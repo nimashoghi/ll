@@ -3,7 +3,7 @@ mamba activate st
 mamba install -y \
     -c conda-forge -c pytorch -c nvidia -c pyg \
     numpy matplotlib seaborn sympy pandas numba scikit-learn ipykernel ipywidgets tqdm pyyaml networkx \
-    pytorch torchvision torchaudio torchtriton pytorch-cuda=11.8 \
+    pytorch==1.13.1 torchvision==0.14.1 torchaudio==0.13.1 pytorch-cuda=11.7 \
     pyg pytorch-scatter pytorch-sparse pytorch-cluster \
     wandb \
     ase python-lmdb h5py \
