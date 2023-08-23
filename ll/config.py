@@ -62,6 +62,10 @@ class TypedConfig(_ModelBase, _MutableMappingBase):
 
     # region construction methods
     @classmethod
+    def from_dict(cls, d: Mapping[str, Any]):
+        return cast(Self, cls._as_pydantic_model_cls.model_validate(d))
+
+    @classmethod
     def builder(cls):
         builder = cast(
             cls,
