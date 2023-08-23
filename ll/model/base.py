@@ -26,6 +26,7 @@ from .modules.log_epoch import LogEpochMixin
 from .modules.logger import LoggerModuleMixin
 from .modules.lr_monitor import LRMonitorMixin
 from .modules.optimizer import OptimizerModuleMixin
+from .modules.checkpoint import CheckpointMixin
 from .modules.parameter_hooks import ParameterHookModuleMixin
 from .modules.rlp_sanity_checks import RLPSanityCheckModuleMixin
 from .modules.shared_parameters import SharedParametersModuleMixin
@@ -207,6 +208,7 @@ class LightningModuleBase(
     WandbWrapperMixin,
     OptimizerModuleMixin,
     RLPSanityCheckModuleMixin,
+    CheckpointMixin,
     LogEpochMixin,
     LoggerModuleMixin,
     LRMonitorMixin,

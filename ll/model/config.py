@@ -146,6 +146,8 @@ class TrainerConfig(TypedConfig):
     """If enabled, will automatically set the loggers to [WandbLogger, CSVLogger, TensorboardLogger] as defined in `config.logging`. Should be `True` most of the time."""
     checkpoint_last_by_default: bool = True
     """If enabled, will update the trainer to save the last checkpoint by default."""
+    on_exception_checkpoint: bool = True
+    """If enabled, will checkpoint the model when an exception is thrown during training."""
     auto_add_trainer_finalizer: bool = True
     """If enabled, will automatically finalize the trainer (e.g., call `wandb.finish()`) when the run ends. Should be `True` most of the time."""
     enable_logger_validation: bool = True
