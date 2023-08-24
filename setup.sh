@@ -13,7 +13,7 @@ mamba install -y \
     wandb \
     ase python-lmdb h5py \
     cloudpickle \
-    pydantic \
+    "pydantic>2" \
     frozendict wrapt varname typing-extensions lovely-tensors lovely-numpy requests pytest nbval
 
 # install latest beta version of einops
