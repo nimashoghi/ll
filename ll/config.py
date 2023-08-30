@@ -1,3 +1,4 @@
+import warnings
 from abc import ABC
 from logging import getLogger
 from typing import TYPE_CHECKING, Any, Mapping, MutableMapping, cast
@@ -62,8 +63,8 @@ class TypedConfig(_ModelBase, _MutableMappingBase):
 
     # region construction methods
     @classmethod
-    def from_dict(cls, d: Mapping[str, Any]):
-        return cast(Self, cls._as_pydantic_model_cls.model_validate(d))
+    def from_dict(cls, model_dict: Mapping[str, Any]):
+        return cast(Self, cls._as_pydantic_model_cls.model_validate(model_dict))
 
     @classmethod
     def builder(cls):
@@ -92,6 +93,17 @@ class TypedConfig(_ModelBase, _MutableMappingBase):
         _ = self._as_pydantic_model.model_validate(model_dict, strict=strict)
 
     # endregion
+
+    def pprint(self):
+        try:
+            from rich import print as rprint
+        except ImportError:
+            warnings.warn(
+                "rich is not installed, falling back to default print function"
+            )
+            print(self)
+        else:
+            rprint(self)
 
     # region MutableMapping implementation
     # These are under `if not TYPE_CHECKING` to prevent vscode from showing
