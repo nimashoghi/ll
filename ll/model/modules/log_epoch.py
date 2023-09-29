@@ -45,10 +45,4 @@ class LogEpochMixin(mixin_base_type(CallbackModuleMixin)):
             on_validation_batch_start=lambda trainer, module, *args, **kwargs: _log_epoch_callback(
                 module, trainer, prefix="val/"
             ),
-            on_test_batch_start=lambda trainer, module, *args, **kwargs: _log_epoch_callback(
-                module, trainer, prefix="test/"
-            ),
-            on_predict_batch_start=lambda trainer, module, *args, **kwargs: _log_epoch_callback(
-                module, trainer, prefix="predict/"
-            ),
         )
