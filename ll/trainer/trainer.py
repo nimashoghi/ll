@@ -211,8 +211,6 @@ class Trainer(LightningTrainer):
             for logger in self.loggers:
                 validate_logger(logger, config.id)
 
-        if config.trainer.patch_hpc_checkpoint_connector:
-            self._patch_checkpoint_connector()
         if config.trainer.checkpoint_last_by_default:
             self._patch_checkpoint_last_by_default()
         if config.trainer.auto_add_trainer_finalizer:
@@ -259,48 +257,6 @@ class Trainer(LightningTrainer):
                 f"Failed to find {model_ckpt.__class__.__name__}.__validate_init_configuration. "
                 "This means that we cannot validate the `save_last` parameter for ModelCheckpoint."
             )
-
-    def _patch_checkpoint_connector(self):
-        """
-        Patch the checkpoint connector to ignore the checkpoint path if we are
-        running on SLURM and the hpc checkpoint exists.
-        This is to handle the scenario where we start training a model with some checkpoint,
-        (e.g., `trainer.fit(model, ckpt_path="some/path")`), but then that job gets preempted
-        by SLURM. When the job is restarted, we want to resume from the hpc checkpoint, not
-        the checkpoint path.
-        """
-        prev_set_ckpt_path = self._checkpoint_connector._parse_ckpt_path.__func__
-
-        trainer = self
-
-        @wraps(prev_set_ckpt_path)
-        def _parse_ckpt_path(
-            self, state_fn, ckpt_path, model_provided, model_connected
-        ):
-            nonlocal trainer
-            if ckpt_path is None and trainer._ll_config.trainer.default_ckpt_path:
-                log.critical(
-                    f"No `ckpt_path` provided, using default {trainer._ll_config.trainer.default_ckpt_path}."
-                )
-                ckpt_path = trainer._ll_config.trainer.default_ckpt_path
-
-            if (
-                ckpt_path is not None
-                and SLURMEnvironment.detect()
-                and (hpc_path := self._hpc_resume_path) is not None
-            ):
-                log.critical(
-                    f"SLURM hpc checkpoint exists at {hpc_path}, ignoring {ckpt_path}"
-                )
-                ckpt_path = "hpc"
-
-            return prev_set_ckpt_path(
-                self, state_fn, ckpt_path, model_provided, model_connected
-            )
-
-        self._checkpoint_connector._parse_ckpt_path = _parse_ckpt_path.__get__(
-            self._checkpoint_connector
-        )
 
     @override
     def _run(

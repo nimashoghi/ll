@@ -23,7 +23,7 @@ def _all_gather(tensor: torch.Tensor, device: torch.device | None = None):
     return gathered
 
 
-@numba.njit
+# @numba.njit
 def _balanced_partition(sizes: np.ndarray, num_parts: int):
     """
     Greedily partition the given set by always inserting
