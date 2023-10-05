@@ -181,15 +181,15 @@ class Trainer(LightningTrainer):
 
         if config.trainer.auto_set_default_root_dir:
             if config.trainer.default_root_dir:
-                log.warning(
+                raise ValueError(
                     "You have set both `config.trainer.default_root_dir` and `config.trainer.auto_set_default_root_dir`. "
-                    "The latter will be ignored."
+                    "Please set only one of them."
                 )
-                kwargs_["default_root_dir"] = config.trainer.default_root_dir
-            else:
-                kwargs_["default_root_dir"] = config.trainer.default_root_dir = str(
-                    cls.ll_default_root_dir(config).absolute()
-                )
+            kwargs_["default_root_dir"] = config.trainer.default_root_dir = str(
+                cls.ll_default_root_dir(config).absolute()
+            )
+        elif config.trainer.default_root_dir:
+            kwargs_["default_root_dir"] = str(config.trainer.default_root_dir)
 
         kwargs_.update(config.trainer.additional_trainer_kwargs)
         return kwargs_
