@@ -18,6 +18,7 @@ from ..trainer import Trainer as LLTrainer
 from ..util import log_batch_info, skip_batch
 from .config import BaseConfig
 from .modules.callback import CallbackModuleMixin, CallbackRegistrarModuleMixin
+from .modules.checkpoint import CheckpointMixin
 from .modules.debug import DebugModuleMixin
 from .modules.distributed import DistributedMixin
 from .modules.finite_checks import FiniteChecksModuleMixin
@@ -26,7 +27,6 @@ from .modules.log_epoch import LogEpochMixin
 from .modules.logger import LoggerModuleMixin
 from .modules.lr_monitor import LRMonitorMixin
 from .modules.optimizer import OptimizerModuleMixin
-from .modules.checkpoint import CheckpointMixin
 from .modules.parameter_hooks import ParameterHookModuleMixin
 from .modules.rlp_sanity_checks import RLPSanityCheckModuleMixin
 from .modules.shared_parameters import SharedParametersModuleMixin
@@ -228,6 +228,11 @@ class LightningModuleBase(
     @classmethod
     @abstractmethod
     def config_cls(cls) -> type[THparams]:
+        ...
+
+    @abstractmethod
+    @override
+    def configure_model(self) -> None:
         ...
 
     @classmethod
