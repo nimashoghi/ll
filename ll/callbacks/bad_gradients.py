@@ -1,5 +1,4 @@
 from logging import getLogger
-from typing import Callable
 
 import torch
 from lightning.pytorch import Callback, LightningModule, Trainer
@@ -19,7 +18,7 @@ def print_bad_gradients(
                 log.critical(f"Parameter {name} ({param.shape}) has None gradients")
             continue
 
-        if torch.isfinite(param.grad.float()).all():
+        if not nonfinite_grads or torch.isfinite(param.grad.float()).all():
             continue
 
         has_nan = torch.isnan(param.grad.float()).any()
