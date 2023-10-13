@@ -9,17 +9,12 @@ class NormalizerConfig(TypedConfig):
     mean: float = 0.0
     std: float = 1.0
 
-
-class Normalizer:
-    def __init__(self, config: NormalizerConfig):
-        self.config = config
-
     def normalize(self, x: torch.Tensor):
-        if not self.config.enabled:
+        if not self.enabled:
             return x
-        return (x - self.config.mean) / self.config.std
+        return (x - self.mean) / self.std
 
     def denormalize(self, x: torch.Tensor):
-        if not self.config.enabled:
+        if not self.enabled:
             return x
-        return x * self.config.std + self.config.mean
+        return x * self.std + self.mean
