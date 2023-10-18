@@ -136,7 +136,7 @@ class TrainerConfig(TypedConfig):
     """Seed for the random number generator. If None, will use a random seed."""
     seed_workers: bool = False
     """Whether to seed the workers of the dataloader."""
-    default_ckpt_path: str | None = "last"
+    default_ckpt_path: str | None = None
     """Default checkpoint path to use when loading a checkpoint. "last" will load the last checkpoint. "hpc" will load the SLURM pre-empted checkpoint."""
 
     auto_wrap_trainer: bool = True
