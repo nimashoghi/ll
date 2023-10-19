@@ -4,7 +4,7 @@ from collections import defaultdict
 from functools import wraps
 from logging import getLogger
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import torch
 from lightning.pytorch import LightningModule
@@ -39,14 +39,25 @@ class _ActivationContext:
 
 
 class ActSaveProvider(defaultdict[str, list[Any]]):
+    @staticmethod
+    def load(path: str | Path):
+        if isinstance(path, str):
+            path = Path(path)
+
+        if path.is_dir():
+            path = path / "all.pt"
+        return cast(dict[str, list[Any]], torch.load(path))
+
     @contextlib.contextmanager
     def enabled(
         self,
+        *,
+        filters: list[str] | None = None,
         dump: Path | None = None,
         dump_filters: list[str] | None = None,
     ):
         prev = self._enabled
-        self.initialize(enabled=True)
+        self.initialize(enabled=True, filters=filters)
         context = _ActivationContext(self)
         try:
             yield context
@@ -56,8 +67,15 @@ class ActSaveProvider(defaultdict[str, list[Any]]):
             context.finalize()
             self.initialize(enabled=prev)
 
-    def initialize(self, *, enabled: bool = True, clear: bool = True):
+    def initialize(
+        self,
+        *,
+        enabled: bool = True,
+        clear: bool = True,
+        filters: list[str] | None = None,
+    ):
         self._enabled = enabled
+        self._filters = filters
 
         if clear:
             self.clear()
@@ -67,6 +85,7 @@ class ActSaveProvider(defaultdict[str, list[Any]]):
         super().__init__(list)
 
         self._enabled = enabled
+        self._filters: list[str] | None = None
         self.prefixes: list[str] = []
 
     @staticmethod
@@ -106,6 +125,12 @@ class ActSaveProvider(defaultdict[str, list[Any]]):
         if acts:
             kwargs.update(acts)
         for name, activation in kwargs.items():
+            # Make sure name matches at least one filter if filters are specified
+            if self._filters and not any(
+                fnmatch.fnmatch(name, f) for f in self._filters
+            ):
+                continue
+
             name = ".".join(self.prefixes + [name])
             self[name].append(
                 apply_to_collection(activation, torch.Tensor, self._clone)
