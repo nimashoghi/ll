@@ -8,7 +8,7 @@ mamba install -y \
 
 mamba install -y \
     -c conda-forge \
-    numpy matplotlib seaborn sympy pandas numba scikit-learn ipykernel ipywidgets tqdm pyyaml networkx \
+    numpy matplotlib seaborn sympy pandas numba scikit-learn plotly nbformat ipykernel ipywidgets tqdm pyyaml networkx \
     pytorch-lightning torchmetrics lightning \
     einops wandb \
     cloudpickle \
