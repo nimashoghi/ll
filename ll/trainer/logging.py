@@ -12,12 +12,7 @@ from ..model.config import BaseConfig
 log = getLogger(__name__)
 
 
-def default_root_dir(
-    config: BaseConfig,
-    *,
-    create_symlinks: bool = True,
-    logs_dirname: str = "lightning_logs",
-):
+def default_root_dir(config: BaseConfig, *, logs_dirname: str = "lightning_logs"):
     base_path = (Path.cwd() / logs_dirname).resolve().absolute()
     path = base_path / config.id
     path.mkdir(parents=True, exist_ok=True)

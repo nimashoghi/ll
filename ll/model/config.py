@@ -153,7 +153,7 @@ class TrainerConfig(TypedConfig):
     """If enabled, will automatically finalize the trainer (e.g., call `wandb.finish()`) when the run ends. Should be `True` most of the time."""
     enable_logger_validation: bool = True
     """If enabled, will validate loggers. This makes sure that the logger's log_dirs are correct given the current config id. Should be `True` most of the time."""
-    patch_hpc_checkpoint_connector: bool = False
+    patch_hpc_checkpoint_connector: bool | None = None
     """If enabled, will patch Lightning's trainer to load the HPC checkpoint by default, even if `default_ckpt_path` is set to something else. This is deprecated and doesn't do anything."""
 
     supports_skip_batch_exception: bool = True
@@ -204,6 +204,7 @@ class TrainerConfig(TypedConfig):
     enable_progress_bar: bool | None = None
     enable_model_summary: bool | None = None
     accumulate_grad_batches: int = 1
+    automatic_gradient_clip: bool = True
     gradient_clip_val: int | float | None = None
     gradient_clip_algorithm: str | None = None
     deterministic: bool | str | None = None

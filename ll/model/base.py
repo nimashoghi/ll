@@ -4,7 +4,7 @@ import os
 import sys
 from abc import ABC, abstractmethod
 from logging import getLogger
-from typing import Any, Callable, Generic, cast
+from typing import TYPE_CHECKING, Any, Callable, Generic, cast
 
 import torch
 import torch.nn as nn
@@ -18,7 +18,6 @@ from ..trainer import Trainer as LLTrainer
 from ..util import log_batch_info, skip_batch
 from .config import BaseConfig
 from .modules.callback import CallbackModuleMixin, CallbackRegistrarModuleMixin
-from .modules.checkpoint import CheckpointMixin
 from .modules.debug import DebugModuleMixin
 from .modules.distributed import DistributedMixin
 from .modules.finite_checks import FiniteChecksModuleMixin
@@ -208,7 +207,6 @@ class LightningModuleBase(
     WandbWrapperMixin,
     OptimizerModuleMixin,
     RLPSanityCheckModuleMixin,
-    CheckpointMixin,
     LogEpochMixin,
     LoggerModuleMixin,
     LRMonitorMixin,
@@ -230,10 +228,15 @@ class LightningModuleBase(
     def config_cls(cls) -> type[THparams]:
         ...
 
-    @abstractmethod
-    @override
-    def configure_model(self) -> None:
-        ...
+    if TYPE_CHECKING:
+        # Only make `configure_model` an abstract method if we're type checking,
+        # so that we get type errors in the editor but no runtime errors in case
+        # it's not implemented.
+
+        @abstractmethod
+        @override
+        def configure_model(self) -> None:
+            ...
 
     @classmethod
     def _update_environment(cls, hparams: THparams):
@@ -245,7 +248,8 @@ class LightningModuleBase(
         hparams.environment.model = _cls_info(cls)
         hparams.environment.slurm = _slurm_session_info()
         hparams.environment.log_dir = str(
-            LLTrainer.ll_default_root_dir(hparams).absolute()
+            hparams.trainer.default_root_dir
+            or LLTrainer.ll_default_root_dir(hparams).absolute()
         )
         hparams.environment.seed = (
             int(seed_str) if (seed_str := os.environ.get("PL_GLOBAL_SEED")) else None

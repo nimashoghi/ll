@@ -1,12 +1,13 @@
 from collections import abc
 from contextlib import ExitStack, contextmanager
 from logging import getLogger
+from pathlib import Path
 from types import NoneType
 from typing import Any, Callable
 
 from lightning.pytorch import LightningModule
 from lightning.pytorch import Trainer as LightningTrainer
-from lightning.pytorch.callbacks.model_checkpoint import ModelCheckpoint
+from lightning.pytorch.callbacks import ModelCheckpoint, OnExceptionCheckpoint
 from lightning.pytorch.plugins.environments import SLURMEnvironment
 from lightning.pytorch.utilities.types import _EVALUATE_OUTPUT, _PREDICT_OUTPUT
 from lightning_fabric.utilities.types import _PATH
@@ -37,21 +38,39 @@ class Trainer(LightningTrainer):
 
     @staticmethod
     def ll_default_root_dir(
-        config: BaseConfig,
-        *,
-        create_symlinks: bool = True,
-        logs_dirname: str = "lightning_logs",
+        config: BaseConfig, *, logs_dirname: str = "lightning_logs"
     ):
-        return default_root_dir(
-            config,
-            create_symlinks=create_symlinks,
-            logs_dirname=logs_dirname,
-        )
+        return default_root_dir(config, logs_dirname=logs_dirname)
+
+    @classmethod
+    def ll_initialize(cls, config: BaseConfig):
+        if config.trainer.auto_set_default_root_dir:
+            if config.trainer.default_root_dir:
+                raise ValueError(
+                    "You have set both `config.trainer.default_root_dir` and `config.trainer.auto_set_default_root_dir`. "
+                    "Please set only one of them."
+                )
+            config.trainer.default_root_dir = str(
+                cls.ll_default_root_dir(config).absolute()
+            )
+
+    @classmethod
+    def ll_default_callbacks(cls, config: BaseConfig):
+        if config.trainer.on_exception_checkpoint:
+            if config.trainer.default_root_dir is None:
+                raise ValueError(
+                    "You must specify `config.trainer.default_root_dir` "
+                    "to use `config.trainer.on_exception_checkpoint`."
+                )
+            log_dir = Path(config.trainer.default_root_dir)
+            yield OnExceptionCheckpoint(log_dir, filename=f"on_exception_{config.id}")
 
     @classmethod
     @contextmanager
     def context(cls, config: BaseConfig):
         with ExitStack() as stack:
+            cls.ll_initialize(config)
+
             cls._finalizers.clear()
             if config.trainer.seed is not None:
                 stack.enter_context(
@@ -114,8 +133,6 @@ class Trainer(LightningTrainer):
             "enable_progress_bar": config.trainer.enable_progress_bar,
             "enable_model_summary": config.trainer.enable_model_summary,
             "accumulate_grad_batches": config.trainer.accumulate_grad_batches,
-            "gradient_clip_val": config.trainer.gradient_clip_val,
-            "gradient_clip_algorithm": config.trainer.gradient_clip_algorithm,
             "deterministic": config.trainer.deterministic,
             "benchmark": config.trainer.benchmark,
             "inference_mode": config.trainer.inference_mode,
@@ -127,6 +144,10 @@ class Trainer(LightningTrainer):
             "sync_batchnorm": config.trainer.sync_batchnorm,
             "reload_dataloaders_every_n_epochs": config.trainer.reload_dataloaders_every_n_epochs,
         }
+        if config.trainer.automatic_gradient_clip:
+            kwargs_["gradient_clip_val"] = config.trainer.gradient_clip_val
+            kwargs_["gradient_clip_algorithm"] = config.trainer.gradient_clip_algorithm
+
         kwargs_.update(kwargs)
 
         kwargs_["plugins"] = []
@@ -179,19 +200,17 @@ class Trainer(LightningTrainer):
                 kwargs_["num_nodes"] = 1
                 log.critical(f"Setting num_nodes to 1 (no SLURM detected).")
 
-        if config.trainer.auto_set_default_root_dir:
-            if config.trainer.default_root_dir:
-                raise ValueError(
-                    "You have set both `config.trainer.default_root_dir` and `config.trainer.auto_set_default_root_dir`. "
-                    "Please set only one of them."
-                )
-            kwargs_["default_root_dir"] = config.trainer.default_root_dir = str(
-                cls.ll_default_root_dir(config).absolute()
-            )
-        elif config.trainer.default_root_dir:
+        if config.trainer.default_root_dir:
             kwargs_["default_root_dir"] = str(config.trainer.default_root_dir)
-
         kwargs_.update(config.trainer.additional_trainer_kwargs)
+
+        # Set the callbacks
+        callbacks = kwargs_.get("callbacks", [])
+        if not isinstance(callbacks, list):
+            callbacks = [callbacks]
+        callbacks.extend(cls.ll_default_callbacks(config))
+        kwargs_["callbacks"] = callbacks
+
         return kwargs_
 
     @override
@@ -259,23 +278,24 @@ class Trainer(LightningTrainer):
 
     @override
     def _run(
-        self,
-        model: LightningModule,
-        ckpt_path: _PATH | None = None,
+        self, model: LightningModule, ckpt_path: _PATH | None = None
     ) -> _EVALUATE_OUTPUT | _PREDICT_OUTPUT | None:
         """
         Lightning doesn't support gradient clipping with manual optimization.
-        We patch the `Trainer._run` method to disable gradient clipping if
-        `model.automatic_optimization` is False.
+        We patch the `Trainer._run` method to throw if gradient clipping is enabled
+        and `model.automatic_optimization` is False.
         """
-        if not model.automatic_optimization:
-            if self.gradient_clip_val:
-                log.critical(
-                    f"Disabling gradient clipping because {model.__class__.__name__}.automatic_optimization is False."
-                    " If you want to use gradient clipping with manual optimization, you can use the values in "
-                    "`config.trainer.gradient_clip_val` and `config.trainer.gradient_clip_algorithm`."
-                )
-            self.gradient_clip_val = None
-            self.gradient_clip_algorithm = None
+        if not model.automatic_optimization and (
+            self.gradient_clip_val is not None
+            or self.gradient_clip_algorithm is not None
+        ):
+            raise ValueError(
+                "Gradient clipping is not supported with manual optimization. "
+                f"Please set {model.__class__.__name__}.automatic_optimization to True "
+                "or disable automatic gradient clipping. "
+                "If you want to use gradient clipping with manual optimization, you can "
+                "set `config.trainer.automatic_gradient_clip=False` and "
+                "use the values in `config.trainer.gradient_clip_val` and `config.trainer.gradient_clip_algorithm`."
+            )
 
         return super()._run(model, ckpt_path)
