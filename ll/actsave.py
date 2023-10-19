@@ -1,4 +1,5 @@
 import contextlib
+import fnmatch
 from collections import defaultdict
 from functools import wraps
 from logging import getLogger
@@ -39,7 +40,11 @@ class _ActivationContext:
 
 class ActSaveProvider(defaultdict[str, list[Any]]):
     @contextlib.contextmanager
-    def enabled(self, dump: Path | None = None):
+    def enabled(
+        self,
+        dump: Path | None = None,
+        dump_filters: list[str] | None = None,
+    ):
         prev = self._enabled
         self.initialize(enabled=True)
         context = _ActivationContext(self)
@@ -47,7 +52,7 @@ class ActSaveProvider(defaultdict[str, list[Any]]):
             yield context
         finally:
             if dump:
-                self.dump(dump)
+                self.dump(dump, filters=dump_filters)
             context.finalize()
             self.initialize(enabled=prev)
 
@@ -113,6 +118,7 @@ class ActSaveProvider(defaultdict[str, list[Any]]):
         root_dir: Path,
         save_all: bool = True,
         save_each: bool = False,
+        filters: list[str] | None = None,
     ):
         if not self._enabled or torch.jit.is_scripting():
             return
@@ -120,6 +126,10 @@ class ActSaveProvider(defaultdict[str, list[Any]]):
         root_dir.mkdir(parents=True, exist_ok=True)
         # First, we save each activation to a separate file
         for name, activations in self.items():
+            # Make sure name matches at least one filter
+            if filters and not any(fnmatch.fnmatch(name, f) for f in filters):
+                continue
+
             base_path = root_dir / f"{name}"
             base_path.mkdir(parents=True, exist_ok=True)
 
