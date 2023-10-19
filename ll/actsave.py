@@ -4,14 +4,18 @@ from collections import defaultdict
 from functools import wraps
 from logging import getLogger
 from pathlib import Path
-from typing import Any, cast
+from typing import Any, Callable, Union
 
+import numpy as np
 import torch
 from lightning.pytorch import LightningModule
 from lightning_utilities.core.apply_func import apply_to_collection
 from typing_extensions import override
 
 log = getLogger(__name__)
+
+Value = Union[int, float, complex, bool, str, np.ndarray, torch.Tensor]
+ValueOrLambda = Union[Value, Callable[..., Value]]
 
 
 class _ActivationContext:
@@ -39,15 +43,6 @@ class _ActivationContext:
 
 
 class ActSaveProvider(defaultdict[str, list[Any]]):
-    @staticmethod
-    def load(path: str | Path):
-        if isinstance(path, str):
-            path = Path(path)
-
-        if path.is_dir():
-            path = path / "all.pt"
-        return cast(dict[str, list[Any]], torch.load(path))
-
     @contextlib.contextmanager
     def enabled(
         self,
@@ -63,7 +58,7 @@ class ActSaveProvider(defaultdict[str, list[Any]]):
             yield context
         finally:
             if dump:
-                self.dump(dump, filters=dump_filters)
+                self.dump(dump, dump_filters=dump_filters)
             context.finalize()
             self.initialize(enabled=prev)
 
@@ -113,12 +108,21 @@ class ActSaveProvider(defaultdict[str, list[Any]]):
             _ = self.prefixes.pop()
 
     @staticmethod
-    def _clone(activation: torch.Tensor):
+    def _to_numpy(activation: Value):
         if not isinstance(activation, torch.Tensor):
-            raise TypeError(f"Expected torch.Tensor, got {type(activation)}")
-        return activation.cpu().detach().clone()
+            return activation
 
-    def save(self, acts: dict[str, Any] | None = None, /, **kwargs: Any):
+        if activation.is_floating_point():
+            # NOTE: We need to convert to float32 because [b]float16 is not supported by numpy
+            activation = activation.float()
+        return activation.detach().cpu().numpy()
+
+    def save(
+        self,
+        acts: dict[str, ValueOrLambda] | None = None,
+        /,
+        **kwargs: ValueOrLambda,
+    ):
         if not self._enabled or torch.jit.is_scripting():
             return
 
@@ -132,19 +136,16 @@ class ActSaveProvider(defaultdict[str, list[Any]]):
                 continue
 
             name = ".".join(self.prefixes + [name])
+            # If we have a lambda, we need to call it
+            if callable(activation):
+                activation = activation()
             self[name].append(
-                apply_to_collection(activation, torch.Tensor, self._clone)
+                apply_to_collection(activation, torch.Tensor, self._to_numpy)
             )
 
     __call__ = save
 
-    def dump(
-        self,
-        root_dir: Path,
-        save_all: bool = True,
-        save_each: bool = False,
-        filters: list[str] | None = None,
-    ):
+    def dump(self, root_dir: Path, dump_filters: list[str] | None = None):
         if not self._enabled or torch.jit.is_scripting():
             return
 
@@ -152,25 +153,12 @@ class ActSaveProvider(defaultdict[str, list[Any]]):
         # First, we save each activation to a separate file
         for name, activations in self.items():
             # Make sure name matches at least one filter
-            if filters and not any(fnmatch.fnmatch(name, f) for f in filters):
+            if dump_filters and not any(fnmatch.fnmatch(name, f) for f in dump_filters):
                 continue
 
-            base_path = root_dir / f"{name}"
-            base_path.mkdir(parents=True, exist_ok=True)
-
-            if save_all:
-                all_path = base_path / "all.pt"
-                torch.save(activations, all_path)
-
-            if save_each:
-                for i, activation in enumerate(activations):
-                    path = base_path / f"{i}.pt"
-                    torch.save(activation, path)
-            log.debug(f"Saved activations to {base_path}")
-
-        # Then, we just dump the entire dict to a file
-        all_path = root_dir / "all.pt"
-        torch.save(dict(self), all_path)
+            path = root_dir / f"{name}.npz"
+            np.savez_compressed(path, *activations, allow_pickle=True)
+        log.debug(f"Saved activations to {root_dir}")
 
 
 ActSave = ActSaveProvider()
