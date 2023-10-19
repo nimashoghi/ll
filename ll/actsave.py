@@ -43,6 +43,19 @@ class _ActivationContext:
 
 
 class ActSaveProvider(defaultdict[str, list[Any]]):
+    @staticmethod
+    def load(path: str | Path):
+        if isinstance(path, str):
+            path = Path(path)
+
+        if path.is_dir():
+            return {p.stem: np.load(p, allow_pickle=True) for p in path.glob("*.npz")}
+
+        # Otherwise, it must be an npz file
+        if not path.suffix == ".npz" or not path.exists():
+            raise ValueError(f"Invalid path {path}")
+        return np.load(path, allow_pickle=True)
+
     @contextlib.contextmanager
     def enabled(
         self,
