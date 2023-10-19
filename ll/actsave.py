@@ -17,6 +17,8 @@ log = getLogger(__name__)
 Value = Union[int, float, complex, bool, str, np.ndarray, torch.Tensor]
 ValueOrLambda = Union[Value, Callable[..., Value]]
 
+Transform = Callable[[str, Any], dict[str, Any] | None]
+
 
 class _ActivationContext:
     _provider: "ActSaveProvider | None"
@@ -61,11 +63,12 @@ class ActSaveProvider(defaultdict[str, list[Any]]):
         self,
         *,
         filters: list[str] | None = None,
+        transforms: list[tuple[str, Transform]] | None = None,
         dump: Path | None = None,
         dump_filters: list[str] | None = None,
     ):
         prev = self._enabled
-        self.initialize(enabled=True, filters=filters)
+        self.initialize(enabled=True, filters=filters, transforms=transforms)
         context = _ActivationContext(self)
         try:
             yield context
@@ -81,9 +84,11 @@ class ActSaveProvider(defaultdict[str, list[Any]]):
         enabled: bool = True,
         clear: bool = True,
         filters: list[str] | None = None,
+        transforms: list[tuple[str, Transform]] | None = None,
     ):
         self._enabled = enabled
         self._filters = filters
+        self._transforms = transforms
 
         if clear:
             self.clear()
@@ -94,6 +99,7 @@ class ActSaveProvider(defaultdict[str, list[Any]]):
 
         self._enabled = enabled
         self._filters: list[str] | None = None
+        self._transforms: list[tuple[str, Transform]] | None = None
         self.prefixes: list[str] = []
 
     @staticmethod
@@ -130,6 +136,17 @@ class ActSaveProvider(defaultdict[str, list[Any]]):
             activation = activation.float()
         return activation.detach().cpu().numpy()
 
+    def _add_activation_(self, name: str, activation: ValueOrLambda):
+        # Make sure name matches at least one filter if filters are specified
+        if self._filters and not any(fnmatch.fnmatch(name, f) for f in self._filters):
+            return
+
+        name = ".".join(self.prefixes + [name])
+        # If we have a lambda, we need to call it
+        if callable(activation):
+            activation = activation()
+        self[name].append(apply_to_collection(activation, torch.Tensor, self._to_numpy))
+
     def save(
         self,
         acts: dict[str, ValueOrLambda] | None = None,
@@ -142,19 +159,26 @@ class ActSaveProvider(defaultdict[str, list[Any]]):
         if acts:
             kwargs.update(acts)
         for name, activation in kwargs.items():
-            # Make sure name matches at least one filter if filters are specified
-            if self._filters and not any(
-                fnmatch.fnmatch(name, f) for f in self._filters
-            ):
-                continue
+            # If we have any transforms, we need to apply them
+            if self._transforms:
+                # Iterate through transforms and apply them
+                for name, transform in self._transforms:
+                    # If the transform doesn't match, we skip it
+                    if not fnmatch.fnmatch(name, name):
+                        continue
 
-            name = ".".join(self.prefixes + [name])
-            # If we have a lambda, we need to call it
-            if callable(activation):
-                activation = activation()
-            self[name].append(
-                apply_to_collection(activation, torch.Tensor, self._to_numpy)
-            )
+                    # Apply the transform
+                    transform_out = transform(name, activation)
+
+                    # If the transform returns empty, we skip it
+                    if not transform_out:
+                        continue
+
+                    # Otherwise, add the transform to the activations
+                    for k, v in transform_out.items():
+                        self._add_activation_(k, v)
+
+            self._add_activation_(name, activation)
 
     __call__ = save
 
