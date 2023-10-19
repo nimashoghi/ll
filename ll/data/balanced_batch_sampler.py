@@ -3,7 +3,6 @@ from functools import cached_property
 from logging import getLogger
 from typing import Any, Protocol, runtime_checkable
 
-import numba
 import numpy as np
 import torch
 import torch.distributed

@@ -3,7 +3,6 @@ from typing import Any, Literal, cast
 import torch.distributed
 from lightning.fabric.utilities.distributed import ReduceOp
 from lightning.pytorch import LightningModule
-from lightning_fabric.utilities.distributed import _distributed_available
 from typing_extensions import TypeVar
 
 from ...util.typing_utils import mixin_base_type
@@ -42,7 +41,10 @@ class DistributedMixin(mixin_base_type(LightningModule)):
         object: T,
         group: torch.distributed.ProcessGroup | None = None,
     ) -> list[T]:
-        if not _distributed_available():
+        if (
+            not torch.distributed.is_available()
+            or not torch.distributed.is_initialized()
+        ):
             return [object]
 
         object_list = [cast(T, None) for _ in range(self.trainer.world_size)]
