@@ -13,16 +13,42 @@ from typing_extensions import override
 log = getLogger(__name__)
 
 
+class _ActivationContext:
+    _provider: "ActSaveProvider | None"
+    _dict: dict[str, list[Any]] | None
+
+    def __init__(self, provider: "ActSaveProvider"):
+        self._provider = provider
+        self._dict = None
+
+    def finalize(self):
+        if self._provider is None:
+            raise RuntimeError("Cannot finalize twice")
+
+        self._dict = dict(self._provider)
+        self._provider = None
+
+    def unwrap(self):
+        if self._dict is None:
+            if self._provider is None:
+                raise RuntimeError("Cannot get after finalizing")
+            return dict(self._provider)
+
+        return self._dict
+
+
 class ActSaveProvider(defaultdict[str, list[Any]]):
     @contextlib.contextmanager
     def enabled(self, dump: Path | None = None):
         prev = self._enabled
         self.initialize(enabled=True)
+        context = _ActivationContext(self)
         try:
-            yield
+            yield context
         finally:
             if dump:
                 self.dump(dump)
+            context.finalize()
             self.initialize(enabled=prev)
 
     def initialize(self, *, enabled: bool = True, clear: bool = True):
@@ -49,7 +75,7 @@ class ActSaveProvider(defaultdict[str, list[Any]]):
             pass
 
     @contextlib.contextmanager
-    def context(self, label: str):
+    def prefix(self, label: str):
         if not self._enabled or torch.jit.is_scripting():
             yield
             return
@@ -92,6 +118,7 @@ class ActSaveProvider(defaultdict[str, list[Any]]):
             return
 
         root_dir.mkdir(parents=True, exist_ok=True)
+        # First, we save each activation to a separate file
         for name, activations in self.items():
             base_path = root_dir / f"{name}"
             base_path.mkdir(parents=True, exist_ok=True)
@@ -106,6 +133,10 @@ class ActSaveProvider(defaultdict[str, list[Any]]):
                     torch.save(activation, path)
             log.debug(f"Saved activations to {base_path}")
 
+        # Then, we just dump the entire dict to a file
+        all_path = root_dir / "all.pt"
+        torch.save(dict(self), all_path)
+
 
 ActSave = ActSaveProvider()
 
@@ -115,7 +146,7 @@ def _wrap_fn(module: LightningModule, fn_name: str):
 
     @wraps(old_step)
     def new_step(module: LightningModule, batch, batch_idx, *args, **kwargs):
-        with ActSave.context(fn_name):
+        with ActSave.prefix(fn_name):
             return old_step(module, batch, batch_idx, *args, **kwargs)
 
     setattr(module, fn_name, new_step.__get__(module))
