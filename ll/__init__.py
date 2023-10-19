@@ -13,7 +13,7 @@ from .model.config import (
     WandbLoggingConfig,
     WandbWatchConfig,
 )
-from .modules.normalizer import Normalizer, NormalizerConfig
+from .modules.normalizer import NormalizerConfig
 from .runner import Runner
 from .sweep import Sweep
 from .trainer import Trainer
@@ -40,7 +40,6 @@ __all__ = [
     "TrainerConfig",
     "WandbLoggingConfig",
     "WandbWatchConfig",
-    "Normalizer",
     "NormalizerConfig",
     "Runner",
     "Sweep",
