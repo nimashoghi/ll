@@ -2,17 +2,18 @@ import contextlib
 import fnmatch
 import tempfile
 import uuid
-from dataclasses import dataclass
-from functools import cache, wraps
+import weakref
+from dataclasses import dataclass, field
+from functools import cached_property, wraps
 from logging import getLogger
 from pathlib import Path
-from typing import Callable, Mapping, Union
+from typing import Callable, Generic, Mapping, Union, cast
 
 import numpy as np
 import torch
 from lightning.pytorch import LightningModule
 from lightning_utilities.core.apply_func import apply_to_collection
-from typing_extensions import ParamSpec, override
+from typing_extensions import ParamSpec, TypeVar, override
 
 log = getLogger(__name__)
 
@@ -24,13 +25,41 @@ def _to_numpy(activation: Value) -> np.ndarray:
     if isinstance(activation, np.ndarray):
         return activation
     if isinstance(activation, torch.Tensor):
+        activation = activation.detach()
         if activation.is_floating_point():
             # NOTE: We need to convert to float32 because [b]float16 is not supported by numpy
             activation = activation.float()
-        return activation.detach().cpu().numpy()
+        return activation.cpu().numpy()
     if isinstance(activation, (int, float, complex, str, bool)):
         return np.array(activation)
     return activation
+
+
+T = TypeVar("T", infer_variance=True)
+
+
+# A wrapper around weakref.ref that allows for primitive types
+# To get around errors like:
+# TypeError: cannot create weak reference to 'int' object
+class WeakRef(Generic[T]):
+    _ref: Callable[[], T] | None
+
+    def __init__(self, obj: T):
+        try:
+            self._ref = cast(Callable[[], T], weakref.ref(obj))
+        except TypeError as e:
+            if "cannot create weak reference" not in str(e):
+                raise
+            self._ref = lambda: obj
+
+    def __call__(self) -> T:
+        if self._ref is None:
+            raise RuntimeError("WeakRef is deleted")
+        return self._ref()
+
+    def delete(self):
+        del self._ref
+        self._ref = None
 
 
 @dataclass(frozen=True)
@@ -42,24 +71,37 @@ class Activation:
         return self.fn()
 
     @classmethod
-    def from_value_or_lambda(cls, name: str, value_or_lambda: ValueOrLambda):
-        @cache  # memoize so we only call the lambda once
-        def wrapper() -> np.ndarray:
-            nonlocal value_or_lambda
+    def _from_value_or_lambda(cls, name: str, ref: WeakRef[ValueOrLambda]):
+        transformed: np.ndarray | None = None
+
+        def fn() -> np.ndarray:
+            nonlocal transformed, ref
+            # If we have a transformed value, we return it
+            if transformed is not None:
+                return transformed
+
             # If we have a lambda, we need to call it
-            activation = value_or_lambda
-            if callable(value_or_lambda):
-                activation = value_or_lambda()
+            unrwapped_ref = ref()
+            activation = unrwapped_ref
+            if callable(unrwapped_ref):
+                activation = unrwapped_ref()
             activation = apply_to_collection(activation, torch.Tensor, _to_numpy)
             activation = _to_numpy(activation)
-            return activation
 
-        # If it's already a function, we call functools.wraps on it
-        fn = wrapper
-        if callable(value_or_lambda):
-            fn = wraps(value_or_lambda)(fn)
+            # Set the transformed value
+            transformed = activation
+
+            # Delete the reference
+            ref.delete()
+            del ref
+
+            return transformed
 
         return cls(name, fn)
+
+    @classmethod
+    def from_value_or_lambda(cls, name: str, value_or_lambda: ValueOrLambda):
+        return cls._from_value_or_lambda(name, WeakRef(value_or_lambda))
 
     @classmethod
     def from_dict(cls, d: Mapping[str, ValueOrLambda]):
@@ -117,12 +159,6 @@ class ActivationSaver:
         self._transforms = transforms
 
     def _save_activation(self, activation: Activation):
-        # Make sure name matches at least one filter if filters are specified
-        if self._filters and not any(
-            fnmatch.fnmatch(activation.name, f) for f in self._filters
-        ):
-            return
-
         # Save the activation to self._save_dir / name / {id}.npz, where id is an auto-incrementing integer
         file_name = ".".join(self._prefixes_fn() + [activation.name])
         path = self._save_dir / file_name
@@ -160,9 +196,15 @@ class ActivationSaver:
                         continue
 
                     # Otherwise, add the transform to the activations
-                    for transformed_activation in Activation.from_dict(transform_out):
+                    transformed_activations = Activation.from_dict(transform_out)
+                    for transformed_activation in transformed_activations:
                         self._save_activation(transformed_activation)
 
+            # Make sure name matches at least one filter if filters are specified
+            if self._filters and not any(
+                fnmatch.fnmatch(activation.name, f) for f in self._filters
+            ):
+                continue
             self._save_activation(activation)
 
 
@@ -239,6 +281,61 @@ class ActSaveProvider:
         self._saver.save(acts, **kwargs)
 
     save = __call__
+
+
+@dataclass
+class LoadedActivation:
+    base_dir: Path = field(repr=False)
+    name: str
+    num_activations: int = field(init=False)
+
+    def __post_init__(self):
+        if not self.activation_dir.exists():
+            raise ValueError(f"Activation dir {self.activation_dir} does not exist")
+
+        # The number of activations = the * of .npy files in the activation dir
+        self.num_activations = len(list(self.activation_dir.glob("*.npy")))
+
+    @property
+    def activation_dir(self) -> Path:
+        return self.base_dir / self.name
+
+    def __getitem__(self, item: int):
+        activation_path = self.activation_dir / f"{item:04d}.npy"
+        if not activation_path.exists():
+            raise ValueError(f"Activation {activation_path} does not exist")
+        print(f"Loading {activation_path}")
+        return np.load(activation_path, allow_pickle=True)
+
+
+class ActivationLoader:
+    def __init__(
+        self,
+        dir: Path,
+    ):
+        self._dir = dir
+
+    def activation(self, name: str):
+        return LoadedActivation(self._dir, name)
+
+    @cached_property
+    def activations(self):
+        return {
+            p.name: LoadedActivation(self._dir, p.name) for p in self._dir.iterdir()
+        }
+
+    def __iter__(self):
+        return iter(self.activations.values())
+
+    def __getitem__(self, item: str):
+        return self.activations[item]
+
+    def __len__(self):
+        return len(self.activations)
+
+    @override
+    def __repr__(self):
+        return f"ActivationLoader(dir={self._dir}, activations={list(self.activations.values())})"
 
 
 ActSave = ActSaveProvider()

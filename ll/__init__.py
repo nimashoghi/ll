@@ -1,3 +1,4 @@
+from . import actsave as A
 from .actsave import ActSave
 from .config import MISSING, Field, TypedConfig, field_validator, model_validator
 from .data import dataset_transform
@@ -21,6 +22,7 @@ from .util.singleton import Singleton
 from .util.typed import TypedModuleDict, TypedModuleList
 
 __all__ = [
+    "A",
     "ActSave",
     "MISSING",
     "Field",
