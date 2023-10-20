@@ -308,7 +308,10 @@ class LoadedActivation:
         if not activation_path.exists():
             raise ValueError(f"Activation {activation_path} does not exist")
         print(f"Loading {activation_path}")
-        return np.load(activation_path, allow_pickle=True)
+        return cast(np.ndarray, np.load(activation_path, allow_pickle=True))
+
+    def all_activations(self):
+        return [self[i] for i in range(self.num_activations)]
 
 
 class ActivationLoader:
