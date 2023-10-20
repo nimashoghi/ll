@@ -145,6 +145,10 @@ class ActivationSaver:
         # The id = the number of activation subdirectories
         self._id = sum(1 for subdir in save_dir.glob("*") if subdir.is_dir())
         save_dir.mkdir(parents=True, exist_ok=True)
+
+        # Add a .activationbase file to the save_dir to indicate that this is an activation base
+        (save_dir / ".activationbase").touch(exist_ok=True)
+
         self._save_dir = save_dir / f"{self._id:04d}"
         # Make sure `self._save_dir` does not exist and create it
         self._save_dir.mkdir(exist_ok=False)
@@ -339,10 +343,30 @@ class LoadedActivation:
 
 
 class ActivationLoader:
-    def __init__(
-        self,
-        dir: Path,
-    ):
+    @classmethod
+    def all_versions(cls, dir: Path):
+        # If the dir is not an activation base directory, we return None
+        if not (dir / ".activationbase").exists():
+            return None
+
+        # The contents of `dir` should be directories, each of which is a version.
+        return [(subdir, int(subdir.name)) for subdir in dir.iterdir() if subdir.is_dir()]
+
+    @classmethod
+    def is_valid_activation_base(cls, dir: Path):
+        return cls.all_versions(dir) is not None
+
+    @classmethod
+    def from_latest_version(cls, dir: Path):
+        # The contents of `dir` should be directories, each of which is a version
+        # We need to find the latest version
+        if (all_versions := cls.all_versions(dir)) is None:
+            raise ValueError(f"{dir} is not an activation base directory")
+
+        path, _ = max(all_versions, key=lambda p: p[1])
+        return cls(path)
+
+    def __init__(self, dir: Path):
         self._dir = dir
 
     def activation(self, name: str):
