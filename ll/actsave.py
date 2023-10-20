@@ -151,7 +151,7 @@ class ActivationSaver:
         self._id = sum(1 for subdir in save_dir.glob("*") if subdir.is_dir())
         save_dir.mkdir(parents=True, exist_ok=True)
         self._save_dir = save_dir / f"{self._id:04d}"
-        # Make sure `self._save_dir ` does not exist and create it
+        # Make sure `self._save_dir` does not exist and create it
         self._save_dir.mkdir(exist_ok=False)
 
         self._prefixes_fn = prefixes_fn
@@ -179,7 +179,15 @@ class ActivationSaver:
         # Build activations
         activations = Activation.from_dict(kwargs)
 
+        transformed_activations: list[Activation] = []
+
         for activation in activations:
+            # Make sure name matches at least one filter if filters are specified
+            if self._filters is None or any(
+                fnmatch.fnmatch(activation.name, f) for f in self._filters
+            ):
+                self._save_activation(activation)
+
             # If we have any transforms, we need to apply them
             if self._transforms:
                 # Iterate through transforms and apply them
@@ -196,16 +204,11 @@ class ActivationSaver:
                         continue
 
                     # Otherwise, add the transform to the activations
-                    transformed_activations = Activation.from_dict(transform_out)
-                    for transformed_activation in transformed_activations:
-                        self._save_activation(transformed_activation)
+                    transformed_activations.extend(Activation.from_dict(transform_out))
 
-            # Make sure name matches at least one filter if filters are specified
-            if self._filters and not any(
-                fnmatch.fnmatch(activation.name, f) for f in self._filters
-            ):
-                continue
-            self._save_activation(activation)
+            # Now, we save the transformed activations
+            for activation in transformed_activations:
+                self._save_activation(activation)
 
 
 class ActSaveProvider:
