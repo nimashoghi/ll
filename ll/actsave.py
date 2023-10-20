@@ -1,12 +1,12 @@
 import contextlib
 import fnmatch
-import string
 import tempfile
 import uuid
-from functools import wraps
+from dataclasses import dataclass
+from functools import cache, wraps
 from logging import getLogger
 from pathlib import Path
-from typing import Any, Callable, Union
+from typing import Callable, Mapping, Union
 
 import numpy as np
 import torch
@@ -19,16 +19,54 @@ log = getLogger(__name__)
 Value = Union[int, float, complex, bool, str, np.ndarray, torch.Tensor]
 ValueOrLambda = Union[Value, Callable[..., Value]]
 
-Transform = Callable[[str, Any], dict[str, Any] | None]
+
+def _to_numpy(activation: Value) -> np.ndarray:
+    if isinstance(activation, np.ndarray):
+        return activation
+    if isinstance(activation, torch.Tensor):
+        if activation.is_floating_point():
+            # NOTE: We need to convert to float32 because [b]float16 is not supported by numpy
+            activation = activation.float()
+        return activation.detach().cpu().numpy()
+    if isinstance(activation, (int, float, complex, str, bool)):
+        return np.array(activation)
+    return activation
 
 
-def _make_id(length: int = 4) -> str:
-    alphabet = list(string.ascii_lowercase + string.digits)
-    id = "".join(np.random.choice(alphabet) for _ in range(length))
-    return id
+@dataclass(frozen=True)
+class Activation:
+    name: str
+    fn: Callable[[], np.ndarray]
+
+    def __call__(self) -> np.ndarray:
+        return self.fn()
+
+    @classmethod
+    def from_value_or_lambda(cls, name: str, value_or_lambda: ValueOrLambda):
+        @cache  # memoize so we only call the lambda once
+        def wrapper() -> np.ndarray:
+            nonlocal value_or_lambda
+            # If we have a lambda, we need to call it
+            activation = value_or_lambda
+            if callable(value_or_lambda):
+                activation = value_or_lambda()
+            activation = apply_to_collection(activation, torch.Tensor, _to_numpy)
+            activation = _to_numpy(activation)
+            return activation
+
+        # If it's already a function, we call functools.wraps on it
+        fn = wrapper
+        if callable(value_or_lambda):
+            fn = wraps(value_or_lambda)(fn)
+
+        return cls(name, fn)
+
+    @classmethod
+    def from_dict(cls, d: Mapping[str, ValueOrLambda]):
+        return [cls.from_value_or_lambda(k, v) for k, v in d.items()]
 
 
-P = ParamSpec("P")
+Transform = Callable[[Activation], Mapping[str, ValueOrLambda]]
 
 
 def _ensure_supported():
@@ -39,6 +77,9 @@ def _ensure_supported():
             raise RuntimeError("Only single GPU is supported at the moment")
     except ImportError:
         pass
+
+
+P = ParamSpec("P")
 
 
 def _ignore_if_scripting(fn: Callable[P, None]) -> Callable[P, None]:
@@ -62,45 +103,34 @@ class ActivationSaver:
         filters: list[str] | None = None,
         transforms: list[tuple[str, Transform]] | None = None,
     ):
-        self._save_dir = save_dir / _make_id()
-        self._save_dir.mkdir(parents=True, exist_ok=True)
+        # Create a directory under `save_dir` by autoincrementing
+        # (i.e., every activation save context, we create a new directory)
+        # The id = the number of activation subdirectories
+        self._id = sum(1 for subdir in save_dir.glob("*") if subdir.is_dir())
+        save_dir.mkdir(parents=True, exist_ok=True)
+        self._save_dir = save_dir / f"{self._id:04d}"
+        # Make sure `self._save_dir ` does not exist and create it
+        self._save_dir.mkdir(exist_ok=False)
+
         self._prefixes_fn = prefixes_fn
         self._filters = filters
         self._transforms = transforms
 
-    @staticmethod
-    def _to_numpy(activation: Value) -> np.ndarray:
-        if isinstance(activation, np.ndarray):
-            return activation
-        if isinstance(activation, torch.Tensor):
-            if activation.is_floating_point():
-                # NOTE: We need to convert to float32 because [b]float16 is not supported by numpy
-                activation = activation.float()
-            return activation.detach().cpu().numpy()
-        if isinstance(activation, (int, float, complex, str, bool)):
-            return np.array(activation)
-        return activation
-
-    def _save_activation(self, name: str, activation_or_lambda: ValueOrLambda):
+    def _save_activation(self, activation: Activation):
         # Make sure name matches at least one filter if filters are specified
-        if self._filters and not any(fnmatch.fnmatch(name, f) for f in self._filters):
+        if self._filters and not any(
+            fnmatch.fnmatch(activation.name, f) for f in self._filters
+        ):
             return
 
-        name = ".".join(self._prefixes_fn() + [name])
-        activation = activation_or_lambda
-
-        # If we have a lambda, we need to call it
-        if callable(activation_or_lambda):
-            activation = activation_or_lambda()
-        activation = apply_to_collection(activation, torch.Tensor, self._to_numpy)
-        activation = self._to_numpy(activation)
-
         # Save the activation to self._save_dir / name / {id}.npz, where id is an auto-incrementing integer
-        path = self._save_dir / name
-        path.mkdir(parents=True, exist_ok=True)
+        file_name = ".".join(self._prefixes_fn() + [activation.name])
+        path = self._save_dir / file_name
+        path.mkdir(exist_ok=True)
 
-        # Get the next id
-        np.save(path / f"{len(list(path.glob('*.npy'))):04d}.npy", activation)
+        # Get the next id and save the activation
+        id = len(list(path.glob("*.npy")))
+        np.save(path / f"{id:04d}.npy", activation())
 
     def save(
         self,
@@ -109,27 +139,31 @@ class ActivationSaver:
         **kwargs: ValueOrLambda,
     ):
         kwargs.update(acts or {})
-        for name, activation in kwargs.items():
+
+        # Build activations
+        activations = Activation.from_dict(kwargs)
+
+        for activation in activations:
             # If we have any transforms, we need to apply them
             if self._transforms:
                 # Iterate through transforms and apply them
                 for name, transform in self._transforms:
                     # If the transform doesn't match, we skip it
-                    if not fnmatch.fnmatch(name, name):
+                    if not fnmatch.fnmatch(activation.name, name):
                         continue
 
                     # Apply the transform
-                    transform_out = transform(name, activation)
+                    transform_out = transform(activation)
 
                     # If the transform returns empty, we skip it
                     if not transform_out:
                         continue
 
                     # Otherwise, add the transform to the activations
-                    for k, v in transform_out.items():
-                        self._save_activation(k, v)
+                    for transformed_activation in Activation.from_dict(transform_out):
+                        self._save_activation(transformed_activation)
 
-            self._save_activation(name, activation)
+            self._save_activation(activation)
 
 
 class ActSaveProvider:
