@@ -1,6 +1,5 @@
 import string
 import time
-from typing_extensions import deprecated
 import warnings
 from logging import getLogger
 from pathlib import Path
@@ -237,6 +236,10 @@ class BaseConfig(TypedConfig):
 
     debug: bool = False
     """Whether to run in debug mode. This will enable debug logging and enable debug code paths."""
+    log_level: Literal[
+        "CRITICAL", "FATAL", "ERROR", "WARN", "WARNING", "INFO", "DEBUG"
+    ] | None = None
+    """Log level to use for the Python logger (or None to use the default)."""
     environment: EnvironmentConfig = EnvironmentConfig()
     """A snapshot of the current environment information (e.g. python version, slurm info, etc.). This is automatically populated by the run script."""
     trainer: TrainerConfig = TrainerConfig()

@@ -45,6 +45,9 @@ class Trainer(LightningTrainer):
 
     @classmethod
     def ll_initialize(cls, config: BaseConfig):
+        if config.log_level is not None:
+            log.setLevel(config.log_level)
+
         if config.trainer.auto_set_default_root_dir:
             if config.trainer.default_root_dir:
                 raise ValueError(
