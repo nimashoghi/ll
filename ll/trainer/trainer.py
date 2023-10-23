@@ -29,6 +29,26 @@ log = logging.getLogger(__name__)
 
 
 def _setup_logger(config: PythonLogging):
+    if config.lovely_tensors:
+        try:
+            import lovely_tensors
+
+            lovely_tensors.monkey_patch()
+        except ImportError:
+            log.warning(
+                "Failed to import lovely-tensors. Ignoring pretty PyTorch tensor formatting"
+            )
+
+    if config.lovely_numpy:
+        try:
+            import lovely_numpy
+
+            lovely_numpy.set_config(repr=lovely_numpy.lovely)
+        except ImportError:
+            log.warning(
+                "Failed to import lovely-numpy. Ignoring pretty numpy array formatting"
+            )
+
     if config.rich:
         try:
             from rich.logging import RichHandler
