@@ -1,6 +1,6 @@
+import logging
 from collections import abc
 from contextlib import ExitStack, contextmanager
-from logging import getLogger
 from pathlib import Path
 from types import NoneType
 from typing import Any, Callable
@@ -25,7 +25,7 @@ from .logging import (
     validate_logger,
 )
 
-log = getLogger(__name__)
+log = logging.getLogger(__name__)
 
 
 class Trainer(LightningTrainer):
@@ -45,8 +45,8 @@ class Trainer(LightningTrainer):
 
     @classmethod
     def ll_initialize(cls, config: BaseConfig):
-        if config.log_level is not None:
-            log.setLevel(config.log_level)
+        if not config.trainer.auto_call_trainer_init_from_runner:
+            logging.basicConfig(level=config.log_level)
 
         if config.trainer.auto_set_default_root_dir:
             if config.trainer.default_root_dir:
@@ -57,6 +57,10 @@ class Trainer(LightningTrainer):
             config.trainer.default_root_dir = str(
                 cls.ll_default_root_dir(config).absolute()
             )
+
+    @classmethod
+    def runner_init(cls, config: BaseConfig):
+        logging.basicConfig(level=config.log_level)
 
     @classmethod
     def ll_default_callbacks(cls, config: BaseConfig):

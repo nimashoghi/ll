@@ -87,6 +87,10 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         def wrapped_run(config: TConfig, *args: Unpack[TArguments]) -> TReturn:
             nonlocal self
 
+            # If `auto_call_trainer_init_from_runner`, we call `Trainer.runner_init` before running the program.
+            if config.trainer.auto_call_trainer_init_from_runner:
+                Trainer.runner_init(config)
+
             # If `validate_config_before_run`, we validate the configuration before running the program.
             if self.validate_config_before_run:
                 config.validate()
