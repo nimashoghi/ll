@@ -167,6 +167,7 @@ class ActivationSaver:
         id = len(list(path.glob("*.npy")))
         np.save(path / f"{id:04d}.npy", activation())
 
+    @_ignore_if_scripting
     def save(
         self,
         acts: dict[str, ValueOrLambda] | None = None,
@@ -260,6 +261,11 @@ class ActSaveProvider:
     @contextlib.contextmanager
     def context(self, label: str):
         if torch.jit.is_scripting():
+            yield
+            return
+
+        if self._saver is None:
+            yield
             return
 
         _ensure_supported()
@@ -273,15 +279,17 @@ class ActSaveProvider:
 
     prefix = context
 
-    @_ignore_if_scripting
     def __call__(
         self,
         acts: dict[str, ValueOrLambda] | None = None,
         /,
         **kwargs: ValueOrLambda,
     ):
+        if torch.jit.is_scripting():
+            return
+
         if self._saver is None:
-            raise RuntimeError("ActSave is not initialized")
+            return
 
         self._saver.save(acts, **kwargs)
 
@@ -338,6 +346,12 @@ class LoadedActivation:
         else:
             raise TypeError(f"Invalid type {type(item)} for item {item}")
 
+    def __iter__(self):
+        return iter(self[i] for i in range(self.num_activations))
+
+    def __len__(self):
+        return self.num_activations
+
     def all_activations(self):
         return [self[i] for i in range(self.num_activations)]
 
@@ -350,7 +364,9 @@ class ActivationLoader:
             return None
 
         # The contents of `dir` should be directories, each of which is a version.
-        return [(subdir, int(subdir.name)) for subdir in dir.iterdir() if subdir.is_dir()]
+        return [
+            (subdir, int(subdir.name)) for subdir in dir.iterdir() if subdir.is_dir()
+        ]
 
     @classmethod
     def is_valid_activation_base(cls, dir: Path):
