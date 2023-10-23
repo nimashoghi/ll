@@ -8,7 +8,7 @@ from datetime import timedelta
 from functools import wraps
 from logging import getLogger
 from pathlib import Path
-from typing import Generic, Protocol, cast, runtime_checkable
+from typing import Generic, Protocol, cast, overload, runtime_checkable
 
 from tqdm.auto import tqdm
 from typing_extensions import TypeVar, TypeVarTuple, Unpack, override
@@ -27,16 +27,17 @@ log = getLogger(__name__)
 
 
 TConfig = TypeVar("TConfig", bound=BaseConfig, infer_variance=True)
+TReturn = TypeVar("TReturn", default=None, infer_variance=True)
 TArguments = TypeVarTuple("TArguments", default=Unpack[tuple[()]])
 
 
 @runtime_checkable
-class RunProtocol(Protocol[TConfig, Unpack[TArguments]]):
-    def __call__(self, config: TConfig, *args: Unpack[TArguments]) -> None:
+class RunProtocol(Protocol[TConfig, TReturn, Unpack[TArguments]]):
+    def __call__(self, config: TConfig, *args: Unpack[TArguments]) -> TReturn:
         ...
 
 
-class Runner(Generic[TConfig, Unpack[TArguments]]):
+class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
     DEFAULT_ENV = {
         # Prevents HDF5 from locking files when opened in read-only mode.
         # This prevents issues when multiple processes try to read the same file.
@@ -54,7 +55,7 @@ class Runner(Generic[TConfig, Unpack[TArguments]]):
     @override
     def __init__(
         self,
-        run: RunProtocol[TConfig, Unpack[TArguments]],
+        run: RunProtocol[TConfig, TReturn, Unpack[TArguments]],
         *,
         slurm_job_name: str = "ll",
         validate_config_before_run: bool = True,
@@ -79,11 +80,11 @@ class Runner(Generic[TConfig, Unpack[TArguments]]):
         self.validate_config_before_run = validate_config_before_run
 
     @property
-    def run(self) -> RunProtocol[TConfig, Unpack[TArguments]]:
+    def run(self) -> RunProtocol[TConfig, TReturn, Unpack[TArguments]]:
         run = self._run
 
         @wraps(run)
-        def wrapped_run(config: TConfig, *args: Unpack[TArguments]) -> None:
+        def wrapped_run(config: TConfig, *args: Unpack[TArguments]) -> TReturn:
             nonlocal self
 
             # If `validate_config_before_run`, we validate the configuration before running the program.
@@ -98,6 +99,8 @@ class Runner(Generic[TConfig, Unpack[TArguments]]):
                     log.critical("Auto-wrapping run in Trainer context")
 
                 return run(config, *args)
+
+            raise RuntimeError("ExitStack should never raise an exception")
 
         return wrapped_run
 
@@ -124,29 +127,56 @@ class Runner(Generic[TConfig, Unpack[TArguments]]):
 
         return resolved
 
+    @overload
     def local(
         self,
         run: TConfig | tuple[TConfig, Unpack[TArguments]],
+        /,
+        *,
+        env: dict[str, str] | None = None,
+        reset_id: bool = True,
+    ) -> TReturn:
+        ...
+
+    @overload
+    def local(
+        self,
+        run_1: TConfig | tuple[TConfig, Unpack[TArguments]],
+        run_2: TConfig | tuple[TConfig, Unpack[TArguments]],
+        /,
+        *runs: TConfig | tuple[TConfig, Unpack[TArguments]],
+        env: dict[str, str] | None = None,
+        reset_id: bool = True,
+    ) -> list[TReturn]:
+        ...
+
+    def local(
+        self,
+        *runs: TConfig | tuple[TConfig, Unpack[TArguments]],
         env: dict[str, str] | None = None,
         reset_id: bool = True,
     ):
-        config, args = self._resolve_run(run)
+        return_values: list[TReturn] = []
+        for run in runs:
+            config, args = self._resolve_run(run)
 
-        config = self.update_config(config)
-        if reset_id:
-            config.id = BaseConfig.generate_id(ignore_rng=True)
+            config = self.update_config(config)
+            if reset_id:
+                config.id = BaseConfig.generate_id(ignore_rng=True)
 
-        env = {**self.DEFAULT_ENV, **(env or {})}
-        env_old = {k: os.environ.get(k, None) for k in env}
-        os.environ.update(env)
-        try:
-            self.run(config, *args)
-        finally:
-            for k, v in env_old.items():
-                if v is None:
-                    _ = os.environ.pop(k, None)
-                else:
-                    os.environ[k] = v
+            env = {**self.DEFAULT_ENV, **(env or {})}
+            env_old = {k: os.environ.get(k, None) for k in env}
+            os.environ.update(env)
+            try:
+                return_value = self.run(config, *args)
+            finally:
+                for k, v in env_old.items():
+                    if v is None:
+                        _ = os.environ.pop(k, None)
+                    else:
+                        os.environ[k] = v
+
+        return return_values[0] if len(return_values) == 1 else return_values
 
     __call__ = local
 
