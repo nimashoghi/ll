@@ -179,6 +179,9 @@ class TrainerConfig(TypedConfig):
     set_nccl_optimal_params: bool = False
     """If enabled, will set the NCCL optimal parameters when running on multiple GPUs + nodes."""
 
+    set_float32_matmul_precision: Literal["medium", "high", "highest"] | None = None
+    """If enabled, will set the torch float32 matmul precision to the specified value. Useful for faster training on Ampere+ GPUs."""
+
     accelerator: str = "auto"
     strategy: str = "auto"
     devices: str | int = "auto"

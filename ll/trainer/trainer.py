@@ -5,6 +5,7 @@ from pathlib import Path
 from types import NoneType
 from typing import Any, Callable
 
+import torch
 from lightning.pytorch import LightningModule
 from lightning.pytorch import Trainer as LightningTrainer
 from lightning.pytorch.callbacks import ModelCheckpoint, OnExceptionCheckpoint
@@ -86,6 +87,10 @@ class Trainer(LightningTrainer):
                 # Details on all available env vars: https://docs.nvidia.com/deeplearning/nccl/user-guide/docs/env.html
                 additional_nccl_env_vars["NCCL_NSOCKS_PERTHREAD"] = "4"
                 additional_nccl_env_vars["NCCL_SOCKET_NTHREADS"] = "2"
+
+            if (precision := config.trainer.set_float32_matmul_precision) is not None:
+                torch.set_float32_matmul_precision(precision)
+
             stack.enter_context(
                 set_additional_env_vars(
                     config.trainer.additional_env_vars | additional_nccl_env_vars
