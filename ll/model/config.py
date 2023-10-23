@@ -124,9 +124,25 @@ class OptimizerConfig(TypedConfig):
     """Gradient skipping configuration."""
 
 
+class PythonLogging(TypedConfig):
+    log_level: Literal[
+        "CRITICAL", "FATAL", "ERROR", "WARN", "WARNING", "INFO", "DEBUG"
+    ] | None = None
+    """Log level to use for the Python logger (or None to use the default)."""
+
+    rich: bool = True
+    """If enabled, will use the rich library to format the Python logger output."""
+
+    rich_tracebacks: bool = True
+    """If enabled, will use the rich library to format the Python logger tracebacks."""
+
+
 class TrainerConfig(TypedConfig):
+    python_logging: PythonLogging = PythonLogging()
+    """Python logging configuration options."""
+
     logging: LoggingConfig = LoggingConfig()
-    """Logging configuration options."""
+    """Logging (e.g., WandB logging) configuration options."""
 
     optimizer: OptimizerConfig = OptimizerConfig()
     """Optimizer configuration options."""
@@ -238,10 +254,6 @@ class BaseConfig(TypedConfig):
 
     debug: bool = False
     """Whether to run in debug mode. This will enable debug logging and enable debug code paths."""
-    log_level: Literal[
-        "CRITICAL", "FATAL", "ERROR", "WARN", "WARNING", "INFO", "DEBUG"
-    ] | None = None
-    """Log level to use for the Python logger (or None to use the default)."""
     environment: EnvironmentConfig = EnvironmentConfig()
     """A snapshot of the current environment information (e.g. python version, slurm info, etc.). This is automatically populated by the run script."""
     trainer: TrainerConfig = TrainerConfig()

@@ -14,7 +14,7 @@ from lightning.pytorch.utilities.types import _EVALUATE_OUTPUT, _PREDICT_OUTPUT
 from lightning_fabric.utilities.types import _PATH
 from typing_extensions import override
 
-from ..model.config import BaseConfig
+from ..model.config import BaseConfig, PythonLogging
 from ..util import seed
 from ..util.environment import set_additional_env_vars
 from ..util.typing_utils import copy_method_with_param
@@ -26,6 +26,25 @@ from .logging import (
 )
 
 log = logging.getLogger(__name__)
+
+
+def _setup_logger(config: PythonLogging):
+    if config.rich:
+        try:
+            from rich.logging import RichHandler
+
+            logging.basicConfig(
+                level=config.log_level,
+                format="%(message)s",
+                datefmt="[%X]",
+                handlers=[RichHandler(rich_tracebacks=config.rich_tracebacks)],
+            )
+            return
+        except ImportError:
+            log.warning(
+                "Failed to import rich. Falling back to default Python logging."
+            )
+    logging.basicConfig(level=config.log_level)
 
 
 class Trainer(LightningTrainer):
@@ -46,7 +65,7 @@ class Trainer(LightningTrainer):
     @classmethod
     def ll_initialize(cls, config: BaseConfig):
         if not config.trainer.auto_call_trainer_init_from_runner:
-            logging.basicConfig(level=config.log_level)
+            _setup_logger(config.trainer.python_logging)
 
         if config.trainer.auto_set_default_root_dir:
             if config.trainer.default_root_dir:
@@ -60,7 +79,7 @@ class Trainer(LightningTrainer):
 
     @classmethod
     def runner_init(cls, config: BaseConfig):
-        logging.basicConfig(level=config.log_level)
+        _setup_logger(config.trainer.python_logging)
 
     @classmethod
     def ll_default_callbacks(cls, config: BaseConfig):
