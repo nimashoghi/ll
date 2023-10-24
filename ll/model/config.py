@@ -137,8 +137,8 @@ class PythonLogging(TypedConfig):
 
     lovely_tensors: bool = True
     """If enabled, will use the lovely-tensors library to format PyTorch tensors."""
-    lovely_numpy: bool = True
-    """If enabled, will use the lovely-numpy library to format numpy arrays."""
+    lovely_numpy: bool = False
+    """If enabled, will use the lovely-numpy library to format numpy arrays. False by default as it causes some issues with other libaries."""
 
 
 class TrainerConfig(TypedConfig):
