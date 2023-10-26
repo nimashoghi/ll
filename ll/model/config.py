@@ -251,9 +251,9 @@ class BaseConfig(TypedConfig):
     """Run name."""
     project: str | None = None
     """Project name."""
-    tags: list[str] | None = None
+    tags: list[str] = []
     """Tags for the run."""
-    notes: list[str] | None = None
+    notes: list[str] = []
     """Human readable notes for the run."""
 
     debug: bool = False

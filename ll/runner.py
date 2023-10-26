@@ -38,12 +38,7 @@ class RunProtocol(Protocol[TConfig, TReturn, Unpack[TArguments]]):
 
 
 class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
-    DEFAULT_ENV = {
-        # Prevents HDF5 from locking files when opened in read-only mode.
-        # This prevents issues when multiple processes try to read the same file.
-        # See https://github.com/h5py/h5py/issues/1101#issuecomment-480354656
-        "HDF5_USE_FILE_LOCKING": "FALSE",
-    }
+    DEFAULT_ENV = {}
     SNAPSHOT_ENV_NAME = "LL_SNAPSHOT"
 
     @classmethod
