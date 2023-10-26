@@ -1,7 +1,7 @@
 import warnings
 from abc import ABC
 from logging import getLogger
-from typing import TYPE_CHECKING, Any, Mapping, MutableMapping, Sequence, cast
+from typing import TYPE_CHECKING, Any, Mapping, MutableMapping, cast
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from typing_extensions import Self, dataclass_transform, override
@@ -23,32 +23,6 @@ if TYPE_CHECKING:
 _MutableMappingBase = MutableMapping[str, Any]
 if TYPE_CHECKING:
     _MutableMappingBase = object
-
-
-def _validate_no_missing(value: Any, labels: list[str]):
-    """Makes sure that no MISSING values are present"""
-
-    match value:
-        # If the value is a Mapping, then validate all the values
-        case Mapping():
-            for k, v in value.items():
-                _validate_no_missing(v, labels + [k])
-        # If the value is a list, then validate all the values
-        case Sequence():
-            for i, v in enumerate(value):
-                _validate_no_missing(v, labels + [str(i)])
-        # If the value is a BaseModel, then validate all the fields
-        case BaseModel():
-            for field_name, field in value.model_fields.items():
-                if (value := getattr(value, field_name, None)) is None:
-                    continue
-                _validate_no_missing(value, labels + [field_name])
-        # If the value is MISSING, then raise an error
-        case value if value is MISSING:
-            raise ValueError("MISSING is not allowed")
-        # Otherwise: do nothing
-        case _:
-            pass
 
 
 @dataclass_transform(kw_only_default=True)
@@ -108,22 +82,10 @@ class TypedConfig(_ModelBase, _MutableMappingBase):
         )
         return instance
 
-    def validate_no_missing(self):
-        """Makes sure that no MISSING values are present"""
-
-        _validate_no_missing(self, [])
-
-    def validate(
-        self,
-        strict: bool = True,
-        check_missing: bool = True,
-    ):
+    def validate(self, strict: bool = True):
         # Make sure this is not a builder
         if self._ll_builder:  # type: ignore
             raise ValueError("A builder cannot be used as a config.")
-
-        if check_missing:
-            self.validate_no_missing()
 
         # Validate the model by dumping it and then loading it
         model_dict = self._as_pydantic_model.model_dump(round_trip=True)
