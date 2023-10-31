@@ -83,6 +83,10 @@ class Trainer(LightningTrainer):
         return default_root_dir(config, logs_dirname=logs_dirname)
 
     @classmethod
+    def setup_python_logging(cls, config: PythonLogging):
+        _setup_logger(config)
+
+    @classmethod
     def ll_initialize(cls, config: BaseConfig):
         if not config.trainer.auto_call_trainer_init_from_runner:
             _setup_logger(config.trainer.python_logging)
@@ -157,8 +161,8 @@ class Trainer(LightningTrainer):
                 )
 
     @classmethod
-    def _update_kwargs(cls, config: BaseConfig, kwargs: dict[str, Any]):
-        kwargs_ = {
+    def _update_kwargs(cls, config: BaseConfig, kwargs_ctor: dict[str, Any]):
+        kwargs = {
             "accelerator": config.trainer.accelerator,
             "strategy": config.trainer.strategy,
             "devices": config.trainer.devices,
@@ -196,26 +200,26 @@ class Trainer(LightningTrainer):
             "reload_dataloaders_every_n_epochs": config.trainer.reload_dataloaders_every_n_epochs,
         }
         if config.trainer.automatic_gradient_clip:
-            kwargs_["gradient_clip_val"] = config.trainer.gradient_clip_val
-            kwargs_["gradient_clip_algorithm"] = config.trainer.gradient_clip_algorithm
+            kwargs["gradient_clip_val"] = config.trainer.gradient_clip_val
+            kwargs["gradient_clip_algorithm"] = config.trainer.gradient_clip_algorithm
 
-        kwargs_.update(kwargs)
+        kwargs.update(kwargs_ctor)
 
-        kwargs_["plugins"] = []
+        kwargs["plugins"] = []
         if config.trainer.plugins is not None:
-            kwargs_["plugins"].extend(config.trainer.plugins)
-        if (plugins := kwargs.get("plugins")) is not None:
+            kwargs["plugins"].extend(config.trainer.plugins)
+        if (plugins := kwargs_ctor.get("plugins")) is not None:
             plugins = [plugins] if not isinstance(plugins, list) else plugins
-            kwargs_["plugins"].extend(plugins)
+            kwargs["plugins"].extend(plugins)
 
         if config.trainer.logger is False:
             log.critical(f"Disabling logger because {config.trainer.logger=}.")
-            kwargs_["logger"] = False
-        elif kwargs_.get("logger") is False:
-            log.critical(f"Disabling logger because {kwargs_.get('logger')=}.")
+            kwargs["logger"] = False
+        elif kwargs.get("logger") is False:
+            log.critical(f"Disabling logger because {kwargs.get('logger')=}.")
 
         if (
-            existing_loggers := kwargs_.get("logger")
+            existing_loggers := kwargs.get("logger")
         ) is not False and config.trainer.auto_set_loggers:
             if int(config.trainer.fast_dev_run) > 0:
                 log.critical("Disabling loggers because fast_dev_run is enabled.")
@@ -228,9 +232,9 @@ class Trainer(LightningTrainer):
                         existing_loggers = [existing_loggers]
                     loggers.extend(existing_loggers)
 
-                kwargs_["logger"] = loggers
+                kwargs["logger"] = loggers
 
-        if kwargs_.get("num_nodes") == "auto":
+        if kwargs.get("num_nodes") == "auto":
             # when num_nodes is auto, we need to detect the number of nodes
             # when on slurm, this would be the number of SLURM nodes allocated
             if SLURMEnvironment.detect():
@@ -242,27 +246,27 @@ class Trainer(LightningTrainer):
                         "SLURMEnvironment detected through PL but not submitit. This is a bug."
                     )
 
-                kwargs_["num_nodes"] = job.num_nodes
+                kwargs["num_nodes"] = job.num_nodes
                 log.critical(
                     f"Setting num_nodes to {job.num_nodes} (detected through submitit)."
                 )
             # otherweise, we assume 1 node
             else:
-                kwargs_["num_nodes"] = 1
+                kwargs["num_nodes"] = 1
                 log.critical(f"Setting num_nodes to 1 (no SLURM detected).")
 
         if config.trainer.default_root_dir:
-            kwargs_["default_root_dir"] = str(config.trainer.default_root_dir)
-        kwargs_.update(config.trainer.additional_trainer_kwargs)
+            kwargs["default_root_dir"] = str(config.trainer.default_root_dir)
+        kwargs.update(config.trainer.additional_trainer_kwargs)
 
         # Set the callbacks
-        callbacks = kwargs_.get("callbacks", [])
+        callbacks = kwargs.get("callbacks", [])
         if not isinstance(callbacks, list):
             callbacks = [callbacks]
         callbacks.extend(cls.ll_default_callbacks(config))
-        kwargs_["callbacks"] = callbacks
+        kwargs["callbacks"] = callbacks
 
-        return kwargs_
+        return kwargs
 
     @override
     @copy_method_with_param(
