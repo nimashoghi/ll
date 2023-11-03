@@ -230,7 +230,7 @@ class TrainerConfig(TypedConfig):
     accumulate_grad_batches: int = 1
     automatic_gradient_clip: bool = True
     gradient_clip_val: int | float | None = None
-    gradient_clip_algorithm: str | None = None
+    gradient_clip_algorithm: Literal["norm", "value"] | None = None
     deterministic: bool | str | None = None
     benchmark: bool | None = None
     inference_mode: bool = True
