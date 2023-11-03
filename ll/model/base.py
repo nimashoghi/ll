@@ -107,6 +107,11 @@ class Base(DebugModuleMixin, Generic[THparams]):
     def config(self) -> THparams:
         return self.hparams
 
+    @torch.jit.unused
+    @property
+    def C(self) -> THparams:
+        return self.hparams
+
     @property
     def debug(self) -> bool:
         if torch.jit.is_scripting():
