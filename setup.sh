@@ -1,10 +1,15 @@
 mamba create -n fm python=3.11
 mamba activate fm
 
+# mamba install -y \
+#     -c pytorch -c nvidia -c pyg \
+#     pytorch torchvision torchaudio pytorch-cuda=12.1 \
+#     pyg pytorch-scatter pytorch-sparse pytorch-cluster
+
+# PyG is not really necessary for `ll`
 mamba install -y \
-    -c pytorch -c nvidia -c pyg \
-    pytorch torchvision torchaudio pytorch-cuda=12.1 \
-    pyg pytorch-scatter pytorch-sparse pytorch-cluster
+    -c pytorch -c nvidia \
+    pytorch torchvision torchaudio pytorch-cuda=12.1
 
 mamba install -y \
     -c conda-forge \
