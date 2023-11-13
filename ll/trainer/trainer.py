@@ -100,6 +100,7 @@ class Trainer(LightningTrainer):
             config.trainer.default_root_dir = str(
                 cls.ll_default_root_dir(config).absolute()
             )
+            log.critical(f"Setting {config.trainer.default_root_dir=}.")
 
     @classmethod
     def runner_init(cls, config: BaseConfig):
