@@ -68,6 +68,10 @@ class Activation:
     ref: WeakRef[ValueOrLambda] | None
     transformed: np.ndarray | None = None
 
+    def __post_init__(self):
+        # Update the `name` to replace `/` with `::`
+        self.name = self.name.replace("/", "::")
+
     def __call__(self) -> np.ndarray:
         # If we have a transformed value, we return it
         if self.transformed is not None:
@@ -161,7 +165,7 @@ class ActivationSaver:
         # Save the activation to self._save_dir / name / {id}.npz, where id is an auto-incrementing integer
         file_name = ".".join(self._prefixes_fn() + [activation.name])
         path = self._save_dir / file_name
-        path.mkdir(exist_ok=True)
+        path.mkdir(exist_ok=True, parents=True)
 
         # Get the next id and save the activation
         id = len(list(path.glob("*.npy")))
@@ -279,9 +283,24 @@ class ActSaveProvider:
 
     prefix = context
 
+    @overload
     def __call__(
         self,
         acts: dict[str, ValueOrLambda] | None = None,
+        /,
+        **kwargs: ValueOrLambda,
+    ):
+        ...
+
+    @overload
+    def __call__(self, acts: Callable[[], dict[str, ValueOrLambda]], /):
+        ...
+
+    def __call__(
+        self,
+        acts: dict[str, ValueOrLambda]
+        | Callable[[], dict[str, ValueOrLambda]]
+        | None = None,
         /,
         **kwargs: ValueOrLambda,
     ):
@@ -291,6 +310,8 @@ class ActSaveProvider:
         if self._saver is None:
             return
 
+        if acts is not None and callable(acts):
+            acts = acts()
         self._saver.save(acts, **kwargs)
 
     save = __call__
@@ -358,7 +379,9 @@ class LoadedActivation:
 
 class ActivationLoader:
     @classmethod
-    def all_versions(cls, dir: Path):
+    def all_versions(cls, dir: str | Path):
+        dir = Path(dir)
+
         # If the dir is not an activation base directory, we return None
         if not (dir / ".activationbase").exists():
             return None
@@ -369,11 +392,11 @@ class ActivationLoader:
         ]
 
     @classmethod
-    def is_valid_activation_base(cls, dir: Path):
+    def is_valid_activation_base(cls, dir: str | Path):
         return cls.all_versions(dir) is not None
 
     @classmethod
-    def from_latest_version(cls, dir: Path):
+    def from_latest_version(cls, dir: str | Path):
         # The contents of `dir` should be directories, each of which is a version
         # We need to find the latest version
         if (all_versions := cls.all_versions(dir)) is None:

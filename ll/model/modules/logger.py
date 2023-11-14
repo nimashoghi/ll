@@ -120,6 +120,10 @@ class LoggerModuleMixin(mixin_base_type(LightningModule)):
             return super().log(name, value, **fn_kwargs)
 
     def __logger_actsave(self, name: str, value: _METRIC) -> None:
-        if isinstance(value, torchmetrics.Metric):
-            value = value.compute()
-        ActSave.save({f"logger::{name}": value})
+        ActSave.save(
+            {
+                f"logger::{name}": lambda: value.compute()
+                if isinstance(value, torchmetrics.Metric)
+                else value
+            }
+        )
