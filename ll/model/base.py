@@ -52,6 +52,7 @@ class Base(DebugModuleMixin, Generic[THparams]):
         bias: bool = True,
         no_bias_scalar: bool = True,
         ln: bool | str = False,
+        dropout: float | None = None,
         residual: bool = False,
         pre_layers: list[nn.Module] = [],
         post_layers: list[nn.Module] = [],
@@ -65,6 +66,7 @@ class Base(DebugModuleMixin, Generic[THparams]):
             bias (bool, optional): Whether to include bias terms in the linear layers. Defaults to True.
             no_bias_scalar (bool, optional): Whether to exclude bias terms when the output dimension is 1. Defaults to True.
             ln (bool | str, optional): Whether to apply layer normalization before or after the linear layers. Defaults to False.
+            dropout (float | None, optional): Dropout probability to apply between layers. Defaults to None.
             residual (bool, optional): Whether to use residual connections between layers. Defaults to False.
             pre_layers (list[nn.Module], optional): List of layers to insert before the linear layers. Defaults to [].
             post_layers (list[nn.Module], optional): List of layers to insert after the linear layers. Defaults to [].
@@ -91,6 +93,8 @@ class Base(DebugModuleMixin, Generic[THparams]):
             out_features = dims[i + 1]
             bias_ = bias and not (no_bias_scalar and out_features == 1)
             layers.append(nn.Linear(in_features, out_features, bias=bias_))
+            if dropout is not None:
+                layers.append(nn.Dropout(dropout))
             if i < len(dims) - 2:
                 layers.append(activation())
 
@@ -326,15 +330,15 @@ class LightningModuleBase(
         datamodule = cast(LightningDataModuleBase[THparams], datamodule)
         return datamodule
 
-    @abstractmethod
-    @override
-    def training_step(self, *args: Any, **kwargs: Any) -> STEP_OUTPUT:
-        ...
+    # @abstractmethod
+    # @override
+    # def training_step(self, *args: Any, **kwargs: Any) -> STEP_OUTPUT:
+    #     ...
 
-    @abstractmethod
-    @override
-    def validation_step(self, *args: Any, **kwargs: Any) -> STEP_OUTPUT:
-        ...
+    # @abstractmethod
+    # @override
+    # def validation_step(self, *args: Any, **kwargs: Any) -> STEP_OUTPUT:
+    #     ...
 
 
 class LightningDataModuleBase(
