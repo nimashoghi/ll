@@ -301,6 +301,11 @@ class Trainer(LightningTrainer):
         if config.trainer.auto_add_trainer_finalizer:
             type(self)._finalizers.append(self.finalize)
 
+        # Print out the log dir, so that we can easily find it in the logs.
+        if log_dir := self.log_dir:
+            log_dir = str(Path(log_dir).resolve())
+        log.critical(f"LightningTrainer log directory: {self.log_dir}.")
+
     def _patch_checkpoint_last_by_default(self):
         """
         Patch the default ModelCheckpoint callback to save the last checkpoint by default.
