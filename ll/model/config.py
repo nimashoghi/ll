@@ -1,11 +1,14 @@
 import string
 import time
 import warnings
+from abc import ABC, abstractmethod
 from logging import getLogger
 from pathlib import Path
 from typing import Annotated, Any, ClassVar, Literal, TypeAlias
 
 import numpy as np
+from lightning.pytorch.profilers import Profiler
+from typing_extensions import override
 
 from ..config import Field, TypedConfig
 
@@ -16,9 +19,13 @@ class IdSeedWarning(Warning):
     pass
 
 
-class BaseProfilerConfig(TypedConfig):
+class BaseProfilerConfig(TypedConfig, ABC):
     dirpath: str | Path | None = None
     filename: str | None = None
+
+    @abstractmethod
+    def construct_profiler(self) -> Profiler:
+        ...
 
 
 class SimpleProfilerConfig(BaseProfilerConfig):
@@ -26,6 +33,7 @@ class SimpleProfilerConfig(BaseProfilerConfig):
 
     extended: bool = True
 
+    @override
     def construct_profiler(self):
         from lightning.pytorch.profilers.simple import SimpleProfiler
 
@@ -41,6 +49,7 @@ class AdvancedProfilerConfig(BaseProfilerConfig):
 
     line_count_restriction: float = 1.0
 
+    @override
     def construct_profiler(self):
         from lightning.pytorch.profilers.advanced import AdvancedProfiler
 
@@ -63,6 +72,7 @@ class PyTorchProfilerConfig(BaseProfilerConfig):
     table_kwargs: dict[str, Any] | None = None
     additional_profiler_kwargs: dict[str, Any] = {}
 
+    @override
     def construct_profiler(self):
         from lightning.pytorch.profilers.pytorch import PyTorchProfiler
 

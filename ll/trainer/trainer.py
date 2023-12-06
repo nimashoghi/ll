@@ -15,7 +15,7 @@ from lightning.pytorch.utilities.types import _EVALUATE_OUTPUT, _PREDICT_OUTPUT
 from lightning_fabric.utilities.types import _PATH
 from typing_extensions import override
 
-from ..model.config import BaseConfig, ProfilerConfig, PythonLogging
+from ..model.config import BaseConfig, BaseProfilerConfig, PythonLogging
 from ..util import seed
 from ..util.environment import set_additional_env_vars
 from ..util.typing_utils import copy_method_with_param
@@ -205,7 +205,7 @@ class Trainer(LightningTrainer):
             kwargs["gradient_clip_algorithm"] = config.trainer.gradient_clip_algorithm
         if profiler := config.trainer.profiler:
             # If the profiler is an ProfilerConfig instance, then we instantiate it.
-            if isinstance(profiler, ProfilerConfig):
+            if isinstance(profiler, BaseProfilerConfig):
                 profiler = profiler.construct_profiler()
                 # Make sure that the profiler is an instance of `Profiler`.
                 if not isinstance(profiler, Profiler):
