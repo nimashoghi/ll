@@ -27,6 +27,7 @@ from .modules.logger import LoggerModuleMixin
 from .modules.lr_monitor import LRMonitorMixin
 from .modules.optimizer import OptimizerModuleMixin
 from .modules.parameter_hooks import ParameterHookModuleMixin
+from .modules.profiler import ProfilerMixin
 from .modules.rlp_sanity_checks import RLPSanityCheckModuleMixin
 from .modules.shared_parameters import SharedParametersModuleMixin
 from .modules.wandb import WandbWrapperMixin
@@ -212,6 +213,7 @@ def _cls_info(cls: type):
 
 
 class LightningModuleBase(
+    ProfilerMixin,
     LogDirMixin,
     WandbWrapperMixin,
     OptimizerModuleMixin,
