@@ -3,7 +3,7 @@ import time
 import warnings
 from logging import getLogger
 from pathlib import Path
-from typing import Any, ClassVar, Literal
+from typing import Annotated, Any, ClassVar, Literal, TypeAlias
 
 import numpy as np
 
@@ -14,6 +14,76 @@ logger = getLogger(__name__)
 
 class IdSeedWarning(Warning):
     pass
+
+
+class BaseProfilerConfig(TypedConfig):
+    dirpath: str | Path | None = None
+    filename: str | None = None
+
+
+class SimpleProfilerConfig(BaseProfilerConfig):
+    kind: Literal["simple"] = "simple"
+
+    extended: bool = True
+
+    def construct_profiler(self):
+        from lightning.pytorch.profilers.simple import SimpleProfiler
+
+        return SimpleProfiler(
+            extended=self.extended,
+            dirpath=self.dirpath,
+            filename=self.filename,
+        )
+
+
+class AdvancedProfilerConfig(BaseProfilerConfig):
+    kind: Literal["advanced"] = "advanced"
+
+    line_count_restriction: float = 1.0
+
+    def construct_profiler(self):
+        from lightning.pytorch.profilers.advanced import AdvancedProfiler
+
+        return AdvancedProfiler(
+            line_count_restriction=self.line_count_restriction,
+            dirpath=self.dirpath,
+            filename=self.filename,
+        )
+
+
+class PyTorchProfilerConfig(BaseProfilerConfig):
+    kind: Literal["pytorch"] = "pytorch"
+
+    group_by_input_shapes: bool = False
+    emit_nvtx: bool = False
+    export_to_chrome: bool = True
+    row_limit: int = 20
+    sort_by_key: str | None = None
+    record_module_names: bool = True
+    table_kwargs: dict[str, Any] | None = None
+    additional_profiler_kwargs: dict[str, Any] = {}
+
+    def construct_profiler(self):
+        from lightning.pytorch.profilers.pytorch import PyTorchProfiler
+
+        return PyTorchProfiler(
+            group_by_input_shapes=self.group_by_input_shapes,
+            emit_nvtx=self.emit_nvtx,
+            export_to_chrome=self.export_to_chrome,
+            row_limit=self.row_limit,
+            sort_by_key=self.sort_by_key,
+            record_module_names=self.record_module_names,
+            table_kwargs=self.table_kwargs,
+            dirpath=self.dirpath,
+            filename=self.filename,
+            **self.additional_profiler_kwargs,
+        )
+
+
+ProfilerConfig: TypeAlias = Annotated[
+    SimpleProfilerConfig | AdvancedProfilerConfig | PyTorchProfilerConfig,
+    Field(discriminator="kind"),
+]
 
 
 class EnvironmentConfig(TypedConfig):
@@ -235,7 +305,7 @@ class TrainerConfig(TypedConfig):
     benchmark: bool | None = None
     inference_mode: bool = True
     use_distributed_sampler: bool = True
-    profiler: str | None = None
+    profiler: str | ProfilerConfig | None = None
     detect_anomaly: bool = False
     barebones: bool = False
     plugins: list[str] | None = None

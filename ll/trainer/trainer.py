@@ -10,11 +10,12 @@ from lightning.pytorch import LightningModule
 from lightning.pytorch import Trainer as LightningTrainer
 from lightning.pytorch.callbacks import ModelCheckpoint, OnExceptionCheckpoint
 from lightning.pytorch.plugins.environments import SLURMEnvironment
+from lightning.pytorch.profilers import Profiler
 from lightning.pytorch.utilities.types import _EVALUATE_OUTPUT, _PREDICT_OUTPUT
 from lightning_fabric.utilities.types import _PATH
 from typing_extensions import override
 
-from ..model.config import BaseConfig, PythonLogging
+from ..model.config import BaseConfig, ProfilerConfig, PythonLogging
 from ..util import seed
 from ..util.environment import set_additional_env_vars
 from ..util.typing_utils import copy_method_with_param
@@ -193,7 +194,6 @@ class Trainer(LightningTrainer):
             "benchmark": config.trainer.benchmark,
             "inference_mode": config.trainer.inference_mode,
             "use_distributed_sampler": config.trainer.use_distributed_sampler,
-            "profiler": config.trainer.profiler,
             "detect_anomaly": config.trainer.detect_anomaly,
             "barebones": config.trainer.barebones,
             "plugins": config.trainer.plugins,
@@ -203,6 +203,17 @@ class Trainer(LightningTrainer):
         if config.trainer.automatic_gradient_clip:
             kwargs["gradient_clip_val"] = config.trainer.gradient_clip_val
             kwargs["gradient_clip_algorithm"] = config.trainer.gradient_clip_algorithm
+        if profiler := config.trainer.profiler:
+            # If the profiler is an ProfilerConfig instance, then we instantiate it.
+            if isinstance(profiler, ProfilerConfig):
+                profiler = profiler.construct_profiler()
+                # Make sure that the profiler is an instance of `Profiler`.
+                if not isinstance(profiler, Profiler):
+                    raise ValueError(f"{profiler=} is not an instance of `{Profiler}`.")
+
+            # Otherwise, if the profiler is a string (e.g., "simpe", "advanced", "pytorch"),
+            #   then we just pass it through.
+            kwargs["profiler"] = profiler
 
         kwargs.update(kwargs_ctor)
 

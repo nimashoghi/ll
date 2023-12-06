@@ -32,6 +32,8 @@ class TypedConfig(_ModelBase, _MutableMappingBase):
         # so we need to disable that warning (beacuse "model_" is a popular prefix for ML).
         protected_namespaces=(),
         validate_assignment=True,
+        strict=True,
+        revalidate_instances="always",
     )
 
     if not TYPE_CHECKING:
