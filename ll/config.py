@@ -55,32 +55,30 @@ class TypedConfig(_ModelBase, _MutableMappingBase):
     # endregion
 
     @classmethod
-    @property
     def _as_pydantic_model_cls(cls):
         return cast(BaseModel, cls)
 
-    @property
     def _as_pydantic_model(self):
         return cast(BaseModel, self)
 
     # region construction methods
     @classmethod
     def from_dict(cls, model_dict: Mapping[str, Any]):
-        return cast(Self, cls._as_pydantic_model_cls.model_validate(model_dict))
+        return cast(Self, cls._as_pydantic_model_cls().model_validate(model_dict))
 
     @classmethod
     def builder(cls, **fields):
         builder = cast(
             cls,
-            cls._as_pydantic_model_cls.model_construct(_ll_builder=True, **fields),
+            cls._as_pydantic_model_cls().model_construct(_ll_builder=True, **fields),
         )
         return builder
 
     def build(self):
-        model_dict = self._as_pydantic_model.model_dump(round_trip=True)
+        model_dict = self._as_pydantic_model().model_dump(round_trip=True)
         instance = cast(
             Self,
-            self._as_pydantic_model_cls.model_validate(model_dict),
+            self._as_pydantic_model_cls().model_validate(model_dict),
         )
         return instance
 
@@ -90,8 +88,8 @@ class TypedConfig(_ModelBase, _MutableMappingBase):
             raise ValueError("A builder cannot be used as a config.")
 
         # Validate the model by dumping it and then loading it
-        model_dict = self._as_pydantic_model.model_dump(round_trip=True)
-        _ = self._as_pydantic_model.model_validate(model_dict, strict=strict)
+        model_dict = self._as_pydantic_model().model_dump(round_trip=True)
+        _ = self._as_pydantic_model().model_validate(model_dict, strict=strict)
 
     # endregion
 
