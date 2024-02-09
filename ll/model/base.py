@@ -4,13 +4,12 @@ import os
 import sys
 from abc import ABC, abstractmethod
 from logging import getLogger
-from typing import TYPE_CHECKING, Any, Callable, Generic, cast
+from typing import Any, Callable, Generic, cast
 
 import torch
 import torch.nn as nn
 from lightning.pytorch import LightningDataModule, LightningModule, Trainer
 from lightning.pytorch.callbacks import Callback
-from lightning.pytorch.utilities.types import STEP_OUTPUT
 from typing_extensions import TypeVar, override
 
 from .. import actsave
@@ -236,18 +235,7 @@ class LightningModuleBase(
 
     @classmethod
     @abstractmethod
-    def config_cls(cls) -> type[THparams]:
-        ...
-
-    if TYPE_CHECKING:
-        # Only make `configure_model` an abstract method if we're type checking,
-        # so that we get type errors in the editor but no runtime errors in case
-        # it's not implemented.
-
-        @abstractmethod
-        @override
-        def configure_model(self) -> None:
-            ...
+    def config_cls(cls) -> type[THparams]: ...
 
     @classmethod
     def _update_environment(cls, hparams: THparams):
@@ -279,6 +267,8 @@ class LightningModuleBase(
 
     @override
     def __init__(self, hparams: THparams):
+        if isinstance(hparams, dict):
+            hparams = self.config_cls().from_dict(hparams)
         self._update_environment(hparams)
 
         super().__init__(hparams)
