@@ -24,8 +24,7 @@ class BaseProfilerConfig(TypedConfig, ABC):
     filename: str | None = None
 
     @abstractmethod
-    def construct_profiler(self) -> Profiler:
-        ...
+    def construct_profiler(self) -> Profiler: ...
 
 
 class SimpleProfilerConfig(BaseProfilerConfig):
@@ -205,9 +204,9 @@ class OptimizerConfig(TypedConfig):
 
 
 class PythonLogging(TypedConfig):
-    log_level: Literal[
-        "CRITICAL", "FATAL", "ERROR", "WARN", "WARNING", "INFO", "DEBUG"
-    ] | None = None
+    log_level: (
+        Literal["CRITICAL", "FATAL", "ERROR", "WARN", "WARNING", "INFO", "DEBUG"] | None
+    ) = None
     """Log level to use for the Python logger (or None to use the default)."""
 
     rich: bool = True
@@ -287,7 +286,9 @@ class TrainerConfig(TypedConfig):
     strategy: str = "auto"
     devices: str | int = "auto"
     num_nodes: str | int = "auto"
-    precision: str = "32-true"
+    precision: Literal[
+        "32-true", "bf16-true", "bf16-mixed", "16-true", "16-mixed", 32, 16
+    ] = "32-true"
     logger: bool | None = None
     fast_dev_run: int | bool = False
     max_epochs: int | None = None

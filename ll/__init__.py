@@ -19,7 +19,7 @@ from .modules.normalizer import NormalizerConfig
 from .runner import Runner
 from .sweep import Sweep
 from .trainer import Trainer
-from .util.singleton import Singleton
+from .util.singleton import Registry, Singleton
 from .util.typed import TypedModuleDict, TypedModuleList
 
 __all__ = [
@@ -48,6 +48,7 @@ __all__ = [
     "Runner",
     "Sweep",
     "Trainer",
+    "Registry",
     "Singleton",
     "TypedModuleDict",
     "TypedModuleList",
