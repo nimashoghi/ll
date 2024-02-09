@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Generic, Protocol, cast, overload, runtime_checkable
 
 from tqdm.auto import tqdm
-from typing_extensions import TypeVar, TypeVarTuple, Unpack, override
+from typing_extensions import TypeVar, TypeVarTuple, Unpack, deprecated, override
 
 from submitit import AutoExecutor
 
@@ -33,8 +33,7 @@ TArguments = TypeVarTuple("TArguments", default=Unpack[tuple[()]])
 
 @runtime_checkable
 class RunProtocol(Protocol[TConfig, TReturn, Unpack[TArguments]]):
-    def __call__(self, config: TConfig, *args: Unpack[TArguments]) -> TReturn:
-        ...
+    def __call__(self, config: TConfig, *args: Unpack[TArguments]) -> TReturn: ...
 
 
 class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
@@ -126,6 +125,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
 
         return resolved
 
+    @deprecated("Use __call__ instead")
     @overload
     def local(
         self,
@@ -134,9 +134,9 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         *,
         env: dict[str, str] | None = None,
         reset_id: bool = True,
-    ) -> TReturn:
-        ...
+    ) -> TReturn: ...
 
+    @deprecated("Use __call__ instead")
     @overload
     def local(
         self,
@@ -146,9 +146,9 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         *runs: TConfig | tuple[TConfig, Unpack[TArguments]],
         env: dict[str, str] | None = None,
         reset_id: bool = True,
-    ) -> list[TReturn]:
-        ...
+    ) -> list[TReturn]: ...
 
+    @deprecated("Use __call__ instead")
     def local(
         self,
         *runs: TConfig | tuple[TConfig, Unpack[TArguments]],
@@ -168,6 +168,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
             os.environ.update(env)
             try:
                 return_value = self.run(config, *args)
+                return_values.append(return_value)
             finally:
                 for k, v in env_old.items():
                     if v is None:
@@ -177,7 +178,34 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
 
         return return_values[0] if len(return_values) == 1 else return_values
 
-    __call__ = local
+    def __call__(
+        self,
+        runs: list[TConfig | tuple[TConfig, Unpack[TArguments]]],
+        env: dict[str, str] | None = None,
+        reset_id: bool = True,
+    ):
+        return_values: list[TReturn] = []
+        for run in runs:
+            config, args = self._resolve_run(run)
+
+            config = self.update_config(config)
+            if reset_id:
+                config.id = BaseConfig.generate_id(ignore_rng=True)
+
+            env = {**self.DEFAULT_ENV, **(env or {})}
+            env_old = {k: os.environ.get(k, None) for k in env}
+            os.environ.update(env)
+            try:
+                return_value = self.run(config, *args)
+                return_values.append(return_value)
+            finally:
+                for k, v in env_old.items():
+                    if v is None:
+                        _ = os.environ.pop(k, None)
+                    else:
+                        os.environ[k] = v
+
+        return return_values[0] if len(return_values) == 1 else return_values
 
     def fast_dev_run(
         self,
@@ -194,6 +222,8 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         resolved_runs = self._resolve_runs(runs)
         self._validate_runs(resolved_runs)
 
+        return_values: list[TReturn] = []
+
         for config, args in tqdm(resolved_runs, desc="Fast dev run"):
             run_id = config.id
             run_name = config.name
@@ -202,13 +232,16 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
                 config.trainer.fast_dev_run = n_batches
                 if devices is not None:
                     config.trainer.devices = devices
-                self.local((config, *args), env=env, reset_id=True)
+                return_value = self.local((config, *args), env=env, reset_id=True)
+                return_values.append(return_value)
             except BaseException as e:
                 # print full traceback
                 log.critical(f"Error in run with {run_id=} ({run_name=}): {e}")
                 traceback.print_exc()
                 if stop_on_error:
                     raise
+
+        return return_values
 
     @staticmethod
     def _validate_runs(runs: list[tuple[TConfig, tuple[Unpack[TArguments]]]]):
@@ -231,27 +264,15 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         partition: str,
         cpus_per_task: int,
         snapshot: bool | Path,
-        timeout: timedelta = timedelta(hours=72),
-        memory: int = 480,
+        constraint: str | None = None,
+        timeout: timedelta | None = None,
+        memory: int | None = None,
         email: str | None = None,
-        volta16gb: bool | None = None,
-        volta32gb: bool | None = None,
         slurm_additional_parameters: dict[str, str] | None = None,
         slurm_setup: list[str] | None = None,
         snapshot_base: Path | None = None,
         env: dict[str, str] | None = None,
     ):
-        if volta16gb and volta32gb:
-            raise ValueError("Cannot have both volta16gb and volta32gb")
-        elif volta16gb is None and volta32gb is None:
-            volta16gb = False
-            volta32gb = True
-
-        if volta16gb is None:
-            volta16gb = False
-        if volta32gb is None:
-            volta32gb = False
-
         resolved_runs = [
             (self.update_config(c), args) for c, args in self._resolve_runs(runs)
         ]
@@ -274,10 +295,8 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         additional_parameters = {}
         if email:
             additional_parameters.update({"mail_user": email, "mail_type": "FAIL"})
-        if volta16gb:
-            additional_parameters.update({"constraint": "volta16gb"})
-        if volta32gb:
-            additional_parameters.update({"constraint": "volta32gb"})
+        if constraint:
+            additional_parameters.update({"constraint": constraint})
         if slurm_additional_parameters:
             additional_parameters.update(slurm_additional_parameters)
 
@@ -291,11 +310,9 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
             setup.append(f"export {self.SNAPSHOT_ENV_NAME}={snapshot_str}")
             setup.append(f"export PYTHONPATH={snapshot_str}:$PYTHONPATH")
 
-        executor = AutoExecutor(folder=base_path / "%j")
-        executor.update_parameters(
+        parameters_kwargs = dict(
             name=self.slurm_job_name,
             mem_gb=memory,
-            timeout_min=int(timeout.total_seconds() / 60),
             cpus_per_task=cpus_per_task,
             tasks_per_node=gpus,
             gpus_per_node=gpus,
@@ -304,6 +321,11 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
             slurm_additional_parameters=additional_parameters,
             slurm_setup=setup,
         )
+        if timeout:
+            parameters_kwargs["timeout_min"] = int(timeout.total_seconds() / 60)
+
+        executor = AutoExecutor(folder=base_path / "%j")
+        executor.update_parameters(**parameters_kwargs)
 
         map_array_args = list(zip(*[(c, *args) for c, args in resolved_runs]))
         log.critical(f"Submitting {len(resolved_runs)} jobs to {partition}.")
