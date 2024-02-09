@@ -157,7 +157,7 @@ class LoggingConfig(TypedConfig):
     enabled: bool = True
     """Enable logging."""
 
-    log_lr: bool | str = True
+    log_lr: bool | Literal["step", "epoch"] = True
     """If enabled, will register a `LearningRateMonitor` callback to log the learning rate to the logger."""
     log_epoch: bool = True
     """If enabled, will log the fractional epoch number to the logger."""
