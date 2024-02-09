@@ -1,10 +1,11 @@
+import copy
 import string
 import time
 import warnings
 from abc import ABC, abstractmethod
 from logging import getLogger
 from pathlib import Path
-from typing import Annotated, Any, ClassVar, Literal, TypeAlias
+from typing import Annotated, Any, ClassVar, Literal, Self, TypeAlias
 
 import numpy as np
 from lightning.pytorch.profilers import Profiler
@@ -346,6 +347,12 @@ class BaseConfig(TypedConfig):
 
     """Additional metadata for this run. This can be used to store arbitrary data that is not part of the config schema."""
     meta: dict[str, Any] = {}
+
+    def clone(self, with_new_id: bool = True) -> Self:
+        c = copy.deepcopy(self)
+        if with_new_id:
+            c.id = BaseConfig.generate_id()
+        return c
 
     # region Seeding
 
