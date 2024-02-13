@@ -13,9 +13,10 @@ from pathlib import Path
 from typing import Generic, Protocol, Sequence, cast, overload, runtime_checkable
 
 import cloudpickle as pickle
-from submitit import AutoExecutor
 from tqdm.auto import tqdm
 from typing_extensions import TypeVar, TypeVarTuple, Unpack, deprecated, override
+
+from submitit import AutoExecutor
 
 from .model.config import BaseConfig
 from .trainer import Trainer
@@ -233,7 +234,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         session_name: str,
         env: dict[str, str],
         wait_for_process: bool = True,
-        execute: bool = True,
+        what_if: bool = True,
     ):
         # All we need to do here is launch `python -m ll.local_sessions_runner` with the config paths as arguments. The `local_sessions_runner` will take care of the rest.
         # Obviously, the command above needs to be run in a screen session, so we can come back to it later.
@@ -258,7 +259,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
                 ]
                 + [str(p.absolute()) for p in config_paths]
             )
-        if execute:
+        if not what_if:
             log.critical(f"Launching session with command: {command}")
             process = subprocess.Popen(command, env=env)
             if wait_for_process:
@@ -272,7 +273,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         sessions: list[dict[str, str]],
         config_pickle_save_path: Path | None = None,
         reset_id: bool = True,
-        execute: bool = True,
+        what_if: bool = True,
     ):
         """
         Launches len(sessions) local runs in different environments using `screen`.
@@ -329,20 +330,20 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
                 current_env,
                 session_name,
                 session_env,
-                execute=execute,
+                what_if=what_if,
             )
             names.append(session_name)
-            if execute:
-                log.critical(f"Launched session {i+1}/{n_sessions}")
-            else:
+            if what_if:
                 command_str = " ".join(command)
                 log.critical(f"Sesssion {i+1}/{n_sessions} command: {command_str}")
                 commands.append(command_str)
+            else:
+                log.critical(f"Launched session {i+1}/{n_sessions}")
 
-        if not execute:
+        if what_if:
             # Print the full command so the user can copy-paste it
             print(
-                "The sessions were not launched because `execute` was set to `False`. Please copy-paste the following command to launch the sessions."
+                "The sessions were not launched because `what_if` was set. Please copy-paste the following command to launch the sessions."
             )
             for command in commands:
                 print(command)
@@ -354,7 +355,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         runs: Sequence[TConfig] | Sequence[tuple[TConfig, Unpack[TArguments]]],
         config_pickle_save_path: Path | None = None,
         reset_id: bool = True,
-        execute: bool = True,
+        what_if: bool = True,
     ):
         # Get the number of GPUs
         import torch
@@ -371,7 +372,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
             sessions,
             config_pickle_save_path=config_pickle_save_path,
             reset_id=reset_id,
-            execute=execute,
+            what_if=what_if,
         )
 
     def fast_dev_run(
