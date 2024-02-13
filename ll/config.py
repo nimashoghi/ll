@@ -1,10 +1,20 @@
+import contextlib
 import warnings
-from abc import ABC
 from logging import getLogger
-from typing import TYPE_CHECKING, Any, Mapping, MutableMapping, cast
+from types import TracebackType
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Callable,
+    ClassVar,
+    Generic,
+    Mapping,
+    MutableMapping,
+    cast,
+)
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
-from typing_extensions import Self, dataclass_transform, override
+from pydantic import BaseModel, ConfigDict, Field
+from typing_extensions import ParamSpec, Self, TypeVar, deprecated, override
 
 log = getLogger(__name__)
 
@@ -15,18 +25,66 @@ class _MISSING:
 
 MISSING = cast(Any, _MISSING)
 
+TConfig = TypeVar("TConfig", bound=BaseModel)
+P = ParamSpec("P")
 
-_ModelBase = BaseModel
-if TYPE_CHECKING:
-    _ModelBase = ABC
+
+class ConfigBuilder(contextlib.AbstractContextManager, Generic[TConfig]):
+    def __init__(
+        self,
+        config_cls: Callable[P, TConfig],
+        /,
+        strict: bool = True,
+        *_args: P.args,
+        **kwargs: P.kwargs,
+    ):
+        assert isinstance(config_cls, type), "config_cls must be a class"
+        assert not len(
+            _args
+        ), f"Only keyword arguments are supported for config classes. Got {_args=}."
+
+        self.__config_cls = cast(type[TConfig], config_cls)
+        self.__strict = strict
+        self.__built_config: TConfig | None = None
+
+        self.config = self.__config_cls.model_construct(**kwargs)
+
+    def __build_if_needed(self) -> TConfig:
+        if self.__built_config is None:
+            self.__built_config = self.__config_cls.model_validate(
+                self.config,
+                strict=self.__strict,
+            )
+
+        return self.__built_config
+
+    def build(self):
+        return self.__build_if_needed()
+
+    __call__ = build
+
+    @override
+    def __enter__(self) -> Self:
+        return self
+
+    @override
+    def __exit__(
+        self,
+        exc_type: type[BaseException],
+        exc_value: BaseException,
+        traceback: TracebackType,
+    ) -> None:
+        _ = self.__build_if_needed()
+
 
 _MutableMappingBase = MutableMapping[str, Any]
 if TYPE_CHECKING:
     _MutableMappingBase = object
 
 
-@dataclass_transform(kw_only_default=True)
-class TypedConfig(_ModelBase, _MutableMappingBase):
+class TypedConfig(BaseModel, _MutableMappingBase):
+    MISSING: ClassVar[Any] = MISSING
+
     model_config = ConfigDict(
         # By default, Pydantic will throw a warning if a field starts with "model_",
         # so we need to disable that warning (beacuse "model_" is a popular prefix for ML).
@@ -36,73 +94,21 @@ class TypedConfig(_ModelBase, _MutableMappingBase):
         revalidate_instances="always",
     )
 
-    if not TYPE_CHECKING:
-        _ll_builder: bool = False
+    @override
+    def model_post_init(self, __context: Any) -> None:
+        super().model_post_init(__context)
 
-    # region Post-Init
-    def __post_init__(self):
-        # Override this method to perform any post-initialization
-        # actions on the model.
-        pass
-
-    def model_post_init(self, __context: Any):
-        # Ignore if this is a builder
-        if self._ll_builder:  # type: ignore
-            return
-
-        self.__post_init__()
-
-    # endregion
+        # Make sure there are no `MISSING` values in the config
+        for key, value in self.model_dump().items():
+            if value is MISSING:
+                raise ValueError(
+                    f"Config value for key '{key}' is `MISSING`.\n"
+                    "Please provide a value for this key."
+                )
 
     @classmethod
-    def _as_pydantic_model_cls(cls):
-        return cast(BaseModel, cls)
-
-    def _as_pydantic_model(self):
-        return cast(BaseModel, self)
-
-    # region construction methods
-    @classmethod
-    def from_dict(cls, model_dict: Mapping[str, Any]):
-        return cast(Self, cls._as_pydantic_model_cls().model_validate(model_dict))
-
-    @classmethod
-    def builder(cls, **fields):
-        builder = cast(
-            cls,
-            cls._as_pydantic_model_cls().model_construct(_ll_builder=True, **fields),
-        )
-        return builder
-
-    def build(self):
-        model_dict = self._as_pydantic_model().model_dump(round_trip=True)
-        instance = cast(
-            Self,
-            self._as_pydantic_model_cls().model_validate(model_dict),
-        )
-        return instance
-
-    def validate(self, strict: bool = True):
-        # Make sure this is not a builder
-        if self._ll_builder:  # type: ignore
-            raise ValueError("A builder cannot be used as a config.")
-
-        # Validate the model by dumping it and then loading it
-        model_dict = self._as_pydantic_model().model_dump(round_trip=True)
-        _ = self._as_pydantic_model().model_validate(model_dict, strict=strict)
-
-    # endregion
-
-    def pprint(self):
-        try:
-            from rich import print as rprint
-        except ImportError:
-            warnings.warn(
-                "rich is not installed, falling back to default print function"
-            )
-            print(self)
-        else:
-            rprint(self)
+    def builder(cls, strict: bool = True, **kwargs: Any) -> ConfigBuilder[Self]:
+        return ConfigBuilder(cls, strict=strict, **kwargs)
 
     # region MutableMapping implementation
     # These are under `if not TYPE_CHECKING` to prevent vscode from showing
@@ -166,11 +172,22 @@ class TypedConfig(_ModelBase, _MutableMappingBase):
 
     # endregion
 
+    @deprecated("No longer supported, use rich library instead.")
+    def pprint(self):
+        try:
+            from rich import print as rprint
+        except ImportError:
+            warnings.warn(
+                "rich is not installed, falling back to default print function"
+            )
+            print(self)
+        else:
+            rprint(self)
+
 
 __all__ = [
     "MISSING",
     "Field",
+    "ConfigBuilder",
     "TypedConfig",
-    "field_validator",
-    "model_validator",
 ]
