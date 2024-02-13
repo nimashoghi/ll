@@ -1,6 +1,8 @@
 import copy
 import getpass
 import os
+import subprocess
+import tempfile
 import traceback
 from collections import Counter
 from contextlib import ExitStack
@@ -10,10 +12,10 @@ from logging import getLogger
 from pathlib import Path
 from typing import Generic, Protocol, Sequence, cast, overload, runtime_checkable
 
+import cloudpickle as pickle
+from submitit import AutoExecutor
 from tqdm.auto import tqdm
 from typing_extensions import TypeVar, TypeVarTuple, Unpack, deprecated, override
-
-from submitit import AutoExecutor
 
 from .model.config import BaseConfig
 from .trainer import Trainer
@@ -76,6 +78,11 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         self.slurm_job_name = slurm_job_name
         self.validate_config_before_run = validate_config_before_run
         self.validate_strict = validate_strict
+        self._init_kwargs = {
+            "slurm_job_name": slurm_job_name,
+            "validate_config_before_run": validate_config_before_run,
+            "validate_strict": validate_strict,
+        }
 
     @property
     def run(self) -> RunProtocol[TConfig, TReturn, Unpack[TArguments]]:
@@ -112,6 +119,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
     def _resolve_run(
         run: TConfig | tuple[TConfig, Unpack[TArguments]],
         copy_config: bool = True,
+        reset_id: bool = False,
     ):
         if isinstance(run, tuple):
             (config, *args) = run
@@ -121,16 +129,21 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         args = cast(tuple[Unpack[TArguments]], args)
         if copy_config:
             config = copy.deepcopy(config)
+        if reset_id:
+            config.id = BaseConfig.generate_id(ignore_rng=True)
         return (config, args)
 
     @staticmethod
     def _resolve_runs(
         runs: Sequence[TConfig] | Sequence[tuple[TConfig, Unpack[TArguments]]],
         copy_config: bool = True,
+        reset_id: bool = False,
     ):
         resolved: list[tuple[TConfig, tuple[Unpack[TArguments]]]] = []
         for run in runs:
-            resolved.append(Runner._resolve_run(run, copy_config=copy_config))
+            resolved.append(
+                Runner._resolve_run(run, copy_config=copy_config, reset_id=reset_id)
+            )
 
         return resolved
 
@@ -212,6 +225,154 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
                         os.environ[k] = v
 
         return return_values[0] if len(return_values) == 1 else return_values
+
+    def _launch_session(
+        self,
+        config_paths: list[Path],
+        conda_env: str | None,
+        session_name: str,
+        env: dict[str, str],
+        wait_for_process: bool = True,
+        execute: bool = True,
+    ):
+        # All we need to do here is launch `python -m ll.local_sessions_runner` with the config paths as arguments. The `local_sessions_runner` will take care of the rest.
+        # Obviously, the command above needs to be run in a screen session, so we can come back to it later.
+
+        if not conda_env:
+            command = (
+                ["screen", "-dmS", session_name]
+                + ["python", "-m", "ll.local_sessions_runner"]
+                + [str(p.absolute()) for p in config_paths]
+            )
+        else:
+            command = (
+                ["screen", "-dmS", session_name]
+                + [
+                    "conda",
+                    "run",
+                    "-n",
+                    conda_env,
+                    "python",
+                    "-m",
+                    "ll.local_sessions_runner",
+                ]
+                + [str(p.absolute()) for p in config_paths]
+            )
+        if execute:
+            log.critical(f"Launching session with command: {command}")
+            process = subprocess.Popen(command, env=env)
+            if wait_for_process:
+                _ = process.wait()
+
+        return command
+
+    def local_sessions(
+        self,
+        runs: Sequence[TConfig] | Sequence[tuple[TConfig, Unpack[TArguments]]],
+        sessions: list[dict[str, str]],
+        config_pickle_save_path: Path | None = None,
+        reset_id: bool = True,
+        execute: bool = True,
+    ):
+        """
+        Launches len(sessions) local runs in different environments using `screen`.
+
+        Parameters
+        ----------
+        runs : Sequence[TConfig] | Sequence[tuple[TConfig, Unpack[TArguments]]]
+            A sequence of runs to launch.
+        sessions : list[dict[str, str]]
+            A list of environment variables to use for each session.
+        reset_id : bool, optional
+            Whether to reset the id of the runs before launching them.
+
+        Returns
+        -------
+        list[TReturn]
+            A list of names for each screen session.
+        """
+
+        # This only works in conda environments, so we need to make sure we're in one
+        if (current_env := os.environ.get("CONDA_DEFAULT_ENV")) is None:
+            raise RuntimeError("This function only works in conda environments.")
+
+        if config_pickle_save_path is None:
+            config_pickle_save_path = Path(tempfile.mkdtemp())
+
+        resolved_runs = self._resolve_runs(runs, reset_id=reset_id)
+        self._validate_runs(resolved_runs)
+
+        # Save all configs to pickle files
+        config_paths: list[Path] = []
+        for i, config in enumerate(resolved_runs):
+            config_path = config_pickle_save_path / f"ll_{i:03d}.pkl"
+            config_paths.append(config_path)
+            config = tuple([config[0], *config[1]])
+            with config_path.open("wb") as f:
+                pickle.dump((self._run, self._init_kwargs, config), f)
+
+        # Launch all sessions
+        names: list[str] = []
+        commands: list[str] = []
+        n_sessions = len(sessions)
+        for i, session in enumerate(sessions):
+            session_env = {**self.DEFAULT_ENV, **session}
+            # Get the shared project name
+            project_names = set([config.project for config, _ in resolved_runs])
+            if len(project_names) == 1:
+                project = project_names.pop()
+            else:
+                project = "session"
+            session_name = f"ll_{project}_{i:03d}"
+            command = self._launch_session(
+                config_paths,
+                current_env,
+                session_name,
+                session_env,
+                execute=execute,
+            )
+            names.append(session_name)
+            if execute:
+                log.critical(f"Launched session {i+1}/{n_sessions}")
+            else:
+                command_str = " ".join(command)
+                log.critical(f"Sesssion {i+1}/{n_sessions} command: {command_str}")
+                commands.append(command_str)
+
+        if not execute:
+            # Print the full command so the user can copy-paste it
+            print(
+                "The sessions were not launched because `execute` was set to `False`. Please copy-paste the following command to launch the sessions."
+            )
+            for command in commands:
+                print(command)
+
+        return names
+
+    def local_session_per_gpu(
+        self,
+        runs: Sequence[TConfig] | Sequence[tuple[TConfig, Unpack[TArguments]]],
+        config_pickle_save_path: Path | None = None,
+        reset_id: bool = True,
+        execute: bool = True,
+    ):
+        # Get the number of GPUs
+        import torch
+
+        n_gpus = torch.cuda.device_count()
+        log.critical(f"Detected {n_gpus} GPUs. Launching one session per GPU.")
+
+        # Create a session for each GPU
+        sessions = [{"CUDA_VISIBLE_DEVICES": str(i)} for i in range(n_gpus)]
+
+        # Launch the sessions
+        return self.local_sessions(
+            runs,
+            sessions,
+            config_pickle_save_path=config_pickle_save_path,
+            reset_id=reset_id,
+            execute=execute,
+        )
 
     def fast_dev_run(
         self,
