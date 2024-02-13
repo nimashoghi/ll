@@ -10,7 +10,7 @@ from torch.optim import Optimizer
 from typing_extensions import override
 
 from ...util.typing_utils import mixin_base_type
-from ..config import BaseConfig, GradientSkippingConfig
+from ..config import BaseConfig
 from .callback import CallbackModuleMixin
 
 log = getLogger(__name__)
@@ -82,8 +82,11 @@ def _skipped_steps_on_before_optimizer_step(
     if not isinstance(pl_module, OptimizerModuleMixin):
         raise TypeError(f"Expected OptimizerModuleMixin, got {type(pl_module)}")
 
-    config = cast(BaseConfig, pl_module.hparams).trainer.optimizer.gradient_skipping
-    if not config.enabled:
+    if (
+        config := cast(
+            BaseConfig, pl_module.hparams
+        ).trainer.optimizer.gradient_skipping
+    ) is None or not config.enabled:
         return
 
     # Skip the step if the global step is less than the start_after_n_steps
@@ -125,12 +128,12 @@ class OptimizerModuleMixin(mixin_base_type(CallbackModuleMixin)):
         def _grad_skip_callback():
             nonlocal self
 
-            config = cast(BaseConfig, self.hparams)
-            match config.trainer.optimizer.gradient_skipping:
-                case GradientSkippingConfig(enabled=True):
-                    self.grad_skipped_steps = torchmetrics.SumMetric()
-                case _:
-                    return
+            if (
+                config := cast(
+                    BaseConfig, self.hparams
+                ).trainer.optimizer.gradient_skipping
+            ) is not None and config.enabled:
+                self.grad_skipped_steps = torchmetrics.SumMetric()
 
             return LambdaCallback(
                 on_before_optimizer_step=_skipped_steps_on_before_optimizer_step

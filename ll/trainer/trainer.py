@@ -200,9 +200,15 @@ class Trainer(LightningTrainer):
             "sync_batchnorm": config.trainer.sync_batchnorm,
             "reload_dataloaders_every_n_epochs": config.trainer.reload_dataloaders_every_n_epochs,
         }
-        if config.trainer.automatic_gradient_clip:
-            kwargs["gradient_clip_val"] = config.trainer.gradient_clip_val
-            kwargs["gradient_clip_algorithm"] = config.trainer.gradient_clip_algorithm
+        # if config.trainer.automatic_gradient_clip:
+        #     kwargs["gradient_clip_val"] = config.trainer.gradient_clip_val
+        #     kwargs["gradient_clip_algorithm"] = config.trainer.gradient_clip_algorithm
+        if (
+            grad_clip_config := config.trainer.optimizer.gradient_clipping
+        ) is not None and grad_clip_config.enabled:
+            kwargs["gradient_clip_algorithm"] = grad_clip_config.algorithm
+            kwargs["gradient_clip_val"] = grad_clip_config.value
+
         if profiler := config.trainer.profiler:
             # If the profiler is an ProfilerConfig instance, then we instantiate it.
             if isinstance(profiler, BaseProfilerConfig):

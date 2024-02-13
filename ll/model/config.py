@@ -242,8 +242,17 @@ class LoggingConfig(TypedConfig):
     """Tensorboard configuration"""
 
 
+class GradientClippingConfig(TypedConfig):
+    enabled: bool = True
+    """Enable gradient clipping."""
+    algorithm: Literal["value", "norm"] = "norm"
+    """Norm type to use for gradient clipping."""
+    value: float = 1.0
+    """Value to use for gradient clipping."""
+
+
 class GradientSkippingConfig(TypedConfig):
-    enabled: bool = False
+    enabled: bool = True
     """Enable gradient skipping."""
     norm_type: str | float = 2.0
     """Norm type to use for gradient skipping."""
@@ -269,8 +278,11 @@ class OptimizerConfig(TypedConfig):
     log_param_norm_per_param: bool | str | float = False
     """If enabled, will log the parameter norm for each model parameter to the logger."""
 
-    gradient_skipping: GradientSkippingConfig = GradientSkippingConfig(enabled=False)
-    """Gradient skipping configuration."""
+    gradient_clipping: GradientClippingConfig | None = None
+    """Gradient clipping configuration, or None to disable gradient clipping."""
+
+    gradient_skipping: GradientSkippingConfig | None = None
+    """Gradient skipping configuration, or None to disable gradient skipping."""
 
 
 class PythonLogging(TypedConfig):
@@ -504,22 +516,6 @@ class TrainerConfig(TypedConfig):
     Accumulates gradients over k batches before stepping the optimizer.
         ``1`` means no gradient accumulation (i.e., performs a step after each batch).
         Default: ``1``.
-    """
-    automatic_gradient_clip: bool = True
-    """
-    Whether gradient clipping should be enabled automatically.
-    """
-    gradient_clip_val: int | float | None = None
-    """
-    The value at which to clip gradients. Passing ``gradient_clip_val=None`` disables
-        gradient clipping. If using Automatic Mixed Precision (AMP), the gradients will be unscaled before.
-        Default: ``None``.
-    """
-    gradient_clip_algorithm: Literal["norm", "value"] | None = None
-    """
-    The gradient clipping algorithm to use. Pass ``gradient_clip_algorithm="value"``
-        to clip by value, and ``gradient_clip_algorithm="norm"`` to clip by norm. By default it will
-        be set to ``"norm"``.
     """
     deterministic: bool | str | None = None
     """
