@@ -1,5 +1,6 @@
 import contextlib
 import warnings
+from abc import ABC
 from logging import getLogger
 from types import TracebackType
 from typing import (
@@ -14,7 +15,14 @@ from typing import (
 )
 
 from pydantic import BaseModel, ConfigDict, Field
-from typing_extensions import ParamSpec, Self, TypeVar, deprecated, override
+from typing_extensions import (
+    ParamSpec,
+    Self,
+    TypeVar,
+    dataclass_transform,
+    deprecated,
+    override,
+)
 
 log = getLogger(__name__)
 
@@ -25,8 +33,18 @@ class _MISSING:
 
 MISSING = cast(Any, _MISSING())
 
-TConfig = TypeVar("TConfig", bound=BaseModel)
+TConfig = TypeVar("TConfig", bound="TypedConfig")
 P = ParamSpec("P")
+
+
+def _deep_validate(config: TConfig, strict: bool = True) -> TConfig:
+    return cast(
+        TConfig,
+        config.pydantic_model().model_validate(
+            config.pydantic_model().model_dump(round_trip=True),
+            strict=strict,
+        ),
+    )
 
 
 class ConfigBuilder(contextlib.AbstractContextManager, Generic[TConfig]):
@@ -50,10 +68,7 @@ class ConfigBuilder(contextlib.AbstractContextManager, Generic[TConfig]):
         self.__warning_list: list[warnings.WarningMessage] | None = None
 
     def build(self, config: TConfig) -> TConfig:
-        return config.model_validate(
-            config.model_dump(round_trip=True),
-            strict=self.__strict,
-        )
+        return _deep_validate(config, strict=self.__strict)
 
     __call__ = build
 
@@ -62,7 +77,12 @@ class ConfigBuilder(contextlib.AbstractContextManager, Generic[TConfig]):
         self.__warning_list = self.__exit_stack.enter_context(
             warnings.catch_warnings(record=True)
         )
-        config = self.__config_cls.model_construct(**self.__model_kwargs)
+        config = cast(
+            TConfig,
+            self.__config_cls.pydantic_model_cls().model_construct(
+                **self.__model_kwargs
+            ),
+        )
         return self, config
 
     @override
@@ -93,12 +113,20 @@ class ConfigBuilder(contextlib.AbstractContextManager, Generic[TConfig]):
         return return_value
 
 
+_BaseModelBase = BaseModel
+if TYPE_CHECKING:
+    _BaseModelBase = ABC
+
 _MutableMappingBase = MutableMapping[str, Any]
 if TYPE_CHECKING:
     _MutableMappingBase = object
 
 
-class TypedConfig(BaseModel, _MutableMappingBase):
+@dataclass_transform(
+    kw_only_default=True,
+    field_specifiers=(Field,),
+)
+class TypedConfig(_BaseModelBase, _MutableMappingBase):
     MISSING: ClassVar[Any] = MISSING
 
     model_config = ConfigDict(
@@ -108,11 +136,23 @@ class TypedConfig(BaseModel, _MutableMappingBase):
         validate_assignment=True,
         strict=True,
         revalidate_instances="always",
+        arbitrary_types_allowed=True,
     )
 
+    @classmethod
+    def pydantic_model_cls(cls) -> type[BaseModel]:
+        return cast(type[BaseModel], cls)
+
+    def pydantic_model(self) -> BaseModel:
+        return cast(BaseModel, self)
+
     @override
-    def model_post_init(self, __context: Any) -> None:
-        super().model_post_init(__context)
+    def model_post_init(  # pyright: ignore[reportGeneralTypeIssues]
+        self, __context: Any
+    ) -> None:
+        super().model_post_init(  # pyright: ignore[reportAttributeAccessIssue]
+            __context
+        )
 
         # This fixes the issue w/ `copy.deepcopy` not working properly when
         # the object was created using `cls.model_construct`.
@@ -120,12 +160,16 @@ class TypedConfig(BaseModel, _MutableMappingBase):
             object.__setattr__(self, "__pydantic_private__", None)
 
         # Make sure there are no `MISSING` values in the config
-        for key, value in self.model_dump().items():
+        for key, value in self.pydantic_model().model_dump().items():
             if value is MISSING:
                 raise ValueError(
                     f"Config value for key '{key}' is `MISSING`.\n"
                     "Please provide a value for this key."
                 )
+
+    @classmethod
+    def model_deep_validate(cls, config: TConfig, strict: bool = True) -> TConfig:
+        return _deep_validate(config, strict=strict)
 
     @classmethod  # pyright: ignore[reportArgumentType]
     def builder(cls: type[TConfig], /, strict: bool = True):

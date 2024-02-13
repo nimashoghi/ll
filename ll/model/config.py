@@ -23,7 +23,7 @@ from lightning.fabric.plugins.precision.precision import _PRECISION_INPUT
 from lightning.pytorch.plugins.layer_sync import LayerSync
 from lightning.pytorch.plugins.precision.precision import Precision
 from lightning.pytorch.profilers import Profiler
-from typing_extensions import TypeVar, override
+from typing_extensions import TypeVar, deprecated, override
 
 from ..config import Field, TypedConfig
 
@@ -245,10 +245,10 @@ class LoggingConfig(TypedConfig):
 class GradientClippingConfig(TypedConfig):
     enabled: bool = True
     """Enable gradient clipping."""
+    value: int | float
+    """Value to use for gradient clipping."""
     algorithm: Literal["value", "norm"] = "norm"
     """Norm type to use for gradient clipping."""
-    value: float = 1.0
-    """Value to use for gradient clipping."""
 
 
 class GradientSkippingConfig(TypedConfig):
@@ -348,8 +348,6 @@ class TrainerConfig(TypedConfig):
     """If enabled, will automatically finalize the trainer (e.g., call `wandb.finish()`) when the run ends. Should be `True` most of the time."""
     enable_logger_validation: bool = True
     """If enabled, will validate loggers. This makes sure that the logger's log_dirs are correct given the current config id. Should be `True` most of the time."""
-    patch_hpc_checkpoint_connector: bool | None = None
-    """If enabled, will patch Lightning's trainer to load the HPC checkpoint by default, even if `default_ckpt_path` is set to something else. This is deprecated and doesn't do anything."""
 
     supports_skip_batch_exception: bool = True
     """If enabled, the model supports skipping an entire batch by throwing a `SkipBatch` exception."""
@@ -595,10 +593,75 @@ class TrainerConfig(TypedConfig):
         Can be remote file paths such as `s3://mybucket/path` or 'hdfs://path/'
     """
 
+    # region Deprecated fields
+    @property
+    @deprecated("Please use trainer.optimizer.gradient_clipping instead.")
+    def automatic_gradient_clip(self):
+        if (config := self.optimizer.gradient_clipping) is None or not config.enabled:
+            return False
+        return True
+
+    @automatic_gradient_clip.setter
+    @deprecated("Please use trainer.optimizer.gradient_clipping instead.")
+    def automatic_gradient_clip(self, value: bool):
+        if self.optimizer.gradient_clipping is None:
+            self.optimizer.gradient_clipping = GradientClippingConfig(
+                enabled=False, value=1.0, algorithm="norm"
+            )
+        self.optimizer.gradient_clipping.enabled = value
+
+    @property
+    @deprecated("Please use trainer.optimizer.gradient_clipping instead.")
+    def gradient_clip_algorithm(self):
+        if (config := self.optimizer.gradient_clipping) is None or not config.enabled:
+            return "norm"
+        return config.algorithm
+
+    @gradient_clip_algorithm.setter
+    @deprecated("Please use trainer.optimizer.gradient_clipping instead.")
+    def gradient_clip_algorithm(self, value: Literal["value", "norm"]):
+        if self.optimizer.gradient_clipping is None:
+            self.optimizer.gradient_clipping = GradientClippingConfig(
+                enabled=False, value=1.0, algorithm=value
+            )
+        self.optimizer.gradient_clipping.algorithm = value
+
+    @property
+    @deprecated("Please use trainer.optimizer.gradient_clipping instead.")
+    def gradient_clip_val(self):
+        if (config := self.optimizer.gradient_clipping) is None or not config.enabled:
+            return None
+        return config.value
+
+    @gradient_clip_val.setter
+    @deprecated("Please use trainer.optimizer.gradient_clipping instead.")
+    def gradient_clip_val(self, value: int | float | None):
+        if value is None:
+            self.optimizer.gradient_clipping = None
+            return
+
+        if self.optimizer.gradient_clipping is None:
+            self.optimizer.gradient_clipping = GradientClippingConfig(
+                enabled=False, value=value, algorithm="norm"
+            )
+        self.optimizer.gradient_clipping.enabled = True
+        self.optimizer.gradient_clipping.value = value
+
+    # endregion
+
+
+class RunnerOutputSaveConfig(TypedConfig):
+    enabled: bool = True
+    """Enable saving the runner stdout and stderr to a file."""
+    dirpath: str | Path | None = None
+    """Directory path for the output file. If None, will use the current working directory/ll_runner_logs/{id}"""
+
 
 class RunnerConfig(TypedConfig):
     auto_call_trainer_init_from_runner: bool = True
     """If enabled, will automatically call the Trainer.runner_init() function from the Runner. Should be `True` most of the time."""
+    save_output: RunnerOutputSaveConfig | None = None
+    """Output saving configuration options, or ``None`` to disable output saving."""
 
 
 class BaseConfig(TypedConfig):

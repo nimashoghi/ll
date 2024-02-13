@@ -1,6 +1,6 @@
+import contextlib
 import logging
 from collections import abc
-from contextlib import ExitStack, contextmanager
 from pathlib import Path
 from types import NoneType
 from typing import Any, Callable
@@ -15,7 +15,12 @@ from lightning.pytorch.utilities.types import _EVALUATE_OUTPUT, _PREDICT_OUTPUT
 from lightning_fabric.utilities.types import _PATH
 from typing_extensions import override
 
-from ..model.config import BaseConfig, BaseProfilerConfig, PythonLogging
+from ..model.config import (
+    BaseConfig,
+    BaseProfilerConfig,
+    PythonLogging,
+    RunnerOutputSaveConfig,
+)
 from ..util import seed
 from ..util.environment import set_additional_env_vars
 from ..util.typing_utils import copy_method_with_param
@@ -29,7 +34,31 @@ from .logging import (
 log = logging.getLogger(__name__)
 
 
-def _setup_logger(config: PythonLogging):
+def _save_output_dir(root_config: BaseConfig, config: RunnerOutputSaveConfig):
+    if not (dirpath := config.dirpath):
+        dirpath = default_root_dir(root_config, logs_dirname="ll_runner_logs")
+    dirpath = Path(dirpath).resolve()
+
+    # Make sure that the directory exists
+    dirpath.mkdir(parents=True, exist_ok=True)
+
+    return dirpath
+
+
+def _default_log_handlers(root_config: BaseConfig):
+    if (config := root_config.runner.save_output) is None or not config.enabled:
+        return
+
+    # Get the directory path
+    dirpath = _save_output_dir(root_config, config)
+
+    # Capture the logs to `dirpath`/log.log
+    log_file = dirpath / "log.log"
+    log_file.touch(exist_ok=True)
+    yield logging.FileHandler(log_file)
+
+
+def _setup_logger(root_config: BaseConfig, config: PythonLogging):
     if config.lovely_tensors:
         try:
             import lovely_tensors
@@ -50,21 +79,24 @@ def _setup_logger(config: PythonLogging):
                 "Failed to import lovely-numpy. Ignoring pretty numpy array formatting"
             )
 
+    log_handlers: list[logging.Handler] = [*_default_log_handlers(root_config)]
     if config.rich:
         try:
             from rich.logging import RichHandler
 
-            logging.basicConfig(
-                level=config.log_level,
-                format="%(message)s",
-                datefmt="[%X]",
-                handlers=[RichHandler(rich_tracebacks=config.rich_tracebacks)],
-            )
-            return
+            log_handlers.append(RichHandler())
         except ImportError:
             log.warning(
                 "Failed to import rich. Falling back to default Python logging."
             )
+
+    logging.basicConfig(
+        level=config.log_level,
+        format="%(message)s",
+        datefmt="[%X]",
+        handlers=log_handlers,
+    )
+
     logging.basicConfig(level=config.log_level)
 
 
@@ -84,28 +116,58 @@ class Trainer(LightningTrainer):
         return default_root_dir(config, logs_dirname=logs_dirname)
 
     @classmethod
-    def setup_python_logging(cls, config: PythonLogging):
-        _setup_logger(config)
+    def setup_python_logging(cls, config: BaseConfig):
+        _setup_logger(config, config.trainer.python_logging)
 
     @classmethod
+    @contextlib.contextmanager
+    def output_save_context(cls, root_config: BaseConfig):
+        if (config := root_config.runner.save_output) is None or not config.enabled:
+            yield
+            return
+
+        # Get the directory path
+        dirpath = _save_output_dir(root_config, config)
+
+        # Capture the stdout and stderr logs to `dirpath`/stdout.log and `dirpath`/stderr.log
+        stdout_log = dirpath / "stdout.log"
+        stderr_log = dirpath / "stderr.log"
+        stdout_log.touch(exist_ok=True)
+        stderr_log.touch(exist_ok=True)
+        with stdout_log.open("a") as file:
+            with contextlib.redirect_stdout(file):
+                with stderr_log.open("a") as file:
+                    with contextlib.redirect_stderr(file):
+                        yield
+
+    @classmethod
+    @contextlib.contextmanager
     def ll_initialize(cls, config: BaseConfig):
-        if not config.trainer.auto_call_trainer_init_from_runner:
-            _setup_logger(config.trainer.python_logging)
+        with contextlib.ExitStack() as stack:
+            if not config.runner.auto_call_trainer_init_from_runner:
+                stack.enter_context(cls.runner_init(config))
 
-        if config.trainer.auto_set_default_root_dir:
-            if config.trainer.default_root_dir:
-                raise ValueError(
-                    "You have set both `config.trainer.default_root_dir` and `config.trainer.auto_set_default_root_dir`. "
-                    "Please set only one of them."
+            if config.trainer.auto_set_default_root_dir:
+                if config.trainer.default_root_dir:
+                    raise ValueError(
+                        "You have set both `config.trainer.default_root_dir` and `config.trainer.auto_set_default_root_dir`. "
+                        "Please set only one of them."
+                    )
+                config.trainer.default_root_dir = str(
+                    cls.ll_default_root_dir(config).absolute()
                 )
-            config.trainer.default_root_dir = str(
-                cls.ll_default_root_dir(config).absolute()
-            )
-            log.critical(f"Setting {config.trainer.default_root_dir=}.")
+                log.critical(f"Setting {config.trainer.default_root_dir=}.")
+
+            yield
 
     @classmethod
+    @contextlib.contextmanager
     def runner_init(cls, config: BaseConfig):
-        _setup_logger(config.trainer.python_logging)
+        with contextlib.ExitStack() as stack:
+            cls.setup_python_logging(config)
+            # Save stdout/stderr to a file
+            stack.enter_context(Trainer.output_save_context(config))
+            yield
 
     @classmethod
     def ll_default_callbacks(cls, config: BaseConfig):
@@ -119,10 +181,10 @@ class Trainer(LightningTrainer):
             yield OnExceptionCheckpoint(log_dir, filename=f"on_exception_{config.id}")
 
     @classmethod
-    @contextmanager
+    @contextlib.contextmanager
     def context(cls, config: BaseConfig):
-        with ExitStack() as stack:
-            cls.ll_initialize(config)
+        with contextlib.ExitStack() as stack:
+            stack.enter_context(cls.ll_initialize(config))
 
             cls._finalizers.clear()
             if config.trainer.seed is not None:

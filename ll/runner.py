@@ -86,25 +86,25 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         }
 
     @property
-    def run(self) -> RunProtocol[TConfig, TReturn, Unpack[TArguments]]:
+    def _run_fn(self) -> RunProtocol[TConfig, TReturn, Unpack[TArguments]]:
         run = self._run
 
         @wraps(run)
         def wrapped_run(config: TConfig, *args: Unpack[TArguments]) -> TReturn:
             nonlocal self
 
-            # If `auto_call_trainer_init_from_runner`, we call `Trainer.runner_init` before running the program.
-            if config.runner.auto_call_trainer_init_from_runner:
-                Trainer.runner_init(config)
-
-            # If `validate_config_before_run`, we validate the configuration before running the program.
-            if self.validate_config_before_run:
-                config = type(config).model_validate(
-                    config, strict=self.validate_strict
-                )
-
             with ExitStack() as stack:
                 nonlocal run
+
+                # If `auto_call_trainer_init_from_runner`, we call `Trainer.runner_init` before running the program.
+                if config.runner.auto_call_trainer_init_from_runner:
+                    stack.enter_context(Trainer.runner_init(config))
+
+                # If `validate_config_before_run`, we validate the configuration before running the program.
+                if self.validate_config_before_run:
+                    config = type(config).model_deep_validate(
+                        config, strict=self.validate_strict
+                    )
 
                 if config.trainer.auto_wrap_trainer:
                     stack.enter_context(Trainer.context(config))
@@ -189,7 +189,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
             env_old = {k: os.environ.get(k, None) for k in env}
             os.environ.update(env)
             try:
-                return_value = self.run(config, *args)
+                return_value = self._run_fn(config, *args)
                 return_values.append(return_value)
             finally:
                 for k, v in env_old.items():
@@ -228,7 +228,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
             env_old = {k: os.environ.get(k, None) for k in env}
             os.environ.update(env)
             try:
-                return_value = self.run(config, *args)
+                return_value = self._run_fn(config, *args)
                 return_values.append(return_value)
             finally:
                 for k, v in env_old.items():
@@ -567,7 +567,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
 
         map_array_args = list(zip(*[(c, *args) for c, args in resolved_runs]))
         log.critical(f"Submitting {len(resolved_runs)} jobs to {partition}.")
-        jobs = executor.map_array(self.run, *map_array_args)
+        jobs = executor.map_array(self._run_fn, *map_array_args)
         for job, (config, _) in zip(jobs, resolved_runs):
             log.critical(f"[id={config.id}] Submitted job: {job.job_id} to {partition}")
         return jobs
