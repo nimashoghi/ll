@@ -23,7 +23,7 @@ class _MISSING:
     pass
 
 
-MISSING = cast(Any, _MISSING)
+MISSING = cast(Any, _MISSING())
 
 TConfig = TypeVar("TConfig", bound=BaseModel)
 P = ParamSpec("P")
@@ -45,30 +45,25 @@ class ConfigBuilder(contextlib.AbstractContextManager, Generic[TConfig]):
 
         self.__config_cls = cast(type[TConfig], config_cls)
         self.__strict = strict
-        self.__built_config: TConfig | None = None
+        self.__model_kwargs = kwargs
+        self.__exit_stack = contextlib.ExitStack()
+        self.__warning_list: list[warnings.WarningMessage] | None = None
 
-        self.config = self.__config_cls.model_construct(**kwargs)
-
-    def __build_config(self, config: TConfig):
-        return self.__config_cls.model_validate(config, strict=self.__strict)
-
-    def __build_if_needed(self, config: TConfig | None) -> TConfig:
-        if config is not None:
-            return self.__build_config(config)
-
-        if self.__built_config is None:
-            self.__built_config = self.__build_config(self.config)
-
-        return self.__built_config
-
-    def build(self, config: TConfig | None = None) -> TConfig:
-        return self.__build_if_needed(config)
+    def build(self, config: TConfig) -> TConfig:
+        return config.model_validate(
+            config.model_dump(round_trip=True),
+            strict=self.__strict,
+        )
 
     __call__ = build
 
     @override
-    def __enter__(self) -> Self:
-        return self
+    def __enter__(self) -> tuple[Self, TConfig]:
+        self.__warning_list = self.__exit_stack.enter_context(
+            warnings.catch_warnings(record=True)
+        )
+        config = self.__config_cls.model_construct(**self.__model_kwargs)
+        return self, config
 
     @override
     def __exit__(
@@ -76,8 +71,26 @@ class ConfigBuilder(contextlib.AbstractContextManager, Generic[TConfig]):
         exc_type: type[BaseException],
         exc_value: BaseException,
         traceback: TracebackType,
-    ) -> None:
-        _ = self.__build_if_needed(None)
+    ):
+        return_value = self.__exit_stack.__exit__(exc_type, exc_value, traceback)
+        if warning_list := self.__warning_list:
+            for warning in warning_list:
+                if (
+                    isinstance(warning.message, UserWarning)
+                    and "pydantic" in warning.message.args[0].lower()
+                ):
+                    continue
+
+                warnings.showwarning(
+                    message=warning.message,
+                    category=warning.category,
+                    filename=warning.filename,
+                    lineno=warning.lineno,
+                    file=warning.file,
+                    line=warning.line,
+                )
+
+        return return_value
 
 
 _MutableMappingBase = MutableMapping[str, Any]
@@ -100,6 +113,9 @@ class TypedConfig(BaseModel, _MutableMappingBase):
     @override
     def model_post_init(self, __context: Any) -> None:
         super().model_post_init(__context)
+
+        if not hasattr(self, "__pydantic_private__"):
+            object.__setattr__(self, "__pydantic_private__", None)
 
         # Make sure there are no `MISSING` values in the config
         for key, value in self.model_dump().items():

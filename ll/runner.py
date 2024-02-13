@@ -53,6 +53,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         *,
         slurm_job_name: str = "ll",
         validate_config_before_run: bool = True,
+        validate_strict: bool = True,
     ):
         """This is the initialization function for a class that takes in a run protocol, an auto wrap run
         boolean, and a slurm job name string.
@@ -65,6 +66,8 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
             The `slurm_job_name` parameter is a string that represents the name of the job when submitting it to a SLURM cluster.
         validate_config_before_run : bool, optional
             The `validate_config_before_run` parameter is a boolean that represents whether or not to validate the configuration before running the program.
+        validate_strict: bool, optional
+            Should `validate_config_before_run` be strict? If `True`, the configuration will be validated strictly. If `False`, the configuration will be validated non-strictly.
         """
 
         super().__init__()
@@ -72,6 +75,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         self._run = run
         self.slurm_job_name = slurm_job_name
         self.validate_config_before_run = validate_config_before_run
+        self.validate_strict = validate_strict
 
     @property
     def run(self) -> RunProtocol[TConfig, TReturn, Unpack[TArguments]]:
@@ -87,7 +91,9 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
 
             # If `validate_config_before_run`, we validate the configuration before running the program.
             if self.validate_config_before_run:
-                config.validate()
+                config = type(config).model_validate(
+                    config, strict=self.validate_strict
+                )
 
             with ExitStack() as stack:
                 nonlocal run
