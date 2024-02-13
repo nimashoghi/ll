@@ -114,6 +114,8 @@ class TypedConfig(BaseModel, _MutableMappingBase):
     def model_post_init(self, __context: Any) -> None:
         super().model_post_init(__context)
 
+        # This fixes the issue w/ `copy.deepcopy` not working properly when
+        # the object was created using `cls.model_construct`.
         if not hasattr(self, "__pydantic_private__"):
             object.__setattr__(self, "__pydantic_private__", None)
 

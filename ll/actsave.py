@@ -289,18 +289,16 @@ class ActSaveProvider:
         acts: dict[str, ValueOrLambda] | None = None,
         /,
         **kwargs: ValueOrLambda,
-    ):
-        ...
+    ): ...
 
     @overload
-    def __call__(self, acts: Callable[[], dict[str, ValueOrLambda]], /):
-        ...
+    def __call__(self, acts: Callable[[], dict[str, ValueOrLambda]], /): ...
 
     def __call__(
         self,
-        acts: dict[str, ValueOrLambda]
-        | Callable[[], dict[str, ValueOrLambda]]
-        | None = None,
+        acts: (
+            dict[str, ValueOrLambda] | Callable[[], dict[str, ValueOrLambda]] | None
+        ) = None,
         /,
         **kwargs: ValueOrLambda,
     ):
@@ -345,12 +343,10 @@ class LoadedActivation:
         return cast(np.ndarray, np.load(activation_path, allow_pickle=True))
 
     @overload
-    def __getitem__(self, item: int) -> np.ndarray:
-        ...
+    def __getitem__(self, item: int) -> np.ndarray: ...
 
     @overload
-    def __getitem__(self, item: slice | list[int]) -> list[np.ndarray]:
-        ...
+    def __getitem__(self, item: slice | list[int]) -> list[np.ndarray]: ...
 
     def __getitem__(
         self, item: int | slice | list[int]
