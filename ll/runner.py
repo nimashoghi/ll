@@ -233,25 +233,25 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         conda_env: str | None,
         session_name: str,
         env: dict[str, str],
+        wait_for_process: bool = True,
         what_if: bool = False,
     ):
         # All we need to do here is launch `python -m ll.local_sessions_runner` with the config paths as arguments. The `local_sessions_runner` will take care of the rest.
-        # Obviously, the command above needs to be run in a tmux session, so we can come back to it later.
+        # Obviously, the command above needs to be run in a screen session, so we can come back to it later.
 
         if not conda_env:
             command = (
-                # ["tmux", "new-session", "-d", "-s", session_name]
-                # +
-                ["python", "-m", "ll.local_sessions_runner"]
+                ["screen", "-dmS", session_name]
+                + ["python", "-m", "ll.local_sessions_runner"]
                 + [str(p.absolute()) for p in config_paths]
             )
         else:
             command = (
-                # ["tmux", "new-session", "-d", "-s", session_name]
-                # +
-                [
+                ["screen", "-dmS", session_name]
+                + [
                     "conda",
                     "run",
+                    "--live-stream",
                     "-n",
                     conda_env,
                     "python",
@@ -262,8 +262,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
             )
         if not what_if:
             log.critical(f"Launching session with command: {command}")
-            # Forward the stdout and stderr to the current process
-            subprocess.run(command, env=env, check=True)
+            _ = subprocess.run(command, env=env, check=True)
 
         return command
 
@@ -276,7 +275,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         what_if: bool = False,
     ):
         """
-        Launches len(sessions) local runs in different environments using `tmux`.
+        Launches len(sessions) local runs in different environments using `screen`.
 
         Parameters
         ----------
@@ -290,7 +289,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         Returns
         -------
         list[TReturn]
-            A list of names for each tmux session.
+            A list of names for each screen session.
         """
 
         # This only works in conda environments, so we need to make sure we're in one
