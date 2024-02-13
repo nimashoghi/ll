@@ -94,7 +94,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
             nonlocal self
 
             # If `auto_call_trainer_init_from_runner`, we call `Trainer.runner_init` before running the program.
-            if config.trainer.auto_call_trainer_init_from_runner:
+            if config.runner.auto_call_trainer_init_from_runner:
                 Trainer.runner_init(config)
 
             # If `validate_config_before_run`, we validate the configuration before running the program.
@@ -206,6 +206,18 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         env: dict[str, str] | None = None,
         reset_id: bool = True,
     ):
+        """
+        Runs a list of configs locally.
+
+        Parameters
+        ----------
+        runs : Sequence[TConfig] | Sequence[tuple[TConfig, Unpack[TArguments]]]
+            A sequence of runs to submit.
+        env : dict[str, str], optional
+            Additional environment variables to set.
+        reset_id : bool, optional
+            Whether to reset the id of the runs before launching them.
+        """
         return_values: list[TReturn] = []
         for run in runs:
             config, args = self._resolve_run(run)
@@ -233,7 +245,6 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         conda_env: str | None,
         session_name: str,
         env: dict[str, str],
-        wait_for_process: bool = True,
         what_if: bool = False,
     ):
         # All we need to do here is launch `python -m ll.local_sessions_runner` with the config paths as arguments. The `local_sessions_runner` will take care of the rest.
@@ -283,8 +294,12 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
             A sequence of runs to launch.
         sessions : list[dict[str, str]]
             A list of environment variables to use for each session.
+        config_pickle_save_path : Path, optional
+            The path to save the config pickles to. If `None`, a temporary directory will be created.
         reset_id : bool, optional
             Whether to reset the id of the runs before launching them.
+        what_if : bool, optional
+            If `True`, the sessions will not be launched, but the command to launch them will be printed.
 
         Returns
         -------
@@ -350,6 +365,12 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
 
         return names
 
+    @staticmethod
+    def _n_gpus():
+        import torch
+
+        return torch.cuda.device_count()
+
     def local_session_per_gpu(
         self,
         runs: Sequence[TConfig] | Sequence[tuple[TConfig, Unpack[TArguments]]],
@@ -357,10 +378,27 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         reset_id: bool = True,
         what_if: bool = False,
     ):
-        # Get the number of GPUs
-        import torch
+        """
+        Launches len(sessions) local runs in different environments using `screen`.
 
-        n_gpus = torch.cuda.device_count()
+        Parameters
+        ----------
+        runs : Sequence[TConfig] | Sequence[tuple[TConfig, Unpack[TArguments]]]
+            A sequence of runs to launch.
+        config_pickle_save_path : Path, optional
+            The path to save the config pickles to. If `None`, a temporary directory will be created.
+        reset_id : bool, optional
+            Whether to reset the id of the runs before launching them.
+        what_if : bool, optional
+            If `True`, the sessions will not be launched, but the command to launch them will be printed.
+
+        Returns
+        -------
+        list[TReturn]
+            A list of names for each screen session.
+        """
+        # Get the number of GPUs
+        n_gpus = self._n_gpus()
         log.critical(f"Detected {n_gpus} GPUs. Launching one session per GPU.")
 
         # Create a session for each GPU
@@ -380,11 +418,21 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         runs: Sequence[TConfig] | Sequence[tuple[TConfig, Unpack[TArguments]]],
         env: dict[str, str] | None = None,
         n_batches: int = 1,
-        devices: str | int | None = 1,
         stop_on_error: bool = True,
     ):
         """
-        Runs a list of configs locally w/ `LightningTrainer.fast_dev_run = True`.
+        Runs a list of configs locally with `LightningTrainer.fast_dev_run = True`.
+
+        Parameters
+        ----------
+        runs : Sequence[TConfig] | Sequence[tuple[TConfig, Unpack[TArguments]]]
+            A sequence of runs to submit.
+        env : dict[str, str], optional
+            Additional environment variables to set.
+        n_batches : int, optional
+            The number of batches to run for `fast_dev_run`.
+        stop_on_error : bool, optional
+            Whether to stop on error.
         """
         resolved_runs = self._resolve_runs(runs)
         self._validate_runs(resolved_runs)
@@ -396,8 +444,6 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
             run_name = config.name
             try:
                 config.trainer.fast_dev_run = n_batches
-                if devices is not None:
-                    config.trainer.devices = devices
                 return_value = self.local((config, *args), env=env, reset_id=True)
                 return_values.append(return_value)
             except BaseException as e:
@@ -439,6 +485,34 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         snapshot_base: Path | None = None,
         env: dict[str, str] | None = None,
     ):
+        """
+        Submits a list of configs to a SLURM cluster.
+
+        Parameters
+        ----------
+        runs : Sequence[TConfig] | Sequence[tuple[TConfig, Unpack[TArguments]]]
+            A sequence of runs to submit.
+        gpus : int
+            The number of GPUs per node.
+        nodes : int
+            The number of nodes.
+        partition : str
+            The name of the partition to submit to.
+        cpus_per_task : int
+            The number of CPUs per task.
+        snapshot : bool | Path
+            If `True`, snapshots the current environment. If a `Path` is provided, it will be used as the snapshot directory.
+        constraint : str, optional
+            The name of the constraint to use.
+        timeout : timedelta, optional
+            The maximum time to run the job for.
+        memory : int, optional
+            The amount of memory to use.
+        email : str, optional
+            The email to send notifications to.
+        slurm_additional_parameters : dict[str, str], optional
+            Additional parameters to pass to the SLUR
+        """
         resolved_runs = self._resolve_runs(runs)
         self._validate_runs(resolved_runs)
 

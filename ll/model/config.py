@@ -324,8 +324,6 @@ class TrainerConfig(TypedConfig):
 
     auto_wrap_trainer: bool = True
     """If enabled, will automatically wrap the `run` function with a `Trainer.context()` context manager. Should be `True` most of the time."""
-    auto_call_trainer_init_from_runner: bool = True
-    """If enabled, will automatically call the Trainer.runner_init() function from the Runner. Should be `True` most of the time."""
     auto_set_default_root_dir: bool = True
     """If enabled, will automatically set the default root dir to [cwd/lightning_logs/<id>/]. Should be `True` most of the time."""
     auto_set_loggers: bool = True
@@ -602,6 +600,11 @@ class TrainerConfig(TypedConfig):
     """
 
 
+class RunnerConfig(TypedConfig):
+    auto_call_trainer_init_from_runner: bool = True
+    """If enabled, will automatically call the Trainer.runner_init() function from the Runner. Should be `True` most of the time."""
+
+
 class BaseConfig(TypedConfig):
     id: str = Field(default_factory=lambda: BaseConfig.generate_id())
     """ID of the run."""
@@ -620,6 +623,8 @@ class BaseConfig(TypedConfig):
     """A snapshot of the current environment information (e.g. python version, slurm info, etc.). This is automatically populated by the run script."""
     trainer: TrainerConfig = TrainerConfig()
     """PyTorch Lightning trainer configuration options. Check Lightning's `Trainer` documentation for more information."""
+    runner: RunnerConfig = RunnerConfig()
+    """`ll.Runner` configuration options."""
 
     """Additional metadata for this run. This can be used to store arbitrary data that is not part of the config schema."""
     meta: dict[str, Any] = {}
