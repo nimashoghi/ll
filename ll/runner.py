@@ -233,22 +233,23 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         conda_env: str | None,
         session_name: str,
         env: dict[str, str],
-        wait_for_process: bool = True,
-        what_if: bool = True,
+        what_if: bool = False,
     ):
         # All we need to do here is launch `python -m ll.local_sessions_runner` with the config paths as arguments. The `local_sessions_runner` will take care of the rest.
-        # Obviously, the command above needs to be run in a screen session, so we can come back to it later.
+        # Obviously, the command above needs to be run in a tmux session, so we can come back to it later.
 
         if not conda_env:
             command = (
-                ["screen", "-dmS", session_name]
-                + ["python", "-m", "ll.local_sessions_runner"]
+                # ["tmux", "new-session", "-d", "-s", session_name]
+                # +
+                ["python", "-m", "ll.local_sessions_runner"]
                 + [str(p.absolute()) for p in config_paths]
             )
         else:
             command = (
-                ["screen", "-dmS", session_name]
-                + [
+                # ["tmux", "new-session", "-d", "-s", session_name]
+                # +
+                [
                     "conda",
                     "run",
                     "-n",
@@ -261,9 +262,8 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
             )
         if not what_if:
             log.critical(f"Launching session with command: {command}")
-            process = subprocess.Popen(command, env=env)
-            if wait_for_process:
-                _ = process.wait()
+            # Forward the stdout and stderr to the current process
+            subprocess.run(command, env=env, check=True)
 
         return command
 
@@ -273,10 +273,10 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         sessions: list[dict[str, str]],
         config_pickle_save_path: Path | None = None,
         reset_id: bool = True,
-        what_if: bool = True,
+        what_if: bool = False,
     ):
         """
-        Launches len(sessions) local runs in different environments using `screen`.
+        Launches len(sessions) local runs in different environments using `tmux`.
 
         Parameters
         ----------
@@ -290,7 +290,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         Returns
         -------
         list[TReturn]
-            A list of names for each screen session.
+            A list of names for each tmux session.
         """
 
         # This only works in conda environments, so we need to make sure we're in one
@@ -334,9 +334,10 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
             )
             names.append(session_name)
             if what_if:
+                # log.critical(f"Sesssion {i+1}/{n_sessions} command: {command_str}")
+                command_prefix = " ".join(f'{k}="{v}"' for k, v in session_env.items())
                 command_str = " ".join(command)
-                log.critical(f"Sesssion {i+1}/{n_sessions} command: {command_str}")
-                commands.append(command_str)
+                commands.append(f"{command_prefix} {command_str}")
             else:
                 log.critical(f"Launched session {i+1}/{n_sessions}")
 
@@ -355,7 +356,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         runs: Sequence[TConfig] | Sequence[tuple[TConfig, Unpack[TArguments]]],
         config_pickle_save_path: Path | None = None,
         reset_id: bool = True,
-        what_if: bool = True,
+        what_if: bool = False,
     ):
         # Get the number of GPUs
         import torch

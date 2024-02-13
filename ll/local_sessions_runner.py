@@ -1,10 +1,10 @@
 import argparse
-from logging import getLogger
+import logging
 from pathlib import Path
 
 import cloudpickle as pickle
 
-log = getLogger(__name__)
+log = logging.getLogger(__name__)
 
 
 def process_session(path: Path) -> None:
@@ -39,6 +39,8 @@ def main():
         "paths", nargs="+", type=Path, help="Paths to the sessions to run"
     )
     args = parser.parse_args()
+
+    logging.basicConfig(level=logging.INFO)
 
     if not args.paths:
         raise ValueError("No paths provided")
