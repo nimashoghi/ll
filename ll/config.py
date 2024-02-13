@@ -49,17 +49,20 @@ class ConfigBuilder(contextlib.AbstractContextManager, Generic[TConfig]):
 
         self.config = self.__config_cls.model_construct(**kwargs)
 
-    def __build_if_needed(self) -> TConfig:
+    def __build_config(self, config: TConfig):
+        return self.__config_cls.model_validate(config, strict=self.__strict)
+
+    def __build_if_needed(self, config: TConfig | None) -> TConfig:
+        if config is not None:
+            return self.__build_config(config)
+
         if self.__built_config is None:
-            self.__built_config = self.__config_cls.model_validate(
-                self.config,
-                strict=self.__strict,
-            )
+            self.__built_config = self.__build_config(self.config)
 
         return self.__built_config
 
-    def build(self):
-        return self.__build_if_needed()
+    def build(self, config: TConfig | None = None) -> TConfig:
+        return self.__build_if_needed(config)
 
     __call__ = build
 
@@ -74,7 +77,7 @@ class ConfigBuilder(contextlib.AbstractContextManager, Generic[TConfig]):
         exc_value: BaseException,
         traceback: TracebackType,
     ) -> None:
-        _ = self.__build_if_needed()
+        _ = self.__build_if_needed(None)
 
 
 _MutableMappingBase = MutableMapping[str, Any]
@@ -106,9 +109,9 @@ class TypedConfig(BaseModel, _MutableMappingBase):
                     "Please provide a value for this key."
                 )
 
-    @classmethod
-    def builder(cls, strict: bool = True, **kwargs: Any) -> ConfigBuilder[Self]:
-        return ConfigBuilder(cls, strict=strict, **kwargs)
+    @classmethod  # pyright: ignore[reportArgumentType]
+    def builder(cls: type[TConfig], /, strict: bool = True):
+        return ConfigBuilder(cls, strict=strict)
 
     # region MutableMapping implementation
     # These are under `if not TYPE_CHECKING` to prevent vscode from showing
