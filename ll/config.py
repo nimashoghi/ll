@@ -146,6 +146,10 @@ class TypedConfig(_BaseModelBase, _MutableMappingBase):
     def pydantic_model(self) -> BaseModel:
         return cast(BaseModel, self)
 
+    @classmethod
+    def from_dict(cls, model_dict: Mapping[str, Any]):
+        return cast(Self, cls.pydantic_model_cls().model_validate(model_dict))
+
     @override
     def model_post_init(  # pyright: ignore[reportGeneralTypeIssues]
         self, __context: Any

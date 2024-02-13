@@ -280,7 +280,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
     def local_sessions(
         self,
         runs: Sequence[TConfig] | Sequence[tuple[TConfig, Unpack[TArguments]]],
-        sessions: list[dict[str, str]],
+        sessions: int | list[dict[str, str]],
         config_pickle_save_path: Path | None = None,
         reset_id: bool = True,
         what_if: bool = False,
@@ -306,6 +306,9 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         list[TReturn]
             A list of names for each screen session.
         """
+
+        if isinstance(sessions, int):
+            sessions = [{} for _ in range(sessions)]
 
         # This only works in conda environments, so we need to make sure we're in one
         if (current_env := os.environ.get("CONDA_DEFAULT_ENV")) is None:
