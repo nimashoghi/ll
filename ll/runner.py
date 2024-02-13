@@ -8,7 +8,7 @@ from datetime import timedelta
 from functools import wraps
 from logging import getLogger
 from pathlib import Path
-from typing import Generic, Protocol, cast, overload, runtime_checkable
+from typing import Generic, Protocol, Sequence, cast, overload, runtime_checkable
 
 from tqdm.auto import tqdm
 from typing_extensions import TypeVar, TypeVarTuple, Unpack, deprecated, override
@@ -108,26 +108,29 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
 
         return wrapped_run
 
-    def update_config(self, config: TConfig):
-        """Returns a copy of `config`"""
-        config = copy.deepcopy(config)
-        return config
-
     @staticmethod
-    def _resolve_run(run: TConfig | tuple[TConfig, Unpack[TArguments]]):
+    def _resolve_run(
+        run: TConfig | tuple[TConfig, Unpack[TArguments]],
+        copy_config: bool = True,
+    ):
         if isinstance(run, tuple):
             (config, *args) = run
         else:
             config = cast(TConfig, run)
             args = []
         args = cast(tuple[Unpack[TArguments]], args)
+        if copy_config:
+            config = copy.deepcopy(config)
         return (config, args)
 
     @staticmethod
-    def _resolve_runs(runs: list[TConfig] | list[tuple[TConfig, Unpack[TArguments]]]):
+    def _resolve_runs(
+        runs: Sequence[TConfig] | Sequence[tuple[TConfig, Unpack[TArguments]]],
+        copy_config: bool = True,
+    ):
         resolved: list[tuple[TConfig, tuple[Unpack[TArguments]]]] = []
         for run in runs:
-            resolved.append(Runner._resolve_run(run))
+            resolved.append(Runner._resolve_run(run, copy_config=copy_config))
 
         return resolved
 
@@ -161,11 +164,10 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         env: dict[str, str] | None = None,
         reset_id: bool = True,
     ):
+
         return_values: list[TReturn] = []
         for run in runs:
             config, args = self._resolve_run(run)
-
-            config = self.update_config(config)
             if reset_id:
                 config.id = BaseConfig.generate_id(ignore_rng=True)
 
@@ -186,15 +188,13 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
 
     def __call__(
         self,
-        runs: list[TConfig | tuple[TConfig, Unpack[TArguments]]],
+        runs: Sequence[TConfig] | Sequence[tuple[TConfig, Unpack[TArguments]]],
         env: dict[str, str] | None = None,
         reset_id: bool = True,
     ):
         return_values: list[TReturn] = []
         for run in runs:
             config, args = self._resolve_run(run)
-
-            config = self.update_config(config)
             if reset_id:
                 config.id = BaseConfig.generate_id(ignore_rng=True)
 
@@ -215,7 +215,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
 
     def fast_dev_run(
         self,
-        runs: list[TConfig] | list[tuple[TConfig, Unpack[TArguments]]],
+        runs: Sequence[TConfig] | Sequence[tuple[TConfig, Unpack[TArguments]]],
         env: dict[str, str] | None = None,
         n_batches: int = 1,
         devices: str | int | None = 1,
@@ -224,7 +224,6 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         """
         Runs a list of configs locally w/ `LightningTrainer.fast_dev_run = True`.
         """
-
         resolved_runs = self._resolve_runs(runs)
         self._validate_runs(resolved_runs)
 
@@ -234,7 +233,6 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
             run_id = config.id
             run_name = config.name
             try:
-                config = self.update_config(config)
                 config.trainer.fast_dev_run = n_batches
                 if devices is not None:
                     config.trainer.devices = devices
@@ -263,7 +261,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
     @remove_wandb_environment_variables()
     def submit(
         self,
-        runs: list[TConfig] | list[tuple[TConfig, Unpack[TArguments]]],
+        runs: Sequence[TConfig] | Sequence[tuple[TConfig, Unpack[TArguments]]],
         *,
         gpus: int,
         nodes: int,
@@ -279,9 +277,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         snapshot_base: Path | None = None,
         env: dict[str, str] | None = None,
     ):
-        resolved_runs = [
-            (self.update_config(c), args) for c, args in self._resolve_runs(runs)
-        ]
+        resolved_runs = self._resolve_runs(runs)
         self._validate_runs(resolved_runs)
 
         if snapshot_base is None:
