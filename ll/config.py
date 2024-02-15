@@ -177,7 +177,7 @@ class TypedConfig(_BaseModelBase, _MutableMappingBase):
 
     @classmethod  # pyright: ignore[reportArgumentType]
     def builder(cls: type[TConfig], /, strict: bool = True):
-        return ConfigBuilder(cls, strict=strict)
+        return ConfigBuilder[TConfig](cls, strict=strict)
 
     # region MutableMapping implementation
     # These are under `if not TYPE_CHECKING` to prevent vscode from showing
