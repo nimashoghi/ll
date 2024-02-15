@@ -11,6 +11,7 @@ from typing import (
     Generic,
     Mapping,
     MutableMapping,
+    TypedDict,
     cast,
 )
 
@@ -38,13 +39,23 @@ P = ParamSpec("P")
 
 
 def _deep_validate(config: TConfig, strict: bool = True) -> TConfig:
+    # First, we call __pre_init__ to allow the config to modify itself a final time
+    config.__pre_init__()
+
+    # Then, we dump the config to a dict and then re-validate it
+    config_dict = config.pydantic_model().model_dump(round_trip=True)
+    # We need to remove the _typed_config_builder_context from the config_dict
+    #   because we're no longer a builder config
+    _ = config_dict.pop("_typed_config_builder_context", None)
+
     return cast(
         TConfig,
-        config.pydantic_model().model_validate(
-            config.pydantic_model().model_dump(round_trip=True),
-            strict=strict,
-        ),
+        config.pydantic_model().model_validate(config_dict, strict=strict),
     )
+
+
+class _ConfigBuilderContext(TypedDict):
+    strict: bool
 
 
 class ConfigBuilder(contextlib.AbstractContextManager, Generic[TConfig]):
@@ -74,13 +85,16 @@ class ConfigBuilder(contextlib.AbstractContextManager, Generic[TConfig]):
 
     @override
     def __enter__(self) -> tuple[Self, TConfig]:
+        ctx = _ConfigBuilderContext(strict=self.__strict)
+
         self.__warning_list = self.__exit_stack.enter_context(
             warnings.catch_warnings(record=True)
         )
         config = cast(
             TConfig,
             self.__config_cls.pydantic_model_cls().model_construct(
-                **self.__model_kwargs
+                _typed_config_builder_context=ctx,
+                **self.__model_kwargs,
             ),
         )
         return self, config
@@ -128,8 +142,7 @@ if TYPE_CHECKING:
 )
 class TypedConfig(_BaseModelBase, _MutableMappingBase):
     MISSING: ClassVar[Any] = MISSING
-
-    model_config = ConfigDict(
+    model_config: ClassVar[ConfigDict] = ConfigDict(
         # By default, Pydantic will throw a warning if a field starts with "model_",
         # so we need to disable that warning (beacuse "model_" is a popular prefix for ML).
         protected_namespaces=(),
@@ -150,27 +163,6 @@ class TypedConfig(_BaseModelBase, _MutableMappingBase):
     def from_dict(cls, model_dict: Mapping[str, Any]):
         return cast(Self, cls.pydantic_model_cls().model_validate(model_dict))
 
-    @override
-    def model_post_init(  # pyright: ignore[reportGeneralTypeIssues]
-        self, __context: Any
-    ) -> None:
-        super().model_post_init(  # pyright: ignore[reportAttributeAccessIssue]
-            __context
-        )
-
-        # This fixes the issue w/ `copy.deepcopy` not working properly when
-        # the object was created using `cls.model_construct`.
-        if not hasattr(self, "__pydantic_private__"):
-            object.__setattr__(self, "__pydantic_private__", None)
-
-        # Make sure there are no `MISSING` values in the config
-        for key, value in self.pydantic_model().model_dump().items():
-            if value is MISSING:
-                raise ValueError(
-                    f"Config value for key '{key}' is `MISSING`.\n"
-                    "Please provide a value for this key."
-                )
-
     @classmethod
     def model_deep_validate(cls, config: TConfig, strict: bool = True) -> TConfig:
         return _deep_validate(config, strict=strict)
@@ -178,6 +170,42 @@ class TypedConfig(_BaseModelBase, _MutableMappingBase):
     @classmethod  # pyright: ignore[reportArgumentType]
     def builder(cls: type[TConfig], /, strict: bool = True):
         return ConfigBuilder[TConfig](cls, strict=strict)
+
+    def __pre_init__(self):
+        """Called before the final config is validated, but after the config is created and populated."""
+        pass
+
+    def __post_init__(self):
+        """Called after the final config is validated."""
+        pass
+
+    if not TYPE_CHECKING:
+        _typed_config_builder_context: _ConfigBuilderContext | None = None
+
+        @override
+        def model_post_init(  # pyright: ignore[reportGeneralTypeIssues]
+            self, __context: Any
+        ) -> None:
+            super().model_post_init(  # pyright: ignore[reportAttributeAccessIssue]
+                __context
+            )
+
+            # This fixes the issue w/ `copy.deepcopy` not working properly when
+            # the object was created using `cls.model_construct`.
+            if not hasattr(self, "__pydantic_private__"):
+                object.__setattr__(self, "__pydantic_private__", None)
+
+            # If we're not in a builder, call __post_init__
+            if self._typed_config_builder_context is None:
+                # Make sure there are no `MISSING` values in the config
+                for key, value in self.pydantic_model().model_dump().items():
+                    if value is MISSING:
+                        raise ValueError(
+                            f"Config value for key '{key}' is `MISSING`.\n"
+                            "Please provide a value for this key."
+                        )
+
+                self.__post_init__()
 
     # region MutableMapping implementation
     # These are under `if not TYPE_CHECKING` to prevent vscode from showing
