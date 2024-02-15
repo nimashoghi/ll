@@ -13,6 +13,9 @@ def print_bad_gradients(
     none_grads: bool = False,
 ):
     for name, param in module.named_parameters():
+        if not param.requires_grad:
+            continue
+
         if param.grad is None:
             if none_grads:
                 log.critical(f"Parameter {name} ({param.shape}) has None gradients")
