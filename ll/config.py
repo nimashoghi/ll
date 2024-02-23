@@ -167,7 +167,7 @@ class TypedConfig(_BaseModelBase, _MutableMappingBase):
     def model_deep_validate(cls, config: TConfig, strict: bool = True) -> TConfig:
         return _deep_validate(config, strict=strict)
 
-    @classmethod  # pyright: ignore[reportArgumentType]
+    @classmethod
     def builder(cls: type[TConfig], /, strict: bool = True):
         return ConfigBuilder[TConfig](cls, strict=strict)
 
