@@ -1,20 +1,23 @@
-from typing import Generic, Iterable, Iterator, Optional, TypeVar, overload
+from collections.abc import Iterable, Iterator
+from typing import Generic, TypeVar, overload
 
 import torch.nn as nn
 from typing_extensions import override
 
-TModule = TypeVar("TModule")
+TModule = TypeVar("TModule", bound=nn.Module)
 
 
 class TypedModuleList(nn.ModuleList, Generic[TModule]):
-    def __init__(self, modules: Optional[Iterable[TModule]] = None) -> None:
+    def __init__(self, modules: Iterable[TModule] | None = None) -> None:
         super().__init__(modules)
 
     @overload
-    def __getitem__(self, idx: int) -> TModule: ...
+    def __getitem__(self, idx: int) -> TModule:
+        ...
 
     @overload
-    def __getitem__(self, idx: slice) -> "TypedModuleList[TModule]": ...
+    def __getitem__(self, idx: slice) -> "TypedModuleList[TModule]":
+        ...
 
     @override
     def __getitem__(self, idx: int | slice) -> TModule | "TypedModuleList[TModule]":
@@ -38,7 +41,7 @@ class TypedModuleList(nn.ModuleList, Generic[TModule]):
 
     @override
     def insert(self, idx: int, module: TModule) -> None:
-        return super().insert(idx, module)  # type: ignore
+        return super().insert(idx, module)
 
     @override
     def append(self, module: TModule) -> "TypedModuleList[TModule]":
