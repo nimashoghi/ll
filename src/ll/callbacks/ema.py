@@ -1,7 +1,7 @@
 import contextlib
 import copy
 import threading
-from typing import Iterable
+from collections.abc import Iterable
 
 import lightning.pytorch as pl
 import torch

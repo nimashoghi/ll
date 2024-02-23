@@ -1,4 +1,5 @@
-from typing import TYPE_CHECKING, Any, Callable, Concatenate, Type, cast
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any, Concatenate, cast
 
 from typing_extensions import ParamSpec, TypeVar
 
@@ -11,7 +12,7 @@ TReturn = TypeVar("TReturn", infer_variance=True)
 def copy_args(
     kwargs_call: Callable[P, Any],
     *,
-    return_type: Type[TReturn],
+    return_type: type[TReturn],
 ) -> Callable[[Callable[..., TReturn]], Callable[P, TReturn]]:
     """
     Copies the type annotations from one function to another.
@@ -26,8 +27,8 @@ def copy_args(
 def copy_method_with_param(
     kwargs_call: Callable[Concatenate[TSelf, P], Any],
     *,
-    param_type: Type[TParam],
-    return_type: Type[TReturn],
+    param_type: type[TParam],
+    return_type: type[TReturn],
 ) -> Callable[
     [Callable[..., TReturn]], Callable[Concatenate[TSelf, TParam, P], TReturn]
 ]:
@@ -45,7 +46,7 @@ def copy_method_with_param(
 TBase = TypeVar("TBase")
 
 
-def mixin_base_type(base_class: Type[TBase]) -> Type[TBase]:
+def mixin_base_type(base_class: type[TBase]) -> type[TBase]:
     """
     Useful function to make mixins with baseclass typehint
 

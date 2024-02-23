@@ -1,19 +1,10 @@
 import contextlib
 import warnings
 from abc import ABC
+from collections.abc import Callable, Mapping, MutableMapping
 from logging import getLogger
 from types import TracebackType
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    Callable,
-    ClassVar,
-    Generic,
-    Mapping,
-    MutableMapping,
-    TypedDict,
-    cast,
-)
+from typing import TYPE_CHECKING, Any, ClassVar, Generic, TypedDict, cast
 
 from pydantic import BaseModel, ConfigDict, Field
 from typing_extensions import (

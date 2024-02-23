@@ -1,11 +1,12 @@
 import copy
 import json
 import os
+from collections.abc import Callable
 from contextlib import contextmanager
 from datetime import timedelta
 from logging import getLogger
 from pathlib import Path
-from typing import Any, Callable, Generic, Literal, TypedDict, Union
+from typing import Any, Generic, Literal, TypeAlias, TypedDict
 
 import wandb
 from typing_extensions import NotRequired, Unpack, override
@@ -108,7 +109,7 @@ class Parameter(TypedDict):
     """Nest other parameters inside a root level parameter."""
 
 
-Parameters = dict[str, Union["Parameter", "Parameters"]]
+Parameters: TypeAlias = dict[str, "Parameter | Parameters"]
 
 
 # https://docs.wandb.ai/guides/sweeps/define-sweep-configuration#metric

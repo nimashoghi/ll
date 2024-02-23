@@ -3,8 +3,9 @@ import json
 import os
 import sys
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from logging import getLogger
-from typing import Any, Callable, Generic, cast
+from typing import Any, Generic, cast
 
 import torch
 import torch.nn as nn
@@ -235,7 +236,8 @@ class LightningModuleBase(
 
     @classmethod
     @abstractmethod
-    def config_cls(cls) -> type[THparams]: ...
+    def config_cls(cls) -> type[THparams]:
+        ...
 
     @classmethod
     def _update_environment(cls, hparams: THparams):

@@ -1,9 +1,10 @@
 import contextlib
 import logging
 from collections import abc
+from collections.abc import Callable
 from pathlib import Path
 from types import NoneType
-from typing import Any, Callable
+from typing import Any
 
 import torch
 from lightning.pytorch import LightningModule

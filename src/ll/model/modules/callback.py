@@ -1,6 +1,7 @@
 from collections import abc
+from collections.abc import Callable, Iterable
 from logging import getLogger
-from typing import Any, Callable, Iterable, cast, final
+from typing import Any, TypeAlias, cast, final
 
 from lightning.pytorch import Callback, LightningModule
 from lightning.pytorch.callbacks import LambdaCallback
@@ -10,7 +11,7 @@ from ...util.typing_utils import mixin_base_type
 
 log = getLogger(__name__)
 
-CallbackFn = Callable[[], Callback | Iterable[Callback] | None]
+CallbackFn: TypeAlias = Callable[[], Callback | Iterable[Callback] | None]
 
 
 class CallbackRegistrarModuleMixin:

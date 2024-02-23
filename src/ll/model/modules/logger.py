@@ -1,7 +1,8 @@
 from collections import deque
+from collections.abc import Callable, Generator
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Callable, Generator
+from typing import TYPE_CHECKING, Any
 
 import torchmetrics
 from lightning.pytorch import LightningModule

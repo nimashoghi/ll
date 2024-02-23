@@ -2,11 +2,11 @@ import importlib.util
 import subprocess
 import uuid
 from collections import defaultdict
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from logging import getLogger
 from pathlib import Path
-from typing import Sequence
 
 log = getLogger(__name__)
 

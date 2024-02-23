@@ -1,4 +1,5 @@
-from typing import Generic, Iterable, Mapping
+from collections.abc import Iterable, Mapping
+from typing import Generic
 
 import torch.nn as nn
 from typing_extensions import TypeVar

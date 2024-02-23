@@ -1,5 +1,6 @@
+from collections.abc import Callable
 from logging import getLogger
-from typing import Callable, cast
+from typing import cast
 
 import torch.nn as nn
 from lightning.pytorch import LightningModule, Trainer

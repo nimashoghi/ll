@@ -5,12 +5,13 @@ import subprocess
 import tempfile
 import traceback
 from collections import Counter
+from collections.abc import Sequence
 from contextlib import ExitStack
 from datetime import timedelta
 from functools import wraps
 from logging import getLogger
 from pathlib import Path
-from typing import Generic, Protocol, Sequence, cast, overload, runtime_checkable
+from typing import Generic, Protocol, cast, overload, runtime_checkable
 
 import cloudpickle as pickle
 from tqdm.auto import tqdm
@@ -36,7 +37,8 @@ TArguments = TypeVarTuple("TArguments", default=Unpack[tuple[()]])
 
 @runtime_checkable
 class RunProtocol(Protocol[TConfig, TReturn, Unpack[TArguments]]):
-    def __call__(self, config: TConfig, *args: Unpack[TArguments]) -> TReturn: ...
+    def __call__(self, config: TConfig, *args: Unpack[TArguments]) -> TReturn:
+        ...
 
 
 class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
@@ -157,7 +159,8 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         *,
         env: dict[str, str] | None = None,
         reset_id: bool = True,
-    ) -> TReturn: ...
+    ) -> TReturn:
+        ...
 
     @deprecated("Use __call__ instead")
     @overload
@@ -169,7 +172,8 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         *runs: TConfig | tuple[TConfig, Unpack[TArguments]],
         env: dict[str, str] | None = None,
         reset_id: bool = True,
-    ) -> list[TReturn]: ...
+    ) -> list[TReturn]:
+        ...
 
     @deprecated("Use __call__ instead")
     def local(
@@ -178,7 +182,6 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         env: dict[str, str] | None = None,
         reset_id: bool = True,
     ):
-
         return_values: list[TReturn] = []
         for run in runs:
             config, args = self._resolve_run(run)

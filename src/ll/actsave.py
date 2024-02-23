@@ -3,11 +3,12 @@ import fnmatch
 import tempfile
 import uuid
 import weakref
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from functools import cached_property, wraps
 from logging import getLogger
 from pathlib import Path
-from typing import Callable, Generic, Mapping, Union, cast, overload
+from typing import Generic, TypeAlias, cast, overload
 
 import numpy as np
 import torch
@@ -17,8 +18,8 @@ from typing_extensions import ParamSpec, TypeVar, override
 
 log = getLogger(__name__)
 
-Value = Union[int, float, complex, bool, str, np.ndarray, torch.Tensor]
-ValueOrLambda = Union[Value, Callable[..., Value]]
+Value: TypeAlias = int | float | complex | bool | str | np.ndarray | torch.Tensor
+ValueOrLambda = Value | Callable[..., Value]
 
 
 def _to_numpy(activation: Value) -> np.ndarray:
@@ -289,10 +290,12 @@ class ActSaveProvider:
         acts: dict[str, ValueOrLambda] | None = None,
         /,
         **kwargs: ValueOrLambda,
-    ): ...
+    ):
+        ...
 
     @overload
-    def __call__(self, acts: Callable[[], dict[str, ValueOrLambda]], /): ...
+    def __call__(self, acts: Callable[[], dict[str, ValueOrLambda]], /):
+        ...
 
     def __call__(
         self,
@@ -343,10 +346,12 @@ class LoadedActivation:
         return cast(np.ndarray, np.load(activation_path, allow_pickle=True))
 
     @overload
-    def __getitem__(self, item: int) -> np.ndarray: ...
+    def __getitem__(self, item: int) -> np.ndarray:
+        ...
 
     @overload
-    def __getitem__(self, item: slice | list[int]) -> list[np.ndarray]: ...
+    def __getitem__(self, item: slice | list[int]) -> list[np.ndarray]:
+        ...
 
     def __getitem__(
         self, item: int | slice | list[int]

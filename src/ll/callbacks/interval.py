@@ -1,4 +1,5 @@
-from typing import Callable, Literal
+from collections.abc import Callable
+from typing import Literal
 
 from lightning.pytorch import LightningModule, Trainer
 from lightning.pytorch.callbacks import Callback
