@@ -1,8 +1,8 @@
 from typing import Any, Literal, cast
 
 import torch.distributed
-from lightning.fabric.utilities.distributed import ReduceOp
 from lightning.pytorch import LightningModule
+from torch.distributed import ReduceOp
 from typing_extensions import TypeVar
 
 from ...util.typing_utils import mixin_base_type
@@ -57,7 +57,7 @@ class DistributedMixin(mixin_base_type(LightningModule)):
     def reduce(
         self,
         tensor: torch.Tensor,
-        reduce_op: ReduceOp | ReduceOpStr,
+        reduce_op: ReduceOp.RedOpType | ReduceOpStr,
         group: Any | None = None,
     ) -> torch.Tensor:
         if isinstance(reduce_op, str):

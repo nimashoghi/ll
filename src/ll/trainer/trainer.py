@@ -83,7 +83,7 @@ def _setup_logger(root_config: BaseConfig, config: PythonLogging):
     log_handlers: list[logging.Handler] = [*_default_log_handlers(root_config)]
     if config.rich:
         try:
-            from rich.logging import RichHandler
+            from rich.logging import RichHandler  # type: ignore
 
             log_handlers.append(RichHandler())
         except ImportError:

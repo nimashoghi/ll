@@ -21,7 +21,7 @@ def grad_norm(
     norm_type: float | int | str,
     group_separator: str = "/",
     grad: bool = True,
-) -> dict[str, float]:
+) -> dict[str, torch.Tensor | float]:
     """Compute each parameter's gradient's norm and their overall norm.
 
     The overall norm is computed over all gradients together, as if they

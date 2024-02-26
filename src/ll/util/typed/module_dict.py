@@ -1,5 +1,5 @@
 from collections.abc import Iterable, Mapping
-from typing import Generic
+from typing import Generic, cast
 
 import torch.nn as nn
 from typing_extensions import TypeVar
@@ -10,7 +10,7 @@ TModule = TypeVar("TModule", bound=nn.Module, infer_variance=True)
 class TypedModuleDict(nn.Module, Generic[TModule]):
     def __init__(
         self,
-        modules: Mapping[str, TModule] | None = None,
+        modules: Mapping[str, TModule],
         key_prefix: str = "_typed_moduledict_",
         # we use a key prefix to avoid attribute name collisions
         # (which is a common issue in nn.ModuleDict as it uses `__setattr__` to set the modules)
@@ -46,7 +46,9 @@ class TypedModuleDict(nn.Module, Generic[TModule]):
 
     def get(self, key: str) -> TModule | None:
         key = self._with_prefix(key)
-        return self._module_dict._modules.get(key)
+        if (value := self._module_dict._modules.get(key)) is None:
+            return None
+        return cast(TModule, value)
 
     def keys(self) -> Iterable[str]:
         r"""Return an iterable of the ModuleDict keys."""
@@ -54,8 +56,11 @@ class TypedModuleDict(nn.Module, Generic[TModule]):
 
     def items(self) -> Iterable[tuple[str, TModule]]:
         r"""Return an iterable of the ModuleDict key/value pairs."""
-        return [(self._remove_prefix(k), v) for k, v in self._module_dict.items()]
+        return [
+            (self._remove_prefix(k), cast(TModule, v))
+            for k, v in self._module_dict.items()
+        ]
 
     def values(self) -> Iterable[TModule]:
         r"""Return an iterable of the ModuleDict values."""
-        return self._module_dict.values()
+        return cast(Iterable[TModule], self._module_dict.values())

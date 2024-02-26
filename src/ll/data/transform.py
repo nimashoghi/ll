@@ -14,6 +14,15 @@ def transform(
     *,
     deepcopy: bool = False,
 ) -> TDataset:
+    """
+    Wraps a dataset with a transform function.
+
+    Args:
+        dataset: The dataset to wrap.
+        transform: The transform function to apply to each item.
+        deepcopy: Whether to deep copy each item before applying the transform.
+    """
+
     class _TransformedDataset(wrapt.ObjectProxy):
         @override
         def __getitem__(self, idx):
@@ -34,6 +43,15 @@ def transform_with_index(
     *,
     deepcopy: bool = False,
 ) -> TDataset:
+    """
+    Wraps a dataset with a transform function that takes an index, in addition to the item.
+
+    Args:
+        dataset: The dataset to wrap.
+        transform: The transform function to apply to each item.
+        deepcopy: Whether to deep copy each item before applying the transform.
+    """
+
     class _TransformedWithIndexDataset(wrapt.ObjectProxy):
         @override
         def __getitem__(self, idx: int):

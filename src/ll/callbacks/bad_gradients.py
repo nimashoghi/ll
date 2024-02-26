@@ -47,9 +47,9 @@ class PrintBadGradientsCallback(Callback):
         self._none_grads = none_grads
 
     @override
-    def on_after_backward(self, _trainer: Trainer, module: LightningModule):
+    def on_after_backward(self, trainer: Trainer, pl_module: LightningModule):
         print_bad_gradients(
-            module,
+            pl_module,
             nonfinite_grads=self._nonfinite_grads,
             none_grads=self._none_grads,
         )

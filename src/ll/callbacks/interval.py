@@ -33,7 +33,14 @@ class StepIntervalCallback(Callback):
         self.splits = set(splits)
 
     @override
-    def on_train_batch_start(self, trainer, pl_module, batch, batch_idx):
+    def on_train_batch_start(
+        self,
+        trainer,
+        pl_module,
+        batch,
+        batch_idx,
+        dataloader_idx=1,
+    ):
         if (
             not _check_step(
                 trainer.global_step,
@@ -46,7 +53,14 @@ class StepIntervalCallback(Callback):
         self.function(trainer, pl_module)
 
     @override
-    def on_validation_batch_start(self, trainer, pl_module, batch, batch_idx):
+    def on_validation_batch_start(
+        self,
+        trainer,
+        pl_module,
+        batch,
+        batch_idx,
+        dataloader_idx=1,
+    ):
         if (
             not _check_step(
                 trainer.global_step,
@@ -59,7 +73,14 @@ class StepIntervalCallback(Callback):
         self.function(trainer, pl_module)
 
     @override
-    def on_test_batch_start(self, trainer, pl_module, batch, batch_idx):
+    def on_test_batch_start(
+        self,
+        trainer,
+        pl_module,
+        batch,
+        batch_idx,
+        dataloader_idx=1,
+    ):
         if (
             not _check_step(
                 trainer.global_step,
@@ -72,7 +93,14 @@ class StepIntervalCallback(Callback):
         self.function(trainer, pl_module)
 
     @override
-    def on_predict_batch_start(self, trainer, pl_module, batch, batch_idx):
+    def on_predict_batch_start(
+        self,
+        trainer,
+        pl_module,
+        batch,
+        batch_idx,
+        dataloader_idx=1,
+    ):
         if (
             not _check_step(
                 trainer.global_step,
@@ -186,32 +214,84 @@ class IntervalCallback(Callback):
             raise ValueError("Either step_interval or epoch_interval must be specified")
 
     @override
-    def on_train_batch_start(self, trainer, pl_module, batch, batch_idx):
+    def on_train_batch_start(
+        self,
+        trainer,
+        pl_module,
+        batch,
+        batch_idx,
+        dataloader_idx=1,
+    ):
         if not isinstance(self.callback, StepIntervalCallback):
             return
 
-        self.callback.on_train_batch_start(trainer, pl_module, batch, batch_idx)
+        self.callback.on_train_batch_start(
+            trainer,
+            pl_module,
+            batch,
+            batch_idx,
+            dataloader_idx=1,
+        )
 
     @override
-    def on_validation_batch_start(self, trainer, pl_module, batch, batch_idx):
+    def on_validation_batch_start(
+        self,
+        trainer,
+        pl_module,
+        batch,
+        batch_idx,
+        dataloader_idx=1,
+    ):
         if not isinstance(self.callback, StepIntervalCallback):
             return
 
-        self.callback.on_validation_batch_start(trainer, pl_module, batch, batch_idx)
+        self.callback.on_validation_batch_start(
+            trainer,
+            pl_module,
+            batch,
+            batch_idx,
+            dataloader_idx=1,
+        )
 
     @override
-    def on_test_batch_start(self, trainer, pl_module, batch, batch_idx):
+    def on_test_batch_start(
+        self,
+        trainer,
+        pl_module,
+        batch,
+        batch_idx,
+        dataloader_idx=1,
+    ):
         if not isinstance(self.callback, StepIntervalCallback):
             return
 
-        self.callback.on_test_batch_start(trainer, pl_module, batch, batch_idx)
+        self.callback.on_test_batch_start(
+            trainer,
+            pl_module,
+            batch,
+            batch_idx,
+            dataloader_idx=1,
+        )
 
     @override
-    def on_predict_batch_start(self, trainer, pl_module, batch, batch_idx):
+    def on_predict_batch_start(
+        self,
+        trainer,
+        pl_module,
+        batch,
+        batch_idx,
+        dataloader_idx=1,
+    ):
         if not isinstance(self.callback, StepIntervalCallback):
             return
 
-        self.callback.on_predict_batch_start(trainer, pl_module, batch, batch_idx)
+        self.callback.on_predict_batch_start(
+            trainer,
+            pl_module,
+            batch,
+            batch_idx,
+            dataloader_idx=1,
+        )
 
     @override
     def on_train_epoch_start(self, trainer, pl_module):

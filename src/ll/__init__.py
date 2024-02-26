@@ -21,7 +21,6 @@ from .model.config import (
     WandbWatchConfig,
 )
 from .runner import Runner
-from .sweep import Sweep
 from .trainer import Trainer
 from .util.singleton import Registry, Singleton
 from .util.typed import TypedModuleDict, TypedModuleList
@@ -51,7 +50,6 @@ __all__ = [
     "WandbLoggingConfig",
     "WandbWatchConfig",
     "Runner",
-    "Sweep",
     "Trainer",
     "Registry",
     "Singleton",
