@@ -1,7 +1,7 @@
 from collections.abc import Mapping, MutableMapping
-from typing import TYPE_CHECKING, Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar, cast
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, PrivateAttr
 from typing_extensions import override
 
 _MutableMappingBase = MutableMapping[str, Any]
@@ -9,8 +9,15 @@ if TYPE_CHECKING:
     _MutableMappingBase = object
 
 
+class _MISSING:
+    pass
+
+
+MISSING = cast(Any, _MISSING())
+
+
 class TypedConfig(BaseModel, _MutableMappingBase):
-    is_draft_config: bool = False
+    _is_draft_config: bool = PrivateAttr(default=False)
     """
     Whether this config is a draft config or not.
 
@@ -28,6 +35,8 @@ class TypedConfig(BaseModel, _MutableMappingBase):
         config = config.finalize()
         ```
     """
+
+    MISSING: ClassVar[Any] = MISSING
 
     model_config: ClassVar[ConfigDict] = ConfigDict(
         # By default, Pydantic will throw a warning if a field starts with "model_",
@@ -62,18 +71,20 @@ class TypedConfig(BaseModel, _MutableMappingBase):
         config = self.model_validate(self.model_dump(round_trip=True), strict=strict)
 
         # Make sure that this is not a draft config
-        if config.is_draft_config:
+        if config._is_draft_config:
             raise ValueError("Draft configs are not valid. Call `finalize` first.")
 
         return config
 
     @classmethod
     def draft(cls, **kwargs):
-        return cls.model_construct(is_draft_config=True, **kwargs)
+        config = cls.model_construct(_is_draft_config=True, **kwargs)
+        config._is_draft_config = True
+        return config
 
     def finalize(self, strict: bool = True):
         # This must be a draft config, otherwise we raise an error
-        if not self.is_draft_config:
+        if not self._is_draft_config:
             raise ValueError("Finalize can only be called on drafts.")
 
         # First, we call `__draft_pre_init__` to allow the config to modify itself a final time
@@ -82,9 +93,9 @@ class TypedConfig(BaseModel, _MutableMappingBase):
         # Then, we dump the config to a dict and then re-validate it
         config_dict = self.model_dump(round_trip=True)
 
-        # We need to remove the _typed_config_draft_context from the config_dict
+        # We need to remove the `_is_draft_config` from the config_dict
         #   because we're no longer a draft self
-        _ = config_dict.pop("is_draft_config", None)
+        _ = config_dict.pop("_is_draft_config", None)
 
         return self.model_validate(config_dict, strict=strict)
 
@@ -98,71 +109,72 @@ class TypedConfig(BaseModel, _MutableMappingBase):
             object.__setattr__(self, "__pydantic_private__", None)
 
         # If we're not in a draft, call __post_init__
-        if not self.is_draft_config:
+        if not self._is_draft_config:
             self.__post_init__()
 
     # region MutableMapping implementation
-    # This is mainly so the config can be used with lightning's hparams
-    #   transparently and without any issues.
+    if not TYPE_CHECKING:
+        # This is mainly so the config can be used with lightning's hparams
+        #   transparently and without any issues.
 
-    @property
-    def _ll_dict(self):
-        return self.model_dump()
+        @property
+        def _ll_dict(self):
+            return self.model_dump()
 
-    # We need to make sure every config class
-    #   is a MutableMapping[str, Any] so that it can be used
-    #   with lightning's hparams.
-    @override
-    def __getitem__(self, key: str):
-        # Key can be of the format "a.b.c"
-        #   so we need to split it into a list of keys.
-        [first_key, *rest_keys] = key.split(".")
-        value = self._ll_dict[first_key]
+        # We need to make sure every config class
+        #   is a MutableMapping[str, Any] so that it can be used
+        #   with lightning's hparams.
+        @override
+        def __getitem__(self, key: str):
+            # Key can be of the format "a.b.c"
+            #   so we need to split it into a list of keys.
+            [first_key, *rest_keys] = key.split(".")
+            value = self._ll_dict[first_key]
 
-        for key in rest_keys:
-            if isinstance(value, Mapping):
-                value = value[key]
+            for key in rest_keys:
+                if isinstance(value, Mapping):
+                    value = value[key]
+                else:
+                    value = getattr(value, key)
+
+            return value
+
+        @override
+        def __setitem__(self, key: str, value: Any):
+            # Key can be of the format "a.b.c"
+            #   so we need to split it into a list of keys.
+            [first_key, *rest_keys] = key.split(".")
+            if len(rest_keys) == 0:
+                self._ll_dict[first_key] = value
+                return
+
+            # We need to traverse the keys until we reach the last key
+            #   and then set the value
+            current_value = self._ll_dict[first_key]
+            for key in rest_keys[:-1]:
+                if isinstance(current_value, Mapping):
+                    current_value = current_value[key]
+                else:
+                    current_value = getattr(current_value, key)
+
+            # Set the value
+            if isinstance(current_value, MutableMapping):
+                current_value[rest_keys[-1]] = value
             else:
-                value = getattr(value, key)
+                setattr(current_value, rest_keys[-1], value)
 
-        return value
+        @override
+        def __delitem__(self, key: str):
+            # This is unsupported for this class
+            raise NotImplementedError
 
-    @override
-    def __setitem__(self, key: str, value: Any):
-        # Key can be of the format "a.b.c"
-        #   so we need to split it into a list of keys.
-        [first_key, *rest_keys] = key.split(".")
-        if len(rest_keys) == 0:
-            self._ll_dict[first_key] = value
-            return
+        @override
+        def __iter__(self):
+            return iter(self._ll_dict)
 
-        # We need to traverse the keys until we reach the last key
-        #   and then set the value
-        current_value = self._ll_dict[first_key]
-        for key in rest_keys[:-1]:
-            if isinstance(current_value, Mapping):
-                current_value = current_value[key]
-            else:
-                current_value = getattr(current_value, key)
-
-        # Set the value
-        if isinstance(current_value, MutableMapping):
-            current_value[rest_keys[-1]] = value
-        else:
-            setattr(current_value, rest_keys[-1], value)
-
-    @override
-    def __delitem__(self, key: str):
-        # This is unsupported for this class
-        raise NotImplementedError
-
-    @override
-    def __iter__(self):
-        return iter(self._ll_dict)
-
-    @override
-    def __len__(self):
-        return len(self._ll_dict)
+        @override
+        def __len__(self):
+            return len(self._ll_dict)
 
     # endregion
 

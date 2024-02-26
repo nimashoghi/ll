@@ -115,9 +115,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
 
                 # If `validate_config_before_run`, we validate the configuration before running the program.
                 if self.validate_config_before_run:
-                    config = type(config).model_deep_validate(
-                        config, strict=self.validate_strict
-                    )
+                    config = config.model_deep_validate(strict=self.validate_strict)
 
                 if config.trainer.auto_wrap_trainer:
                     stack.enter_context(Trainer.context(config))
