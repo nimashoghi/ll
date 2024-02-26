@@ -198,7 +198,8 @@ class Trainer(LightningTrainer):
             additional_nccl_env_vars: dict[str, str] = {}
             if config.trainer.set_nccl_optimal_params:
                 # We need to set these env vars before the NCCL library is loaded.
-                # Reportedly, the training performance can be improved quite a bit (see).
+                # Reportedly, the training performance can be improved quite a bit, see
+                #   https://lightning.ai/docs/pytorch/stable/advanced/ddp_optimizations.html#on-a-multi-node-cluster-set-nccl-parameters
                 # Details on all available env vars: https://docs.nvidia.com/deeplearning/nccl/user-guide/docs/env.html
                 additional_nccl_env_vars["NCCL_NSOCKS_PERTHREAD"] = "4"
                 additional_nccl_env_vars["NCCL_SOCKET_NTHREADS"] = "2"
