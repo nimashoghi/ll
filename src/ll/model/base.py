@@ -11,7 +11,9 @@ import torch
 import torch.nn as nn
 from lightning.pytorch import LightningDataModule, LightningModule, Trainer
 from lightning.pytorch.callbacks import Callback
-from typing_extensions import TypeVar, override
+from typing_extensions import TypeVar, deprecated, override
+
+from ..nn.mlp import MLP
 
 from .. import actsave
 from ..trainer import Trainer as LLTrainer
@@ -37,14 +39,9 @@ log = getLogger(__name__)
 THparams = TypeVar("THparams", bound=BaseConfig, infer_variance=True)
 
 
-class _ResidualSequential(nn.Sequential):
-    @override
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return x + super().forward(x)
-
-
 class Base(DebugModuleMixin, Generic[THparams]):
     @torch.jit.unused
+    @deprecated("Use ll.nn.MLP instead")
     def mlp(
         self,
         dims: list[int],
@@ -76,36 +73,17 @@ class Base(DebugModuleMixin, Generic[THparams]):
             nn.Sequential: The constructed MLP.
         """
 
-        if len(dims) < 2:
-            raise ValueError("mlp requires at least 2 dimensions")
-        if ln is True:
-            ln = "pre"
-        elif isinstance(ln, str) and not ln in ("pre", "post"):
-            raise ValueError("ln must be a boolean or 'pre' or 'post'")
-
-        layers: list[nn.Module] = []
-        if ln == "pre":
-            layers.append(nn.LayerNorm(dims[0]))
-
-        layers.extend(pre_layers)
-
-        for i in range(len(dims) - 1):
-            in_features = dims[i]
-            out_features = dims[i + 1]
-            bias_ = bias and not (no_bias_scalar and out_features == 1)
-            layers.append(nn.Linear(in_features, out_features, bias=bias_))
-            if dropout is not None:
-                layers.append(nn.Dropout(dropout))
-            if i < len(dims) - 2:
-                layers.append(activation())
-
-        layers.extend(post_layers)
-
-        if ln == "post":
-            layers.append(nn.LayerNorm(dims[-1]))
-
-        cls = _ResidualSequential if residual else nn.Sequential
-        return cls(*layers)
+        return MLP(
+            dims,
+            activation=activation,
+            bias=bias,
+            no_bias_scalar=no_bias_scalar,
+            ln=ln,
+            dropout=dropout,
+            residual=residual,
+            pre_layers=pre_layers,
+            post_layers=post_layers,
+        )
 
     @torch.jit.unused
     @property
