@@ -13,7 +13,7 @@ from unittest.mock import patch
 
 import pytest
 
-import submitit
+import ll.submitit
 
 from .. import helpers
 from ..core import job_environment, submission, test_core, utils
@@ -23,7 +23,10 @@ from . import slurm
 
 def _mock_log_files(job: Job[tp.Any], prints: str = "", errors: str = "") -> None:
     """Write fake log files"""
-    filepaths = [str(x).replace("%j", str(job.job_id)) for x in [job.paths.stdout, job.paths.stderr]]
+    filepaths = [
+        str(x).replace("%j", str(job.job_id))
+        for x in [job.paths.stdout, job.paths.stderr]
+    ]
     for filepath, msg in zip(filepaths, (prints, errors)):
         with Path(filepath).open("w") as f:
             f.write(msg)
@@ -75,7 +78,9 @@ def test_slurm_job_mocked(tmp_path: Path) -> None:
         # logs
         assert job.stdout() == "hop"
         assert job.stderr() == "This is the error log\n"
-        assert "_USELESS_TEST_ENV_VAR_" not in os.environ, "Test context manager seems to be failing"
+        assert (
+            "_USELESS_TEST_ENV_VAR_" not in os.environ
+        ), "Test context manager seems to be failing"
 
 
 @pytest.mark.parametrize("use_batch_api", (False, True))  # type: ignore
@@ -117,7 +122,9 @@ def test_slurm_job_array_mocked(use_batch_api: bool, tmp_path: Path) -> None:
 def test_slurm_error_mocked(tmp_path: Path) -> None:
     with mocked_slurm() as mock:
         executor = slurm.SlurmExecutor(folder=tmp_path)
-        executor.update_parameters(time=24, gpus_per_node=0)  # just to cover the function
+        executor.update_parameters(
+            time=24, gpus_per_node=0
+        )  # just to cover the function
         job = executor.submit(test_core.do_nothing, 1, 2, error=12)
         with mock.job_context(job.job_id):
             with pytest.raises(ValueError):
@@ -132,7 +139,9 @@ def test_slurm_error_mocked(tmp_path: Path) -> None:
 @contextlib.contextmanager
 def mock_requeue(called_with: int = None, not_called: bool = False):
     assert not_called or called_with is not None
-    requeue = patch("submitit.slurm.slurm.SlurmJobEnvironment._requeue", return_value=None)
+    requeue = patch(
+        "submitit.slurm.slurm.SlurmJobEnvironment._requeue", return_value=None
+    )
     with requeue as _patch:
         try:
             yield
@@ -151,7 +160,7 @@ def get_signal_handler(job: Job) -> job_environment.SignalHandler:
 
 
 def test_requeuing_checkpointable(tmp_path: Path, fast_forward_clock) -> None:
-    usr_sig = submitit.JobEnvironment._usr_sig()
+    usr_sig = ll.submitit.JobEnvironment._usr_sig()
     fs0 = helpers.FunctionSequence()
     fs0.add(test_core._three_time, 10)
     assert isinstance(fs0, helpers.Checkpointable)
@@ -193,7 +202,7 @@ def test_requeuing_checkpointable(tmp_path: Path, fast_forward_clock) -> None:
 
 
 def test_requeuing_not_checkpointable(tmp_path: Path, fast_forward_clock) -> None:
-    usr_sig = submitit.JobEnvironment._usr_sig()
+    usr_sig = ll.submitit.JobEnvironment._usr_sig()
     # Start job with a 60 minutes timeout
     with mocked_slurm():
         executor = slurm.SlurmExecutor(folder=tmp_path, max_num_timeout=1)
@@ -223,7 +232,7 @@ def test_requeuing_not_checkpointable(tmp_path: Path, fast_forward_clock) -> Non
 
 
 def test_checkpoint_and_exit(tmp_path: Path) -> None:
-    usr_sig = submitit.JobEnvironment._usr_sig()
+    usr_sig = ll.submitit.JobEnvironment._usr_sig()
     with mocked_slurm():
         executor = slurm.SlurmExecutor(folder=tmp_path, max_num_timeout=1)
         executor.update_parameters(time=60)
@@ -263,7 +272,11 @@ def test_make_sbatch_string() -> None:
         print("# # # # #")
         print(recorded)
         message = ["Difference with reference file:"] + changes
-        message += ["", "Delete the record file if this is normal:", f"rm {record_file}"]
+        message += [
+            "",
+            "Delete the record file if this is normal:",
+            f"rm {record_file}",
+        ]
         raise AssertionError("\n".join(message))
 
 
@@ -273,13 +286,15 @@ def test_make_sbatch_string_gpu() -> None:
 
 
 def test_make_sbatch_stderr() -> None:
-    string = slurm._make_sbatch_string(command="blublu", folder="/tmp", stderr_to_stdout=True)
+    string = slurm._make_sbatch_string(
+        command="blublu", folder="/tmp", stderr_to_stdout=True
+    )
     assert "--error" not in string
 
 
 def test_update_parameters(tmp_path: Path) -> None:
     with mocked_slurm():
-        executor = submitit.AutoExecutor(folder=tmp_path)
+        executor = ll.submitit.AutoExecutor(folder=tmp_path)
     executor.update_parameters(mem_gb=3.5)
     assert executor._executor.parameters["mem"] == "3584MB"
 
@@ -302,11 +317,18 @@ def test_read_info() -> None:
     output = slurm.SlurmInfoWatcher().read_info(example)
     assert output["5610980"] == {"JobID": "5610980", "State": "RUNNING"}
     assert output["20956421_2"] == {"JobID": "20956421_[2-4%25]", "State": "PENDING"}
-    assert set(output) == {"5610980", "20956421_0", "20956421_2", "20956421_3", "20956421_4"}
+    assert set(output) == {
+        "5610980",
+        "20956421_0",
+        "20956421_2",
+        "20956421_3",
+        "20956421_4",
+    }
 
 
 @pytest.mark.parametrize(  # type: ignore
-    "name,state", [("12_0", "R"), ("12_1", "U"), ("12_2", "X"), ("12_3", "U"), ("12_4", "X")]
+    "name,state",
+    [("12_0", "R"), ("12_1", "U"), ("12_2", "X"), ("12_3", "U"), ("12_4", "X")],
 )
 def test_read_info_array(name: str, state: str) -> None:
     example = "JobID|State\n12_0|R\n12_[2,4-12]|X"
@@ -327,14 +349,19 @@ def test_read_info_array(name: str, state: str) -> None:
         ("20_[0%1]", [(20, 0)]),
     ],
 )
-def test_read_job_id(job_id: str, expected: tp.List[tp.Tuple[tp.Union[int, str], ...]]) -> None:
+def test_read_job_id(
+    job_id: str, expected: tp.List[tp.Tuple[tp.Union[int, str], ...]]
+) -> None:
     output = slurm.read_job_id(job_id)
     assert output == [tuple(str(x) for x in group) for group in expected]
 
 
 @pytest.mark.parametrize(  # type: ignore
     "string,expected",
-    [(b"Submitted batch job 5610208\n", "5610208"), ("Submitted batch job 5610208\n", "5610208")],
+    [
+        (b"Submitted batch job 5610208\n", "5610208"),
+        ("Submitted batch job 5610208\n", "5610208"),
+    ],
 )
 def test_get_id_from_submission_command(string: str, expected: str) -> None:
     output = slurm.SlurmExecutor._get_job_id_from_submission_command(string)
@@ -424,7 +451,13 @@ def test_slurm_node_list() -> None:
     with with_slurm_job_nodelist("compute[042,044]") as env:
         assert ["compute042", "compute044"] == env.hostnames
     with with_slurm_job_nodelist("compute[042-043,045,048-049]") as env:
-        assert ["compute042", "compute043", "compute045", "compute048", "compute049"] == env.hostnames
+        assert [
+            "compute042",
+            "compute043",
+            "compute045",
+            "compute048",
+            "compute049",
+        ] == env.hostnames
 
 
 def test_slurm_node_list_online_documentation() -> None:
@@ -488,8 +521,10 @@ def test_slurm_weird_dir(weird_tmp_path: Path) -> None:
 @pytest.mark.parametrize("params", [{}, {"mem_gb": None}])  # type: ignore
 def test_slurm_through_auto(params: tp.Dict[str, int], tmp_path: Path) -> None:
     with mocked_slurm():
-        executor = submitit.AutoExecutor(folder=tmp_path)
-        executor.update_parameters(**params, slurm_additional_parameters={"mem_per_gpu": 12})
+        executor = ll.submitit.AutoExecutor(folder=tmp_path)
+        executor.update_parameters(
+            **params, slurm_additional_parameters={"mem_per_gpu": 12}
+        )
         job = executor.submit(test_core.do_nothing, 1, 2, blublu=3)
     text = job.paths.submission_file.read_text()
     mem_lines = [x for x in text.splitlines() if "#SBATCH --mem" in x]
@@ -515,5 +550,7 @@ def test_slurm_job_no_stderr(tmp_path: Path) -> None:
         job._results_timeout_s = 0
         # Explicitly unlink stdout because submitit is writing there on startup
         # job.paths.stdout.unlink()
-        with pytest.raises(utils.UncompletedJobError, match="No output/error stream produced !"):
+        with pytest.raises(
+            utils.UncompletedJobError, match="No output/error stream produced !"
+        ):
             job._get_outcome_and_result()

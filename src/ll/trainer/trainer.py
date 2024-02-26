@@ -319,7 +319,7 @@ class Trainer(LightningTrainer):
             # when num_nodes is auto, we need to detect the number of nodes
             # when on slurm, this would be the number of SLURM nodes allocated
             if SLURMEnvironment.detect():
-                from submitit import JobEnvironment
+                from ll.submitit import JobEnvironment
 
                 job = JobEnvironment()
                 if not job.activated():

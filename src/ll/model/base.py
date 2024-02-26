@@ -172,7 +172,7 @@ class DebugFlagCallback(Callback):
 
 def _slurm_session_info():
     try:
-        from submitit import JobEnvironment
+        from ll.submitit import JobEnvironment
 
         job = JobEnvironment()
         if not job.activated():

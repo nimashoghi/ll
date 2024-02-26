@@ -3,7 +3,7 @@ from datetime import timedelta
 from logging import getLogger
 from pathlib import Path
 
-from submitit import AutoExecutor
+from ll.submitit import AutoExecutor
 
 from .snapshot import snapshot_modules
 

@@ -17,7 +17,7 @@ import cloudpickle as pickle
 from tqdm.auto import tqdm
 from typing_extensions import TypeVar, TypeVarTuple, Unpack, deprecated, override
 
-from submitit import AutoExecutor
+from ll.submitit import AutoExecutor
 
 from .model.config import BaseConfig
 from .trainer import Trainer

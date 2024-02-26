@@ -90,9 +90,9 @@ def test_job_use_snapshot_modules(executor, tmp_path: Path) -> None:
 
         def submitit_file() -> Path:
             # pylint: disable=import-outside-toplevel
-            import submitit
+            import ll.submitit
 
-            return Path(submitit.__file__)
+            return Path(ll.submitit.__file__)
 
         job = executor.submit(submitit_file)
     # Here we load the normal submitit
@@ -133,7 +133,9 @@ def test_monitor_jobs(tmp_path: Path) -> None:
 
 
 def _get_env() -> tp.Dict[str, str]:
-    return {x: y for x, y in os.environ.items() if x.startswith(("SLURM_", "SUBMITIT_"))}
+    return {
+        x: y for x, y in os.environ.items() if x.startswith(("SLURM_", "SUBMITIT_"))
+    }
 
 
 def test_clean_env() -> None:

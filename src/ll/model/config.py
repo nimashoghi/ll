@@ -27,7 +27,7 @@ from typing_extensions import TypeVar, deprecated, override
 
 from ..config import Field, TypedConfig
 
-logger = getLogger(__name__)
+log = getLogger(__name__)
 
 
 class IdSeedWarning(Warning):
@@ -48,7 +48,8 @@ class BaseProfilerConfig(TypedConfig, ABC):
     """
 
     @abstractmethod
-    def construct_profiler(self) -> Profiler: ...
+    def construct_profiler(self) -> Profiler:
+        ...
 
 
 class SimpleProfilerConfig(BaseProfilerConfig):
@@ -314,7 +315,8 @@ TPlugin = TypeVar(
 
 @runtime_checkable
 class PluginConfigProtocol(Protocol[TPlugin]):
-    def construct_plugin(self) -> TPlugin: ...
+    def construct_plugin(self) -> TPlugin:
+        ...
 
 
 class TrainerConfig(TypedConfig):
@@ -685,8 +687,8 @@ class BaseConfig(TypedConfig):
     runner: RunnerConfig = RunnerConfig()
     """`ll.Runner` configuration options."""
 
-    """Additional metadata for this run. This can be used to store arbitrary data that is not part of the config schema."""
     meta: dict[str, Any] = {}
+    """Additional metadata for this run. This can be used to store arbitrary data that is not part of the config schema."""
 
     def clone(self, with_new_id: bool = True) -> Self:
         c = copy.deepcopy(self)
@@ -722,7 +724,7 @@ class BaseConfig(TypedConfig):
     def set_seed(seed: int | None = None) -> None:
         if seed is None:
             seed = int(time.time() * 1000)
-        logger.critical(f"Seeding BaseConfig with seed {seed}")
+        log.critical(f"Seeding BaseConfig with seed {seed}")
         BaseConfig._rng = np.random.default_rng(seed)
 
     # endregion
