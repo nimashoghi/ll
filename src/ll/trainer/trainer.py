@@ -227,7 +227,7 @@ class Trainer(LightningTrainer):
 
     @classmethod
     def _update_kwargs(cls, config: BaseConfig, kwargs_ctor: dict[str, Any]):
-        kwargs = {
+        kwargs: dict[str, Any] = {
             "accelerator": config.trainer.accelerator,
             "strategy": config.trainer.strategy,
             "devices": config.trainer.devices,

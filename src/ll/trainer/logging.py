@@ -71,7 +71,7 @@ def _default_loggers(
     return loggers
 
 
-def loggers_from_config(config: BaseConfig):
+def loggers_from_config(config: BaseConfig) -> list[Logger]:
     logging_config = config.trainer.logging
     if not logging_config.enabled or config.trainer.logger is False:
         return []

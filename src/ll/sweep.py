@@ -24,31 +24,29 @@ ParameterValue = float | int
 
 
 # https://docs.wandb.ai/guides/sweeps/define-sweep-configuration#parameters
-class Parameter(TypedDict):
-    values: NotRequired[list[Any]]
+class Parameter(TypedDict, total=False):
+    values: list[Any]
     """Specifies all valid values for this hyperparameter. Compatible with `grid`."""
 
-    value: NotRequired[Any]
+    value: Any
     """Specifies the single valid value for this hyperparameter. Compatible with `grid`."""
 
-    distribution: NotRequired[
-        Literal[
-            "constant",
-            "categorical",
-            "int_uniform",
-            "uniform",
-            "q_uniform",
-            "log_uniform",
-            "log_uniform_values",
-            "q_log_uniform",
-            "q_log_uniform_values",
-            "inv_log_uniform",
-            "inv_log_uniform_values",
-            "normal",
-            "q_normal",
-            "log_normal",
-            "q_log_normal",
-        ]
+    distribution: Literal[
+        "constant",
+        "categorical",
+        "int_uniform",
+        "uniform",
+        "q_uniform",
+        "log_uniform",
+        "log_uniform_values",
+        "q_log_uniform",
+        "q_log_uniform_values",
+        "inv_log_uniform",
+        "inv_log_uniform_values",
+        "normal",
+        "q_normal",
+        "log_normal",
+        "q_log_normal",
     ]
     """
     Selects a distribution from the distribution table below. If not specified, will default to `categorical` if `values` is set, to `int_uniform` if `max` and `min` are set to integers, to `uniform` if `max` and `min` are set to floats, or to `constant` if `value` is set.
@@ -87,25 +85,25 @@ class Parameter(TypedDict):
         `q_log_normal` - Quantized log normal distribution. Returns `round(X / q) * q` where `X` is `log_normal`. `q` defaults to `1`.
     """
 
-    probabilities: NotRequired[list[float]]
+    probabilities: list[float]
     """Specify the probability of selecting each element of values when using random."""
 
-    min: NotRequired[ParameterValue]
+    min: ParameterValue
     """Minimum values. If int, for `int_uniform`-distributed hyperparameters. If float, for `uniform`-distributed hyperparameters."""
 
-    max: NotRequired[ParameterValue]
+    max: ParameterValue
     """Maximum values. If int, for `int_uniform`-distributed hyperparameters. If float, for `uniform`-distributed hyperparameters."""
 
-    mu: NotRequired[ParameterValue]
+    mu: ParameterValue
     """Mean parameter for `normal`-or-`lognormal`-distributed hyperparameters."""
 
-    sigma: NotRequired[ParameterValue]
+    sigma: ParameterValue
     """Standard deviation parameter for `normal`-or-`lognormal`-distributed hyperparameters."""
 
-    q: NotRequired[ParameterValue]
+    q: ParameterValue
     """Quantization step size for quantized hyperparameters."""
 
-    parameters: NotRequired[dict[str, "Parameters"]]
+    parameters: dict[str, "Parameters"]
     """Nest other parameters inside a root level parameter."""
 
 
