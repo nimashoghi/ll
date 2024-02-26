@@ -1,6 +1,5 @@
 import copy
 import os
-import subprocess
 import tempfile
 import traceback
 from collections import Counter
@@ -201,43 +200,23 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
 
         return return_values
 
-    def _launch_session(
-        self,
-        config_paths: list[Path],
-        conda_env: str | None,
-        session_name: str,
-        env: dict[str, str],
-        what_if: bool = False,
-    ):
-        # All we need to do here is launch `python -m ll.local_sessions_runner` with the config paths as arguments. The `local_sessions_runner` will take care of the rest.
+    def _launch_session(self, config_paths: list[Path], session_name: str):
+        # All we need to do here is launch `python -m ll.local_sessions_runner`
+        # with the config paths as arguments. The `local_sessions_runner` will take care of the rest.
         # Obviously, the command above needs to be run in a screen session, so we can come back to it later.
-
-        if not conda_env:
-            command = (
-                ["screen", "-dmS", session_name]
-                + ["python", "-m", "ll.local_sessions_runner"]
-                + [str(p.absolute()) for p in config_paths]
-            )
-        else:
-            command = (
-                ["screen", "-dmS", session_name]
-                + [
-                    "conda",
-                    "run",
-                    "--live-stream",
-                    "-n",
-                    conda_env,
-                    "python",
-                    "-m",
-                    "ll.local_sessions_runner",
-                ]
-                + [str(p.absolute()) for p in config_paths]
-            )
-        if not what_if:
-            log.critical(f"Launching session with command: {command}")
-            _ = subprocess.run(command, env=env, check=True)
-
-        return command
+        return (
+            [
+                "screen",
+                "-dmS",
+                session_name,
+                # Save the logs to a file
+                "-L",
+                "-Logfile",
+                f"{session_name}.log",
+            ]
+            + ["python", "-m", "ll.local_sessions_runner"]
+            + [str(p.absolute()) for p in config_paths]
+        )
 
     def local_sessions(
         self,
@@ -245,7 +224,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         sessions: int | list[dict[str, str]],
         config_pickle_save_path: Path | None = None,
         reset_id: bool = True,
-        what_if: bool = False,
+        snapshot: bool | SnapshotConfig = False,
     ):
         """
         Launches len(sessions) local runs in different environments using `screen`.
@@ -260,8 +239,8 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
             The path to save the config pickles to. If `None`, a temporary directory will be created.
         reset_id : bool, optional
             Whether to reset the id of the runs before launching them.
-        what_if : bool, optional
-            If `True`, the sessions will not be launched, but the command to launch them will be printed.
+        snapshot : bool | SnapshotConfig
+            Whether to snapshot the environment before launching the sessions.
 
         Returns
         -------
@@ -282,6 +261,9 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         resolved_runs = self._resolve_runs(runs, reset_id=reset_id)
         self._validate_runs(resolved_runs)
 
+        # Take a snapshot of the environment
+        snapshot_path = self._snapshot(snapshot, resolved_runs)
+
         # Save all configs to pickle files
         config_paths: list[Path] = []
         for i, config in enumerate(resolved_runs):
@@ -294,39 +276,63 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         # Launch all sessions
         names: list[str] = []
         commands: list[str] = []
-        n_sessions = len(sessions)
+
         for i, session in enumerate(sessions):
             session_env = {**self.DEFAULT_ENV, **session}
+
+            # Get the projects assigned to this session
+            session_config_paths = config_paths[i :: len(sessions)]
+
+            # If this session has no configs, skip it
+            if not session_config_paths:
+                continue
+
             # Get the shared project name
-            project_names = set([config.project for config, _ in resolved_runs])
+            project_names = set([c.project for c, _ in resolved_runs if c.project])
             if len(project_names) == 1:
                 project = project_names.pop()
             else:
                 project = "session"
-            session_name = f"ll_{project}_{i:03d}"
-            command = self._launch_session(
-                config_paths,
-                current_env,
-                session_name,
-                session_env,
-                what_if=what_if,
-            )
-            names.append(session_name)
-            if what_if:
-                # log.critical(f"Sesssion {i+1}/{n_sessions} command: {command_str}")
-                command_prefix = " ".join(f'{k}="{v}"' for k, v in session_env.items())
-                command_str = " ".join(command)
-                commands.append(f"{command_prefix} {command_str}")
-            else:
-                log.critical(f"Launched session {i+1}/{n_sessions}")
 
-        if what_if:
-            # Print the full command so the user can copy-paste it
-            print(
-                "The sessions were not launched because `what_if` was set. Please copy-paste the following command to launch the sessions."
-            )
+            session_name = f"ll_{project}_{i:03d}"
+            command = self._launch_session(session_config_paths, session_name)
+            names.append(session_name)
+
+            # log.critical(f"Sesssion {i+1}/{n_sessions} command: {command_str}")
+            command_prefix = " ".join(f'{k}="{v}"' for k, v in session_env.items())
+            command_str = " ".join(command)
+            commands.append(f"{command_prefix} {command_str}")
+
+        # Create a shell script to launch all sessions
+        script_path = config_pickle_save_path / "launch.sh"
+        with script_path.open("w") as f:
+            f.write("#!/bin/bash\n\n")
+
+            # Enable error checking
+            f.write("set -e\n\n")
+
+            # If we're in a snapshot, we need to activate the snapshot before launching the sessions
+            if snapshot_path:
+                snapshot_str = str(snapshot_path.resolve().absolute())
+                f.write('echo "Activating snapshot"\n')
+                f.write(f"export PYTHONPATH={snapshot_str}:$PYTHONPATH\n")
+                f.write(f"export {self.SNAPSHOT_ENV_NAME}={snapshot_str}\n\n")
+
+            # Activate the conda environment
+            f.write('eval "$(conda shell.bash hook)"\n')
+            f.write(f'echo "Activating conda environment {current_env}"\n')
+            f.write(f"conda activate {current_env}\n\n")
+
             for command in commands:
-                print(command)
+                f.write(f"{command}\n")
+
+        # Make the script executable
+        script_path.chmod(0o755)
+
+        # Print the full command so the user can copy-paste it
+        print(
+            f"Run the following command to launch the sessions:\n\n{script_path.resolve()}\n\n"
+        )
 
         return names
 
@@ -341,7 +347,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         runs: Sequence[TConfig] | Sequence[tuple[TConfig, Unpack[TArguments]]],
         config_pickle_save_path: Path | None = None,
         reset_id: bool = True,
-        what_if: bool = False,
+        snapshot: bool | SnapshotConfig = False,
     ):
         """
         Launches len(sessions) local runs in different environments using `screen`.
@@ -354,8 +360,8 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
             The path to save the config pickles to. If `None`, a temporary directory will be created.
         reset_id : bool, optional
             Whether to reset the id of the runs before launching them.
-        what_if : bool, optional
-            If `True`, the sessions will not be launched, but the command to launch them will be printed.
+        snapshot : bool | SnapshotConfig
+            Whether to snapshot the environment before launching the sessions.
 
         Returns
         -------
@@ -375,7 +381,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
             sessions,
             config_pickle_save_path=config_pickle_save_path,
             reset_id=reset_id,
-            what_if=what_if,
+            snapshot=snapshot,
         )
 
     def fast_dev_run(
@@ -430,8 +436,8 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
             if count > 1:
                 raise ValueError(f"Duplicate id {id=}")
 
-    @staticmethod
     def _snapshot(
+        self,
         snapshot: bool | SnapshotConfig,
         resolved_runs: list[tuple[TConfig, tuple[Unpack[TArguments]]]],
     ):
@@ -449,10 +455,19 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
 
         # Set the snapshot base to the user's home directory
         snapshot_base = snapshot_config.get("base_path", Path.home() / ".ll_snapshots")
+        snapshot_base.mkdir(exist_ok=True, parents=True)
+
         snapshot_modules_set: set[str] = set()
         snapshot_modules_set.update(snapshot_config.get("modules", []))
         if snapshot_config.get("snapshot_ll", True):
-            snapshot_modules_set.add("ll")
+            # Resolve ll by taking the module of the runner class
+            ll_module = self.__class__.__module__.split(".", 1)[0]
+            if ll_module != "ll":
+                log.warning(
+                    f"Runner class {self.__class__.__name__} is not in the 'll' module.\n"
+                    "This is unexpected and may lead to issues with snapshotting."
+                )
+            snapshot_modules_set.add(ll_module)
         if snapshot_config.get("snapshot_config_cls_module", True):
             for config, _ in resolved_runs:
                 # Resolve the root module of the config class
@@ -485,7 +500,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         nodes: int,
         partition: str,
         cpus_per_task: int,
-        snapshot: bool | SnapshotConfig,
+        snapshot: bool | SnapshotConfig = False,
         constraint: str | None = None,
         timeout: timedelta | None = None,
         memory: int | None = None,

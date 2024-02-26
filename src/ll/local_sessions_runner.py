@@ -29,7 +29,7 @@ def process_session(path: Path) -> None:
     from ll.runner import Runner
 
     runner = Runner(run_fn, **runner_kwargs)
-    _ = runner([config])
+    _ = runner.local([config])
     log.critical(f"Executed {path}")
 
 
@@ -39,8 +39,6 @@ def main():
         "paths", nargs="+", type=Path, help="Paths to the sessions to run"
     )
     args = parser.parse_args()
-
-    logging.basicConfig(level=logging.INFO)
 
     if not args.paths:
         raise ValueError("No paths provided")
