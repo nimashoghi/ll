@@ -1,15 +1,15 @@
 from collections.abc import Mapping, MutableMapping
-from typing import Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from pydantic import BaseModel, ConfigDict, Field
-from typing_extensions import dataclass_transform, override
+from typing_extensions import override
+
+_MutableMappingBase = MutableMapping[str, Any]
+if TYPE_CHECKING:
+    _MutableMappingBase = object
 
 
-@dataclass_transform(
-    kw_only_default=True,
-    field_specifiers=(Field,),
-)
-class TypedConfig(BaseModel, MutableMapping[str, Any]):
+class TypedConfig(BaseModel, _MutableMappingBase):
     is_draft_config: bool = False
     """
     Whether this config is a draft config or not.
@@ -165,3 +165,6 @@ class TypedConfig(BaseModel, MutableMapping[str, Any]):
         return len(self._ll_dict)
 
     # endregion
+
+
+__all__ = ["TypedConfig", "Field"]

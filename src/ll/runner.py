@@ -1,18 +1,16 @@
 import copy
-import getpass
 import os
 import subprocess
 import tempfile
 import traceback
 from collections import Counter
-from collections.abc import Sequence, Mapping
+from collections.abc import Mapping, Sequence
 from contextlib import ExitStack
 from datetime import timedelta
 from functools import wraps
 from logging import getLogger
 from pathlib import Path
 from typing import Generic, Protocol, TypedDict, cast, runtime_checkable
-
 
 import cloudpickle as pickle
 from tqdm.auto import tqdm
