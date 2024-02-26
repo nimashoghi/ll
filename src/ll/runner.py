@@ -5,17 +5,18 @@ import subprocess
 import tempfile
 import traceback
 from collections import Counter
-from collections.abc import Sequence
+from collections.abc import Sequence, Mapping
 from contextlib import ExitStack
 from datetime import timedelta
 from functools import wraps
 from logging import getLogger
 from pathlib import Path
-from typing import Generic, Protocol, cast, overload, runtime_checkable
+from typing import Generic, Protocol, TypedDict, cast, runtime_checkable
+
 
 import cloudpickle as pickle
 from tqdm.auto import tqdm
-from typing_extensions import TypeVar, TypeVarTuple, Unpack, deprecated, override
+from typing_extensions import TypeVar, TypeVarTuple, Unpack, override
 
 from ll.submitit import AutoExecutor
 
@@ -28,6 +29,19 @@ from .util.environment import (
 from .util.snapshot import snapshot_modules
 
 log = getLogger(__name__)
+
+
+class SnapshotConfig(TypedDict, total=False):
+    base_path: Path
+    modules: list[str]
+    snapshot_ll: bool
+    snapshot_config_cls_module: bool
+
+
+SNAPSHOT_CONFIG_DEFAULT = SnapshotConfig(
+    snapshot_ll=True,
+    snapshot_config_cls_module=True,
+)
 
 
 TConfig = TypeVar("TConfig", bound=BaseConfig, infer_variance=True)
@@ -150,60 +164,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
 
         return resolved
 
-    @deprecated("Use __call__ instead")
-    @overload
     def local(
-        self,
-        run: TConfig | tuple[TConfig, Unpack[TArguments]],
-        /,
-        *,
-        env: dict[str, str] | None = None,
-        reset_id: bool = True,
-    ) -> TReturn:
-        ...
-
-    @deprecated("Use __call__ instead")
-    @overload
-    def local(
-        self,
-        run_1: TConfig | tuple[TConfig, Unpack[TArguments]],
-        run_2: TConfig | tuple[TConfig, Unpack[TArguments]],
-        /,
-        *runs: TConfig | tuple[TConfig, Unpack[TArguments]],
-        env: dict[str, str] | None = None,
-        reset_id: bool = True,
-    ) -> list[TReturn]:
-        ...
-
-    @deprecated("Use __call__ instead")
-    def local(
-        self,
-        *runs: TConfig | tuple[TConfig, Unpack[TArguments]],
-        env: dict[str, str] | None = None,
-        reset_id: bool = True,
-    ):
-        return_values: list[TReturn] = []
-        for run in runs:
-            config, args = self._resolve_run(run)
-            if reset_id:
-                config.id = BaseConfig.generate_id(ignore_rng=True)
-
-            env = {**self.DEFAULT_ENV, **(env or {})}
-            env_old = {k: os.environ.get(k, None) for k in env}
-            os.environ.update(env)
-            try:
-                return_value = self._run_fn(config, *args)
-                return_values.append(return_value)
-            finally:
-                for k, v in env_old.items():
-                    if v is None:
-                        _ = os.environ.pop(k, None)
-                    else:
-                        os.environ[k] = v
-
-        return return_values[0] if len(return_values) == 1 else return_values
-
-    def __call__(
         self,
         runs: Sequence[TConfig] | Sequence[tuple[TConfig, Unpack[TArguments]]],
         env: dict[str, str] | None = None,
@@ -240,7 +201,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
                     else:
                         os.environ[k] = v
 
-        return return_values[0] if len(return_values) == 1 else return_values
+        return return_values
 
     def _launch_session(
         self,
@@ -440,18 +401,17 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         stop_on_error : bool, optional
             Whether to stop on error.
         """
-        resolved_runs = self._resolve_runs(runs)
+        resolved_runs = self._resolve_runs(runs, copy_config=True)
         self._validate_runs(resolved_runs)
 
         return_values: list[TReturn] = []
-
         for config, args in tqdm(resolved_runs, desc="Fast dev run"):
             run_id = config.id
             run_name = config.name
             try:
                 config.trainer.fast_dev_run = n_batches
-                return_value = self.local((config, *args), env=env, reset_id=True)
-                return_values.append(return_value)
+                return_value = self.local([(config, *args)], env=env, reset_id=True)
+                return_values.extend(return_value)
             except BaseException as e:
                 # print full traceback
                 log.critical(f"Error in run with {run_id=} ({run_name=}): {e}")
@@ -466,10 +426,56 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         if not runs:
             raise ValueError("No run configs provided.")
 
+        # Make sure there are no duplicate ids
         id_counter = Counter(config.id for config, _ in runs if config.id is not None)
         for id, count in id_counter.items():
             if count > 1:
                 raise ValueError(f"Duplicate id {id=}")
+
+    @staticmethod
+    def _snapshot(
+        snapshot: bool | SnapshotConfig,
+        resolved_runs: list[tuple[TConfig, tuple[Unpack[TArguments]]]],
+    ):
+        # Handle snapshot
+        snapshot_config: SnapshotConfig | None = None
+        if snapshot is True:
+            snapshot_config = {**SNAPSHOT_CONFIG_DEFAULT}
+        elif snapshot is False:
+            snapshot_config = None
+        elif isinstance(snapshot, Mapping):
+            snapshot_config = {**SNAPSHOT_CONFIG_DEFAULT, **snapshot}
+
+        if snapshot_config is None:
+            return None
+
+        # Set the snapshot base to the user's home directory
+        snapshot_base = snapshot_config.get("base_path", Path.home() / ".ll_snapshots")
+        snapshot_modules_set: set[str] = set()
+        snapshot_modules_set.update(snapshot_config.get("modules", []))
+        if snapshot_config.get("snapshot_ll", True):
+            snapshot_modules_set.add("ll")
+        if snapshot_config.get("snapshot_config_cls_module", True):
+            for config, _ in resolved_runs:
+                # Resolve the root module of the config class
+                # NOTE: We also must handle the case where the config
+                #   class's module is "__main__" (i.e. the config class
+                #   is defined in the main script).
+                module = config.__class__.__module__
+                if module == "__main__":
+                    log.warning(
+                        f"Config class {config.__class__.__name__} is defined in the main script.\n"
+                        "Snapshotting the main script is not supported.\n"
+                        "Skipping snapshotting of the config class's module."
+                    )
+                    continue
+
+                # Make sure to get the root module
+                module = module.split(".", 1)[0]
+                snapshot_modules_set.add(module)
+
+        snapshot_path = snapshot_modules(snapshot_base, list(snapshot_modules_set))
+        return snapshot_path.absolute()
 
     @remove_slurm_environment_variables()
     @remove_wandb_environment_variables()
@@ -481,14 +487,13 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         nodes: int,
         partition: str,
         cpus_per_task: int,
-        snapshot: bool | Path,
+        snapshot: bool | SnapshotConfig,
         constraint: str | None = None,
         timeout: timedelta | None = None,
         memory: int | None = None,
         email: str | None = None,
         slurm_additional_parameters: dict[str, str] | None = None,
         slurm_setup: list[str] | None = None,
-        snapshot_base: Path | None = None,
         env: dict[str, str] | None = None,
     ):
         """
@@ -507,7 +512,9 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         cpus_per_task : int
             The number of CPUs per task.
         snapshot : bool | Path
-            If `True`, snapshots the current environment. If a `Path` is provided, it will be used as the snapshot directory.
+            The base path to save snapshots to.
+                - If `True`, the default path will be used (`/home/<user>/.ll_snapshots`).
+                - If `False`, no snapshots will be used.
         constraint : str, optional
             The name of the constraint to use.
         timeout : timedelta, optional
@@ -522,14 +529,8 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         resolved_runs = self._resolve_runs(runs)
         self._validate_runs(resolved_runs)
 
-        if snapshot_base is None:
-            current_user = getpass.getuser()
-            snapshot_base = Path(f"/checkpoint/{current_user}/ll_snapshots/")
-
-        if snapshot is True:
-            snapshot = snapshot_modules(
-                snapshot_base, ["st", "ll", "submitit"]
-            ).absolute()
+        # Handle snapshot
+        snapshot_path = self._snapshot(snapshot, resolved_runs)
 
         env = {**self.DEFAULT_ENV, **(env or {})}
 
@@ -549,8 +550,8 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
             setup.extend(f"export {k}={v}" for k, v in env.items())
         if slurm_setup:
             setup.extend(slurm_setup)
-        if snapshot:
-            snapshot_str = str(snapshot.resolve().absolute())
+        if snapshot_path:
+            snapshot_str = str(snapshot_path.resolve().absolute())
             setup.append(f"export {self.SNAPSHOT_ENV_NAME}={snapshot_str}")
             setup.append(f"export PYTHONPATH={snapshot_str}:$PYTHONPATH")
 

@@ -113,7 +113,8 @@ class CallbackRegistrarModuleMixin:
 
 
 class CallbackModuleMixin(
-    CallbackRegistrarModuleMixin, mixin_base_type(LightningModule)
+    CallbackRegistrarModuleMixin,
+    mixin_base_type(LightningModule),
 ):
     def _gather_all_callbacks(self):
         modules: list[Any] = []

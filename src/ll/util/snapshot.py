@@ -66,7 +66,7 @@ def snapshot_modules(
     snapshot_dir = snapshot_dir / id
     snapshot_dir.mkdir(parents=True, exist_ok=not error_on_existing)
 
-    log.critical(f"Snapshotting to {snapshot_dir}")
+    log.critical(f"Snapshotting {modules=} to {snapshot_dir}")
 
     moved_modules = defaultdict[str, list[tuple[Path, Path]]](list)
     for module in modules:
