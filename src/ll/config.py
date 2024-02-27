@@ -39,6 +39,11 @@ class TypedConfig(BaseModel, _MutableMappingBase):
         ```
     """
 
+    repr_diff_only: ClassVar[bool] = True
+    """
+    If `True`, the repr methods will only show values for fields that are different from the default.
+    """
+
     MISSING: ClassVar[Any] = MISSING
     """
     Alias for the `MISSING` constant.
@@ -189,6 +194,29 @@ class TypedConfig(BaseModel, _MutableMappingBase):
             object.__setattr__(m, "__pydantic_private__", None)
 
         return m
+
+    @override
+    def __repr_args__(self):
+        # If `repr_diff_only` is `True`, we only show the fields that are different from the default.
+        if not self.repr_diff_only:
+            yield from super().__repr_args__()
+            return
+
+        # First, we get the default values for all fields.
+        default_values = self.model_construct_draft()
+
+        # Then, we compare the default values with the current values.
+        for k, v in super().__repr_args__():
+            if k is None:
+                yield k, v
+                continue
+
+            # If there is no default value or the value is different from the default, we yield it.
+            if not hasattr(default_values, k) or getattr(default_values, k) != v:
+                yield k, v
+                continue
+
+            # Otherwise, we can skip this field.
 
     # region MutableMapping implementation
     if not TYPE_CHECKING:
