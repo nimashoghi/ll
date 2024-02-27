@@ -1,19 +1,44 @@
+import types
 from collections.abc import Mapping, MutableMapping
-from typing import TYPE_CHECKING, Any, ClassVar, cast
+from typing import TYPE_CHECKING, Annotated, Any, ClassVar, Never, TypeAlias, cast
 
-from pydantic import BaseModel, ConfigDict, Field, PrivateAttr
-from typing_extensions import override
+from pydantic import BaseModel, ConfigDict, Field, GetCoreSchemaHandler, PrivateAttr
+from pydantic_core import core_schema
+from typing_extensions import TypeVar, override
 
 _MutableMappingBase = MutableMapping[str, Any]
 if TYPE_CHECKING:
     _MutableMappingBase = object
 
 
-class _MISSING:
+MISSING = cast(Any, None)
+
+
+class _MissingTypeAnnotation:
+    @classmethod
+    def __get_pydantic_core_schema__(
+        cls,
+        _source_type: Any,
+        _handler: GetCoreSchemaHandler,
+    ) -> core_schema.CoreSchema:
+        return core_schema.json_or_python_schema(
+            json_schema=core_schema.literal_schema([None]),
+            python_schema=core_schema.literal_schema([None]),
+            serialization=core_schema.plain_serializer_function_ser_schema(lambda x: x),
+        )
+
+
+class _DraftConfigContextCls:
     pass
 
 
-MISSING = cast(Any, _MISSING())
+_DraftConfigContext = _DraftConfigContextCls()
+
+T = TypeVar("T", infer_variance=True)
+if TYPE_CHECKING:
+    AllowMissing: TypeAlias = T | Annotated[Never, _MissingTypeAnnotation()]
+else:
+    AllowMissing: TypeAlias = T | Annotated[types.NoneType, _MissingTypeAnnotation()]
 
 
 class TypedConfig(BaseModel, _MutableMappingBase):
@@ -46,6 +71,7 @@ class TypedConfig(BaseModel, _MutableMappingBase):
         strict=True,
         revalidate_instances="always",
         arbitrary_types_allowed=True,
+        extra="forbid",
     )
 
     def __draft_pre_init__(self):
@@ -68,7 +94,8 @@ class TypedConfig(BaseModel, _MutableMappingBase):
             config: The config to validate.
             strict: Whether to validate the config strictly.
         """
-        config = self.model_validate(self.model_dump(round_trip=True), strict=strict)
+        config_dict = self.model_dump(round_trip=True)
+        config = self.model_validate(config_dict, strict=strict)
 
         # Make sure that this is not a draft config
         if config._is_draft_config:
@@ -78,8 +105,7 @@ class TypedConfig(BaseModel, _MutableMappingBase):
 
     @classmethod
     def draft(cls, **kwargs):
-        config = cls.model_construct(_is_draft_config=True, **kwargs)
-        config._is_draft_config = True
+        config = cls.model_construct_draft(**kwargs)
         return config
 
     def finalize(self, strict: bool = True):
@@ -91,26 +117,89 @@ class TypedConfig(BaseModel, _MutableMappingBase):
         self.__draft_pre_init__()
 
         # Then, we dump the config to a dict and then re-validate it
-        config_dict = self.model_dump(round_trip=True)
-
-        # We need to remove the `_is_draft_config` from the config_dict
-        #   because we're no longer a draft self
-        _ = config_dict.pop("_is_draft_config", None)
-
-        return self.model_validate(config_dict, strict=strict)
+        return self.model_deep_validate(strict=strict)
 
     @override
     def model_post_init(self, __context: Any) -> None:
         super().model_post_init(__context)
 
-        # This fixes the issue w/ `copy.deepcopy` not working properly when
-        #   the object was created using `cls.model_construct`.
-        if not hasattr(self, "__pydantic_private__"):
-            object.__setattr__(self, "__pydantic_private__", None)
-
-        # If we're not in a draft, call __post_init__
-        if not self._is_draft_config:
+        # Call the `__post_init__` method if this is not a draft config
+        if __context is not _DraftConfigContext:
             self.__post_init__()
+
+    @classmethod
+    def model_construct_draft(cls, _fields_set: set[str] | None = None, **values: Any):
+        """
+        NOTE: This is a copy of the `model_construct` method from Pydantic's `Model` class,
+            with the following changes:
+            - The `model_post_init` method is called with the `_DraftConfigContext` context.
+            - The `_is_draft_config` attribute is set to `True` in the `values` dict.
+
+        Creates a new instance of the `Model` class with validated data.
+
+        Creates a new model setting `__dict__` and `__pydantic_fields_set__` from trusted or pre-validated data.
+        Default values are respected, but no other validation is performed.
+
+        !!! note
+            `model_construct()` generally respects the `model_config.extra` setting on the provided model.
+            That is, if `model_config.extra == 'allow'`, then all extra passed values are added to the model instance's `__dict__`
+            and `__pydantic_extra__` fields. If `model_config.extra == 'ignore'` (the default), then all extra passed values are ignored.
+            Because no validation is performed with a call to `model_construct()`, having `model_config.extra == 'forbid'` does not result in
+            an error if extra values are passed, but they will be ignored.
+
+        Args:
+            _fields_set: The set of field names accepted for the Model instance.
+            values: Trusted or pre-validated data dictionary.
+
+        Returns:
+            A new instance of the `Model` class with validated data.
+        """
+
+        values["_is_draft_config"] = True
+
+        m = cls.__new__(cls)
+        fields_values: dict[str, Any] = {}
+        fields_set = set()
+
+        for name, field in cls.model_fields.items():
+            if field.alias and field.alias in values:
+                fields_values[name] = values.pop(field.alias)
+                fields_set.add(name)
+            elif name in values:
+                fields_values[name] = values.pop(name)
+                fields_set.add(name)
+            elif not field.is_required():
+                fields_values[name] = field.get_default(call_default_factory=True)
+        if _fields_set is None:
+            _fields_set = fields_set
+
+        _extra: dict[str, Any] | None = None
+        if cls.model_config.get("extra") == "allow":
+            _extra = {}
+            for k, v in values.items():
+                _extra[k] = v
+        object.__setattr__(m, "__dict__", fields_values)
+        object.__setattr__(m, "__pydantic_fields_set__", _fields_set)
+        if not cls.__pydantic_root_model__:
+            object.__setattr__(m, "__pydantic_extra__", _extra)
+
+        if cls.__pydantic_post_init__:
+            m.model_post_init(_DraftConfigContext)
+            # update private attributes with values set
+            if (
+                hasattr(m, "__pydantic_private__")
+                and m.__pydantic_private__ is not None
+            ):
+                for k, v in values.items():
+                    if k in m.__private_attributes__:
+                        m.__pydantic_private__[k] = v
+
+        elif not cls.__pydantic_root_model__:
+            # Note: if there are any private attributes, cls.__pydantic_post_init__ would exist
+            # Since it doesn't, that means that `__pydantic_private__` should be set to None
+            object.__setattr__(m, "__pydantic_private__", None)
+
+        return m
 
     # region MutableMapping implementation
     if not TYPE_CHECKING:
