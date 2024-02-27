@@ -8,6 +8,7 @@ from typing_extensions import override
 
 from ._config.missing import MISSING
 from ._config.missing import AllowMissing as AllowMissing
+from ._config.missing import MissingField as MissingField
 from ._config.missing import validate_no_missing_values
 
 _MutableMappingBase = MutableMapping[str, Any]
@@ -260,4 +261,5 @@ __all__ = [
     "TypedConfig",
     "Field",
     "AllowMissing",
+    "MissingField",
 ]
