@@ -335,10 +335,18 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         return names
 
     @staticmethod
-    def _n_gpus():
+    def _available_gpus():
+        # If `CUDA_VISIBLE_DEVICES` is set, we can just return those.
+        try:
+            if (env := os.environ.get("CUDA_VISIBLE_DEVICES")) is not None:
+                return [int(i) for i in env.split(",")]
+        except ValueError:
+            pass
+
+        # Otherwise, get all available GPUs
         import torch
 
-        return torch.cuda.device_count()
+        return list(range(torch.cuda.device_count()))
 
     def local_session_per_gpu(
         self,
@@ -367,11 +375,13 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
             A list of names for each screen session.
         """
         # Get the number of GPUs
-        n_gpus = self._n_gpus()
-        log.critical(f"Detected {n_gpus} GPUs. Launching one session per GPU.")
+        gpus = self._available_gpus()
+        log.critical(
+            f"Detected {len(gpus)} GPUs; {gpus=}. Launching one session per GPU."
+        )
 
         # Create a session for each GPU
-        sessions = [{"CUDA_VISIBLE_DEVICES": str(i)} for i in range(n_gpus)]
+        sessions = [{"CUDA_VISIBLE_DEVICES": str(gpu_idx)} for gpu_idx in gpus]
 
         # Launch the sessions
         return self.local_sessions(

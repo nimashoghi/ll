@@ -680,7 +680,10 @@ class BaseConfig(TypedConfig):
 
     debug: bool = False
     """Whether to run in debug mode. This will enable debug logging and enable debug code paths."""
-    environment: EnvironmentConfig = EnvironmentConfig()
+    environment: EnvironmentConfig = Field(
+        default_factory=lambda: EnvironmentConfig(),
+        repr=False,
+    )
     """A snapshot of the current environment information (e.g. python version, slurm info, etc.). This is automatically populated by the run script."""
     trainer: TrainerConfig = TrainerConfig()
     """PyTorch Lightning trainer configuration options. Check Lightning's `Trainer` documentation for more information."""

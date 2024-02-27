@@ -1,44 +1,21 @@
-import types
 from collections.abc import Mapping, MutableMapping
-from typing import TYPE_CHECKING, Annotated, Any, ClassVar, Never, TypeAlias, cast
+from typing import TYPE_CHECKING, Any, ClassVar
 
-from pydantic import BaseModel, ConfigDict, Field, GetCoreSchemaHandler, PrivateAttr
-from pydantic_core import core_schema
-from typing_extensions import TypeVar, override
+from pydantic import BaseModel, ConfigDict
+from pydantic import Field as Field
+from pydantic import PrivateAttr
+from typing_extensions import override
+
+from ._config.missing import MISSING
+from ._config.missing import AllowMissing as AllowMissing
+from ._config.missing import validate_no_missing_values
 
 _MutableMappingBase = MutableMapping[str, Any]
 if TYPE_CHECKING:
     _MutableMappingBase = object
 
 
-MISSING = cast(Any, None)
-
-
-class _MissingTypeAnnotation:
-    @classmethod
-    def __get_pydantic_core_schema__(
-        cls,
-        _source_type: Any,
-        _handler: GetCoreSchemaHandler,
-    ) -> core_schema.CoreSchema:
-        return core_schema.json_or_python_schema(
-            json_schema=core_schema.literal_schema([None]),
-            python_schema=core_schema.literal_schema([None]),
-            serialization=core_schema.plain_serializer_function_ser_schema(lambda x: x),
-        )
-
-
-class _DraftConfigContextCls:
-    pass
-
-
-_DraftConfigContext = _DraftConfigContextCls()
-
-T = TypeVar("T", infer_variance=True)
-if TYPE_CHECKING:
-    AllowMissing: TypeAlias = T | Annotated[Never, _MissingTypeAnnotation()]
-else:
-    AllowMissing: TypeAlias = T | Annotated[types.NoneType, _MissingTypeAnnotation()]
+_DraftConfigContextSentinel = object()
 
 
 class TypedConfig(BaseModel, _MutableMappingBase):
@@ -62,6 +39,9 @@ class TypedConfig(BaseModel, _MutableMappingBase):
     """
 
     MISSING: ClassVar[Any] = MISSING
+    """
+    Alias for the `MISSING` constant.
+    """
 
     model_config: ClassVar[ConfigDict] = ConfigDict(
         # By default, Pydantic will throw a warning if a field starts with "model_",
@@ -124,8 +104,16 @@ class TypedConfig(BaseModel, _MutableMappingBase):
         super().model_post_init(__context)
 
         # Call the `__post_init__` method if this is not a draft config
-        if __context is not _DraftConfigContext:
-            self.__post_init__()
+        if __context is _DraftConfigContextSentinel:
+            return
+
+        self.__post_init__()
+
+        # After `_post_init__` is called, we perform the final round of validation
+        self.model_post_init_validate()
+
+    def model_post_init_validate(self):
+        validate_no_missing_values(self)
 
     @classmethod
     def model_construct_draft(cls, _fields_set: set[str] | None = None, **values: Any):
@@ -184,7 +172,7 @@ class TypedConfig(BaseModel, _MutableMappingBase):
             object.__setattr__(m, "__pydantic_extra__", _extra)
 
         if cls.__pydantic_post_init__:
-            m.model_post_init(_DraftConfigContext)
+            m.model_post_init(_DraftConfigContextSentinel)
             # update private attributes with values set
             if (
                 hasattr(m, "__pydantic_private__")
@@ -268,4 +256,8 @@ class TypedConfig(BaseModel, _MutableMappingBase):
     # endregion
 
 
-__all__ = ["TypedConfig", "Field"]
+__all__ = [
+    "TypedConfig",
+    "Field",
+    "AllowMissing",
+]
