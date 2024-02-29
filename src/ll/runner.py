@@ -351,6 +351,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
     def local_session_per_gpu(
         self,
         runs: Sequence[TConfig] | Sequence[tuple[TConfig, Unpack[TArguments]]],
+        num_jobs_per_gpu: int = 1,
         config_pickle_save_path: Path | None = None,
         reset_id: bool = True,
         snapshot: bool | SnapshotConfig = False,
@@ -362,6 +363,8 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         ----------
         runs : Sequence[TConfig] | Sequence[tuple[TConfig, Unpack[TArguments]]]
             A sequence of runs to launch.
+        num_jobs_per_gpu : int, optional
+            The number of jobs to launch per GPU.
         config_pickle_save_path : Path, optional
             The path to save the config pickles to. If `None`, a temporary directory will be created.
         reset_id : bool, optional
@@ -377,11 +380,15 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         # Get the number of GPUs
         gpus = self._available_gpus()
         log.critical(
-            f"Detected {len(gpus)} GPUs; {gpus=}. Launching one session per GPU."
+            f"Detected {len(gpus)} GPUs; {gpus=}. Launching {num_jobs_per_gpu} sessions per GPU."
         )
 
         # Create a session for each GPU
-        sessions = [{"CUDA_VISIBLE_DEVICES": str(gpu_idx)} for gpu_idx in gpus]
+        sessions: list[dict[str, str]] = []
+        for gpu_idx in gpus:
+            session = {"CUDA_VISIBLE_DEVICES": str(gpu_idx)}
+            for _ in range(num_jobs_per_gpu):
+                sessions.append(session)
 
         # Launch the sessions
         return self.local_sessions(
