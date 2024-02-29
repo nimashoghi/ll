@@ -5,6 +5,7 @@ import traceback
 from collections import Counter
 from collections.abc import Mapping, Sequence
 from contextlib import ExitStack
+from dataclasses import dataclass
 from datetime import timedelta
 from functools import wraps
 from logging import getLogger
@@ -48,8 +49,16 @@ TArguments = TypeVarTuple("TArguments", default=Unpack[tuple[()]])
 
 @runtime_checkable
 class RunProtocol(Protocol[TConfig, TReturn, Unpack[TArguments]]):
-    def __call__(self, config: TConfig, *args: Unpack[TArguments]) -> TReturn:
-        ...
+    def __call__(self, config: TConfig, *args: Unpack[TArguments]) -> TReturn: ...
+
+
+@dataclass
+class RunnerSession:
+    env: Mapping[str, str]
+    """The environment variables to use for the session."""
+
+    name: str | None = None
+    """The name of the session."""
 
 
 class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
@@ -162,7 +171,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
     def local(
         self,
         runs: Sequence[TConfig] | Sequence[tuple[TConfig, Unpack[TArguments]]],
-        env: dict[str, str] | None = None,
+        env: Mapping[str, str] | None = None,
         reset_id: bool = True,
     ):
         """
@@ -172,7 +181,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         ----------
         runs : Sequence[TConfig] | Sequence[tuple[TConfig, Unpack[TArguments]]]
             A sequence of runs to submit.
-        env : dict[str, str], optional
+        env : Mapping[str, str], optional
             Additional environment variables to set.
         reset_id : bool, optional
             Whether to reset the id of the runs before launching them.
@@ -211,6 +220,8 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
                 "-L",
                 "-Logfile",
                 f"{session_name}.log",
+                # Enable UTF-8 encoding
+                "-U",
             ]
             + ["python", "-m", "ll.local_sessions_runner"]
             + [str(p.absolute()) for p in config_paths]
@@ -219,7 +230,8 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
     def local_sessions(
         self,
         runs: Sequence[TConfig] | Sequence[tuple[TConfig, Unpack[TArguments]]],
-        sessions: int | list[dict[str, str]],
+        sessions: int | list[Mapping[str, str]] | list[RunnerSession],
+        name: str = "ll",
         config_pickle_save_path: Path | None = None,
         reset_id: bool = True,
         snapshot: bool | SnapshotConfig = False,
@@ -231,8 +243,10 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         ----------
         runs : Sequence[TConfig] | Sequence[tuple[TConfig, Unpack[TArguments]]]
             A sequence of runs to launch.
-        sessions : list[dict[str, str]]
+        sessions : list[Mapping[str, str]]
             A list of environment variables to use for each session.
+        name : str, optional
+            The name of this job. This name is pre-pended to the `screen` session names.
         config_pickle_save_path : Path, optional
             The path to save the config pickles to. If `None`, a temporary directory will be created.
         reset_id : bool, optional
@@ -271,13 +285,43 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
             with config_path.open("wb") as f:
                 pickle.dump((self._run, self._init_kwargs, config), f)
 
+        # Resolve all session names
+        session_names: list[str] = []
+        for i, session in enumerate(sessions):
+            match session:
+                case RunnerSession() if session.name:
+                    session_name = session.name
+                case _:
+                    session_name = f"{i:03d}"
+
+            # If the session name is already in use, add a number to it
+            if session_name in session_names:
+                j = 1
+                while (new_name := f"{session_name}_{j}") in session_names:
+                    j += 1
+                session_name = new_name
+
+            session_names.append(session_name)
+        # Prepend the job name to the session names
+        session_names = [f"{name}{n}" for n in session_names]
+
+        # Resolve all session envs
+        session_envs: list[Mapping[str, str]] = []
+        for i, session in enumerate(sessions):
+            match session:
+                case RunnerSession():
+                    session_env = session.env
+                case _:
+                    session_env = session
+
+            session_envs.append({**self.DEFAULT_ENV, **session_env})
+
         # Launch all sessions
-        names: list[str] = []
         commands: list[str] = []
 
-        for i, session in enumerate(sessions):
-            session_env = {**self.DEFAULT_ENV, **session}
-
+        for i, (session_env, session_name) in enumerate(
+            zip(session_envs, session_names)
+        ):
             # Get the projects assigned to this session
             session_config_paths = config_paths[i :: len(sessions)]
 
@@ -285,16 +329,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
             if not session_config_paths:
                 continue
 
-            # Get the shared project name
-            project_names = set([c.project for c, _ in resolved_runs if c.project])
-            if len(project_names) == 1:
-                project = project_names.pop()
-            else:
-                project = "session"
-
-            session_name = f"ll_{project}_{i:03d}"
             command = self._launch_session(session_config_paths, session_name)
-            names.append(session_name)
 
             # log.critical(f"Sesssion {i+1}/{n_sessions} command: {command_str}")
             command_prefix = " ".join(f'{k}="{v}"' for k, v in session_env.items())
@@ -332,7 +367,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
             f"Run the following command to launch the sessions:\n\n{script_path.resolve()}\n\n"
         )
 
-        return names
+        return session_names
 
     @staticmethod
     def _available_gpus():
@@ -351,6 +386,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
     def local_session_per_gpu(
         self,
         runs: Sequence[TConfig] | Sequence[tuple[TConfig, Unpack[TArguments]]],
+        name: str = "ll",
         num_jobs_per_gpu: int = 1,
         config_pickle_save_path: Path | None = None,
         reset_id: bool = True,
@@ -371,6 +407,8 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
             Whether to reset the id of the runs before launching them.
         snapshot : bool | SnapshotConfig
             Whether to snapshot the environment before launching the sessions.
+        name : str, optional
+            The name of this job. This name is pre-pended to the `screen` session names.
 
         Returns
         -------
@@ -384,16 +422,21 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         )
 
         # Create a session for each GPU
-        sessions: list[dict[str, str]] = []
+        sessions: list[RunnerSession] = []
         for gpu_idx in gpus:
-            session = {"CUDA_VISIBLE_DEVICES": str(gpu_idx)}
-            for _ in range(num_jobs_per_gpu):
-                sessions.append(session)
+            session_env = {"CUDA_VISIBLE_DEVICES": str(gpu_idx)}
+            session_name_gpu = f"gpu{gpu_idx}"
+            for job_idx in range(num_jobs_per_gpu):
+                session_name = session_name_gpu
+                if num_jobs_per_gpu > 1:
+                    session_name = f"{session_name}_job{job_idx}"
+                sessions.append(RunnerSession(session_env, session_name))
 
         # Launch the sessions
         return self.local_sessions(
             runs,
             sessions,
+            name=name,
             config_pickle_save_path=config_pickle_save_path,
             reset_id=reset_id,
             snapshot=snapshot,
@@ -402,7 +445,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
     def fast_dev_run(
         self,
         runs: Sequence[TConfig] | Sequence[tuple[TConfig, Unpack[TArguments]]],
-        env: dict[str, str] | None = None,
+        env: Mapping[str, str] | None = None,
         n_batches: int = 1,
         stop_on_error: bool = True,
     ):
@@ -413,7 +456,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         ----------
         runs : Sequence[TConfig] | Sequence[tuple[TConfig, Unpack[TArguments]]]
             A sequence of runs to submit.
-        env : dict[str, str], optional
+        env : Mapping[str, str], optional
             Additional environment variables to set.
         n_batches : int, optional
             The number of batches to run for `fast_dev_run`.
@@ -520,9 +563,9 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         timeout: timedelta | None = None,
         memory: int | None = None,
         email: str | None = None,
-        slurm_additional_parameters: dict[str, str] | None = None,
+        slurm_additional_parameters: Mapping[str, str] | None = None,
         slurm_setup: list[str] | None = None,
-        env: dict[str, str] | None = None,
+        env: Mapping[str, str] | None = None,
     ):
         """
         Submits a list of configs to a SLURM cluster.
@@ -551,7 +594,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
             The amount of memory to use.
         email : str, optional
             The email to send notifications to.
-        slurm_additional_parameters : dict[str, str], optional
+        slurm_additional_parameters : Mapping[str, str], optional
             Additional parameters to pass to the SLUR
         """
         resolved_runs = self._resolve_runs(runs)
