@@ -296,8 +296,8 @@ class PythonLogging(TypedConfig):
     rich_tracebacks: bool = True
     """If enabled, will use the rich library to format the Python logger tracebacks."""
 
-    lovely_tensors: bool = True
-    """If enabled, will use the lovely-tensors library to format PyTorch tensors."""
+    lovely_tensors: bool = False
+    """If enabled, will use the lovely-tensors library to format PyTorch tensors. False by default as it causes issues when used with `torch.vmap`."""
     lovely_numpy: bool = False
     """If enabled, will use the lovely-numpy library to format numpy arrays. False by default as it causes some issues with other libaries."""
 
