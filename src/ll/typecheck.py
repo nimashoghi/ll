@@ -3,8 +3,36 @@ from logging import getLogger
 from typing import Any
 
 import torch
+from jaxtyping import BFloat16 as BFloat16
+from jaxtyping import Bool as Bool
+from jaxtyping import Complex as Complex
+from jaxtyping import Complex64 as Complex64
+from jaxtyping import Complex128 as Complex128
+from jaxtyping import Float as Float
+from jaxtyping import Float16 as Float16
+from jaxtyping import Float32 as Float32
+from jaxtyping import Float64 as Float64
+from jaxtyping import Inexact as Inexact
+from jaxtyping import Int as Int
+from jaxtyping import Int4 as Int4
+from jaxtyping import Int8 as Int8
+from jaxtyping import Int16 as Int16
+from jaxtyping import Int32 as Int32
+from jaxtyping import Int64 as Int64
+from jaxtyping import Integer as Integer
+from jaxtyping import Key as Key
+from jaxtyping import Num as Num
+from jaxtyping import Real as Real
+from jaxtyping import Shaped as Shaped
+from jaxtyping import UInt as UInt
+from jaxtyping import UInt4 as UInt4
+from jaxtyping import UInt8 as UInt8
+from jaxtyping import UInt16 as UInt16
+from jaxtyping import UInt32 as UInt32
+from jaxtyping import UInt64 as UInt64
 from jaxtyping._storage import get_shape_memo, shape_str
 from lovely_tensors import lovely
+from torch import Tensor as Tensor
 from typing_extensions import TypeVar
 
 log = getLogger(__name__)
