@@ -3,7 +3,7 @@ import json
 import os
 import sys
 from abc import ABC, abstractmethod
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from logging import getLogger
 from typing import Any, Generic, cast
 
@@ -13,9 +13,8 @@ from lightning.pytorch import LightningDataModule, LightningModule, Trainer
 from lightning.pytorch.callbacks import Callback
 from typing_extensions import TypeVar, deprecated, override
 
-from ..nn.mlp import MLP
-
 from .. import actsave
+from ..nn.mlp import MLP
 from ..trainer import Trainer as LLTrainer
 from ..util import log_batch_info, skip_batch
 from .config import BaseConfig
@@ -214,8 +213,7 @@ class LightningModuleBase(
 
     @classmethod
     @abstractmethod
-    def config_cls(cls) -> type[THparams]:
-        ...
+    def config_cls(cls) -> type[THparams]: ...
 
     @classmethod
     def _update_environment(cls, hparams: THparams):
@@ -246,8 +244,12 @@ class LightningModuleBase(
         )
 
     @override
-    def __init__(self, hparams: THparams):
-        if isinstance(hparams, dict):
+    def __init__(self, hparams: THparams | Mapping[str, Any]):
+        if not isinstance(hparams, BaseConfig):
+            if not isinstance(hparams, Mapping):
+                raise TypeError(
+                    f"hparams must be a BaseConfig or a Mapping: {type(hparams)}"
+                )
             hparams = self.config_cls().from_dict(hparams)
         self._update_environment(hparams)
 
