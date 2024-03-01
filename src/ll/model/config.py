@@ -301,7 +301,7 @@ class PythonLogging(TypedConfig):
     lovely_numpy: bool = False
     """If enabled, will use the lovely-numpy library to format numpy arrays. False by default as it causes some issues with other libaries."""
 
-    use_rich_progress_bar: bool = False
+    use_rich_progress_bar: bool = True
     """If enabled, will use the rich library to format the progress bar."""
 
 
