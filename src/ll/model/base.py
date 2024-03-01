@@ -3,7 +3,7 @@ import json
 import os
 import sys
 from abc import ABC, abstractmethod
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, MutableMapping
 from logging import getLogger
 from typing import Any, Generic, cast
 
@@ -243,16 +243,31 @@ class LightningModuleBase(
             else None
         )
 
+    def pre_init_update_hparams_dict(self, hparams: MutableMapping[str, Any]):
+        """
+        Override this method to update the hparams dictionary before it is used to create the hparams object.
+        Mapping-based parameters are passed to the constructor of the hparams object when we're loading the model from a checkpoint.
+        """
+        return hparams
+
+    def pre_init_update_hparams(self, hparams: THparams):
+        """
+        Override this method to update the hparams object before it is used to create the hparams_initial object.
+        """
+        return hparams
+
     @override
-    def __init__(self, hparams: THparams | Mapping[str, Any]):
+    def __init__(self, hparams: THparams | MutableMapping[str, Any]):
         if not isinstance(hparams, BaseConfig):
-            if not isinstance(hparams, Mapping):
+            if not isinstance(hparams, MutableMapping):
                 raise TypeError(
-                    f"hparams must be a BaseConfig or a Mapping: {type(hparams)}"
+                    f"hparams must be a BaseConfig or a MutableMapping: {type(hparams)}"
                 )
+
+            hparams = self.pre_init_update_hparams_dict(hparams)
             hparams = self.config_cls().from_dict(hparams)
         self._update_environment(hparams)
-
+        hparams = self.pre_init_update_hparams(hparams)
         super().__init__(hparams)
 
         self.save_hyperparameters(hparams)
@@ -326,13 +341,35 @@ class LightningDataModuleBase(
     hparams: THparams
     hparams_initial: THparams
 
+    def pre_init_update_hparams_dict(self, hparams: MutableMapping[str, Any]):
+        """
+        Override this method to update the hparams dictionary before it is used to create the hparams object.
+        Mapping-based parameters are passed to the constructor of the hparams object when we're loading the model from a checkpoint.
+        """
+        return hparams
+
+    def pre_init_update_hparams(self, hparams: THparams):
+        """
+        Override this method to update the hparams object before it is used to create the hparams_initial object.
+        """
+        return hparams
+
     @classmethod
     def _update_environment(cls, hparams: THparams):
         hparams.environment.data = _cls_info(cls)
 
     @override
     def __init__(self, hparams: THparams):
+        if not isinstance(hparams, BaseConfig):
+            if not isinstance(hparams, MutableMapping):
+                raise TypeError(
+                    f"hparams must be a BaseConfig or a MutableMapping: {type(hparams)}"
+                )
+
+            hparams = self.pre_init_update_hparams_dict(hparams)
+            hparams = self.config_cls().from_dict(hparams)
         self._update_environment(hparams)
+        hparams = self.pre_init_update_hparams(hparams)
         super().__init__(hparams)
 
         self.save_hyperparameters(hparams)
