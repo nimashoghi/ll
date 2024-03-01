@@ -9,7 +9,11 @@ from typing import Any
 import torch
 from lightning.pytorch import LightningModule
 from lightning.pytorch import Trainer as LightningTrainer
-from lightning.pytorch.callbacks import ModelCheckpoint, OnExceptionCheckpoint
+from lightning.pytorch.callbacks import (
+    ModelCheckpoint,
+    OnExceptionCheckpoint,
+    RichProgressBar,
+)
 from lightning.pytorch.plugins.environments import SLURMEnvironment
 from lightning.pytorch.profilers import Profiler
 from lightning.pytorch.utilities.types import _EVALUATE_OUTPUT, _PREDICT_OUTPUT
@@ -180,6 +184,9 @@ class Trainer(LightningTrainer):
                 )
             log_dir = Path(config.trainer.default_root_dir)
             yield OnExceptionCheckpoint(log_dir, filename=f"on_exception_{config.id}")
+
+        if config.trainer.python_logging.use_rich_progress_bar:
+            yield RichProgressBar()
 
     @classmethod
     @contextlib.contextmanager
