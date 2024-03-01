@@ -33,6 +33,7 @@ from jaxtyping import UInt64 as UInt64
 from jaxtyping._storage import get_shape_memo, shape_str
 from lovely_tensors import lovely
 from torch import Tensor as Tensor
+from torch.nn.parameter import Parameter as Parameter
 from typing_extensions import TypeVar
 
 log = getLogger(__name__)
