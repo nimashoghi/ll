@@ -1,3 +1,4 @@
+import os
 from collections.abc import Sequence
 from logging import getLogger
 from typing import Any
@@ -39,13 +40,24 @@ from typing_extensions import TypeVar
 log = getLogger(__name__)
 
 
-def typecheck_modules(modules: Sequence[str]):
+def typecheck_modules(
+    modules: Sequence[str],
+    disable_env_key: str | None = "LL_DISABLE_TYPECHECKING",
+):
     """
     Typecheck the given modules using `jaxtyping`.
 
     Args:
         modules: Modules to typecheck.
     """
+    # If `disable_env_key` is set and the environment variable is set, skip
+    #   typechecking.
+    if disable_env_key is not None and bool(int(os.environ.get(disable_env_key, "0"))):
+        log.critical(
+            f"Type checking is disabled due to the environment variable {disable_env_key}."
+        )
+        return
+
     # Install the jaxtyping import hook for this module.
     from jaxtyping import install_import_hook
 
@@ -56,6 +68,7 @@ def typecheck_modules(modules: Sequence[str]):
 
 def typecheck_this_module(
     additional_modules: Sequence[str] = (),
+    disable_env_key: str | None = "LL_DISABLE_TYPECHECKING",
 ):
     """
     Typecheck the calling module and any additional modules using `jaxtyping`.
@@ -75,7 +88,10 @@ def typecheck_this_module(
     calling_module_name = get_frame_package_name(frame)
 
     # Typecheck the calling module + any additional modules.
-    typecheck_modules((calling_module_name, *additional_modules))
+    typecheck_modules(
+        (calling_module_name, *additional_modules),
+        disable_env_key=disable_env_key,
+    )
 
 
 def _make_error_str(input: Any, t: Any) -> str:
