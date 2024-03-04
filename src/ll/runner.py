@@ -235,6 +235,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         config_pickle_save_path: Path | None = None,
         reset_id: bool = True,
         snapshot: bool | SnapshotConfig = False,
+        delete_run_script_after_launch: bool = True,
     ):
         """
         Launches len(sessions) local runs in different environments using `screen`.
@@ -253,6 +254,8 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
             Whether to reset the id of the runs before launching them.
         snapshot : bool | SnapshotConfig
             Whether to snapshot the environment before launching the sessions.
+        delete_run_script_after_launch : bool, optional
+            Whether to delete the run shell script after launching the sessions.
 
         Returns
         -------
@@ -356,8 +359,13 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
             f.write(f'echo "Activating conda environment {current_env}"\n')
             f.write(f"conda activate {current_env}\n\n")
 
+            # Launch the sessions
             for command in commands:
                 f.write(f"{command}\n")
+
+            # Delete the script after launching the sessions
+            if delete_run_script_after_launch:
+                f.write(f"rm {script_path}\n")
 
         # Make the script executable
         script_path.chmod(0o755)
@@ -387,6 +395,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         self,
         runs: Sequence[TConfig] | Sequence[tuple[TConfig, Unpack[TArguments]]],
         name: str = "ll",
+        gpus: list[int] | None = None,
         num_jobs_per_gpu: int = 1,
         config_pickle_save_path: Path | None = None,
         reset_id: bool = True,
@@ -401,6 +410,8 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
             A sequence of runs to launch.
         num_jobs_per_gpu : int, optional
             The number of jobs to launch per GPU.
+        gpus : list[int], optional
+            The GPUs to use. If `None`, all available GPUs will be used.
         config_pickle_save_path : Path, optional
             The path to save the config pickles to. If `None`, a temporary directory will be created.
         reset_id : bool, optional
@@ -415,8 +426,16 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         list[TReturn]
             A list of names for each screen session.
         """
-        # Get the number of GPUs
-        gpus = self._available_gpus()
+        # Get available GPUs
+        all_gpus = self._available_gpus()
+        if gpus is None:
+            gpus = all_gpus
+        else:
+            # Make sure all the requested GPUs are available
+            for gpu in gpus:
+                if gpu not in all_gpus:
+                    raise ValueError(f"GPU {gpu} is not available.")
+
         log.critical(
             f"Detected {len(gpus)} GPUs; {gpus=}. Launching {num_jobs_per_gpu} sessions per GPU."
         )
@@ -448,6 +467,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         env: Mapping[str, str] | None = None,
         n_batches: int = 1,
         stop_on_error: bool = True,
+        reset_memory_caches: bool = True,
     ):
         """
         Runs a list of configs locally with `LightningTrainer.fast_dev_run = True`.
@@ -462,6 +482,8 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
             The number of batches to run for `fast_dev_run`.
         stop_on_error : bool, optional
             Whether to stop on error.
+        reset_memory_caches : bool, optional
+            Whether to reset memory caches after each run.
         """
         resolved_runs = self._resolve_runs(runs, copy_config=True)
         self._validate_runs(resolved_runs)
@@ -480,8 +502,24 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
                 traceback.print_exc()
                 if stop_on_error:
                     raise
+            finally:
+                # After each run, we should reset memory/caches
+                if reset_memory_caches:
+                    self._reset_memory_caches()
 
         return return_values
+
+    def _reset_memory_caches(self):
+        import gc
+
+        import torch
+
+        # Clear the memory caches
+        torch.cuda.empty_cache()
+        torch.cuda.reset_peak_memory_stats()
+        torch.cuda.reset_accumulated_memory_stats()
+        torch.cuda.synchronize()
+        gc.collect()
 
     @staticmethod
     def _validate_runs(runs: list[tuple[TConfig, tuple[Unpack[TArguments]]]]):
