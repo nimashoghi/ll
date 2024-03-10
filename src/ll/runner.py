@@ -79,6 +79,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         slurm_job_name: str = "ll",
         validate_config_before_run: bool = True,
         validate_strict: bool = True,
+        env: Mapping[str, str] | None = None,
     ):
         """This is the initialization function for a class that takes in a run protocol, an auto wrap run
         boolean, and a slurm job name string.
@@ -105,6 +106,10 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
             "slurm_job_name": slurm_job_name,
             "validate_config_before_run": validate_config_before_run,
             "validate_strict": validate_strict,
+        }
+        self.env = {
+            **self.DEFAULT_ENV,
+            **(env or {}),
         }
 
     @property
@@ -192,7 +197,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
             if reset_id:
                 config.id = BaseConfig.generate_id(ignore_rng=True)
 
-            env = {**self.DEFAULT_ENV, **(env or {})}
+            env = {**self.env, **(env or {})}
             env_old = {k: os.environ.get(k, None) for k in env}
             os.environ.update(env)
             try:
@@ -317,7 +322,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
                 case _:
                     session_env = session
 
-            session_envs.append({**self.DEFAULT_ENV, **session_env})
+            session_envs.append({**self.env, **session_env})
 
         # Launch all sessions
         commands: list[str] = []
@@ -641,7 +646,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         # Handle snapshot
         snapshot_path = self._snapshot(snapshot, resolved_runs)
 
-        env = {**self.DEFAULT_ENV, **(env or {})}
+        env = {**self.env, **(env or {})}
 
         base_path = Path(".") / "slurm_logs"
         base_path.mkdir(exist_ok=True, parents=True)

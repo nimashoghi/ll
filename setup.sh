@@ -19,3 +19,6 @@ mamba install -y \
     cloudpickle \
     "pydantic>2" \
     frozendict wrapt varname typing-extensions lovely-tensors lovely-numpy requests pytest nbval
+
+# Install jaxtyping
+pip install jaxtyping
