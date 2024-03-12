@@ -39,22 +39,21 @@ from typing_extensions import TypeVar
 
 log = getLogger(__name__)
 
+DISABLE_ENV_KEY = "LL_DISABLE_TYPECHECKING"
 
-def typecheck_modules(
-    modules: Sequence[str],
-    disable_env_key: str | None = "LL_DISABLE_TYPECHECKING",
-):
+
+def typecheck_modules(modules: Sequence[str]):
     """
     Typecheck the given modules using `jaxtyping`.
 
     Args:
         modules: Modules to typecheck.
     """
-    # If `disable_env_key` is set and the environment variable is set, skip
+    # If `DISABLE_ENV_KEY` is set and the environment variable is set, skip
     #   typechecking.
-    if disable_env_key is not None and bool(int(os.environ.get(disable_env_key, "0"))):
+    if DISABLE_ENV_KEY is not None and bool(int(os.environ.get(DISABLE_ENV_KEY, "0"))):
         log.critical(
-            f"Type checking is disabled due to the environment variable {disable_env_key}."
+            f"Type checking is disabled due to the environment variable {DISABLE_ENV_KEY}."
         )
         return
 
@@ -66,10 +65,7 @@ def typecheck_modules(
     log.critical(f"Type checking the following modules: {modules}")
 
 
-def typecheck_this_module(
-    additional_modules: Sequence[str] = (),
-    disable_env_key: str | None = "LL_DISABLE_TYPECHECKING",
-):
+def typecheck_this_module(additional_modules: Sequence[str] = ()):
     """
     Typecheck the calling module and any additional modules using `jaxtyping`.
 
@@ -88,10 +84,7 @@ def typecheck_this_module(
     calling_module_name = get_frame_package_name(frame)
 
     # Typecheck the calling module + any additional modules.
-    typecheck_modules(
-        (calling_module_name, *additional_modules),
-        disable_env_key=disable_env_key,
-    )
+    typecheck_modules((calling_module_name, *additional_modules))
 
 
 def _make_error_str(input: Any, t: Any) -> str:
@@ -117,6 +110,10 @@ def tassert(t: Any, input: T) -> T:
         t: Type to check against.
         input: Input to check.
     """
+
+    # Ignore typechecking if the environment variable is set.
+    if DISABLE_ENV_KEY is not None and bool(int(os.environ.get(DISABLE_ENV_KEY, "0"))):
+        return input
 
     assert isinstance(input, t), _make_error_str(input, t)
     return input
