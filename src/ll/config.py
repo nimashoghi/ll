@@ -3,13 +3,12 @@ from typing import TYPE_CHECKING, Any, ClassVar
 
 from pydantic import BaseModel, ConfigDict
 from pydantic import Field as Field
-from pydantic import PrivateAttr
+from pydantic import PrivateAttr as PrivateAttr
 from typing_extensions import override
 
-from ._config.missing import MISSING
+from ._config.missing import MISSING, validate_no_missing_values
 from ._config.missing import AllowMissing as AllowMissing
 from ._config.missing import MissingField as MissingField
-from ._config.missing import validate_no_missing_values
 
 _MutableMappingBase = MutableMapping[str, Any]
 if TYPE_CHECKING:
@@ -288,6 +287,7 @@ class TypedConfig(BaseModel, _MutableMappingBase):
 __all__ = [
     "TypedConfig",
     "Field",
+    "PrivateAttr",
     "AllowMissing",
     "MissingField",
 ]

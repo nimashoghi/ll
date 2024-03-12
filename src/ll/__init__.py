@@ -1,6 +1,6 @@
 from . import actsave as A
 from .actsave import ActSave
-from .config import AllowMissing, Field, MissingField, TypedConfig
+from .config import AllowMissing, Field, MissingField, PrivateAttr, TypedConfig
 from .data import dataset_transform
 from .exception import SkipBatch
 from .model.base import Base, LightningDataModuleBase, LightningModuleBase
@@ -31,6 +31,7 @@ __all__ = [
     "AllowMissing",
     "Field",
     "MissingField",
+    "PrivateAttr",
     "TypedConfig",
     "dataset_transform",
     "SkipBatch",
