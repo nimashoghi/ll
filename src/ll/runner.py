@@ -400,8 +400,8 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         self,
         runs: Sequence[TConfig] | Sequence[tuple[TConfig, Unpack[TArguments]]],
         name: str = "ll",
-        gpus: list[int] | None = None,
-        num_jobs_per_gpu: int = 1,
+        gpus: list[int] | dict[int, int] | None = None,
+        num_jobs_per_gpu: int | None = None,
         config_pickle_save_path: Path | None = None,
         reset_id: bool = True,
         snapshot: bool | SnapshotConfig = False,
@@ -414,9 +414,11 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         runs : Sequence[TConfig] | Sequence[tuple[TConfig, Unpack[TArguments]]]
             A sequence of runs to launch.
         num_jobs_per_gpu : int, optional
-            The number of jobs to launch per GPU.
-        gpus : list[int], optional
-            The GPUs to use. If `None`, all available GPUs will be used.
+            The number of jobs to launch per GPU. (default: 1)
+        gpus : list[int] | dict[int, int] | None, optional
+            The GPUs to use.
+            - If a dictionary is provided, it should map GPU indices to the number of jobs to launch on that GPU.
+            - If a list is provided, it should be a list of GPU indices to use. In this case, `num_jobs_per_gpu` will be used to determine the number of jobs to launch on each GPU.
         config_pickle_save_path : Path, optional
             The path to save the config pickles to. If `None`, a temporary directory will be created.
         reset_id : bool, optional
@@ -435,19 +437,24 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         all_gpus = self._available_gpus()
         if gpus is None:
             gpus = all_gpus
-        else:
-            # Make sure all the requested GPUs are available
-            for gpu in gpus:
-                if gpu not in all_gpus:
-                    raise ValueError(f"GPU {gpu} is not available.")
 
-        log.critical(
-            f"Detected {len(gpus)} GPUs; {gpus=}. Launching {num_jobs_per_gpu} sessions per GPU."
-        )
+        # Convert gpus to a dictionary which
+        # maps gpu index to the number of jobs to launch on that gpu.
+        if isinstance(gpus, Sequence):
+            # If `num_jobs_per_gpu` is not provided, default to 1.
+            n = num_jobs_per_gpu or 1
+            gpus = {gpu: n for gpu in gpus}
+
+        # Make sure all the requested GPUs are available
+        for gpu in gpus:
+            if gpu not in all_gpus:
+                raise ValueError(f"GPU {gpu} is not available.")
+
+        log.critical(f"Detected {len(gpus)} GPUs; {gpus=}.")
 
         # Create a session for each GPU
         sessions: list[RunnerSession] = []
-        for gpu_idx in gpus:
+        for gpu_idx, num_jobs_per_gpu in gpus.items():
             session_env = {"CUDA_VISIBLE_DEVICES": str(gpu_idx)}
             session_name_gpu = f"gpu{gpu_idx}"
             for job_idx in range(num_jobs_per_gpu):
