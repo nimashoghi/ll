@@ -20,7 +20,7 @@ from .model.config import (
     WandbLoggingConfig,
     WandbWatchConfig,
 )
-from .runner import Runner
+from .runner import Runner, SnapshotConfig
 from .trainer import Trainer
 from .util.singleton import Registry, Singleton
 from .util.typed import TypedModuleDict, TypedModuleList
@@ -53,6 +53,7 @@ __all__ = [
     "WandbLoggingConfig",
     "WandbWatchConfig",
     "Runner",
+    "SnapshotConfig",
     "Trainer",
     "Registry",
     "Singleton",

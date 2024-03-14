@@ -31,9 +31,16 @@ log = getLogger(__name__)
 
 class SnapshotConfig(TypedDict, total=False):
     base_path: Path
-    modules: list[str]
+    """The base path to save snapshots to. Default: `~/.ll_snapshots`."""
+
     snapshot_ll: bool
+    """Whether to snapshot the `ll` module. Default: `True`."""
+
     snapshot_config_cls_module: bool
+    """Whether to snapshot the module of the config class. Default: `True`."""
+
+    modules: list[str]
+    """Additional modules to snapshot. Default: `[]`."""
 
 
 SNAPSHOT_CONFIG_DEFAULT = SnapshotConfig(
