@@ -291,7 +291,7 @@ class PythonLogging(TypedConfig):
     ) = None
     """Log level to use for the Python logger (or None to use the default)."""
 
-    rich: bool = True
+    rich: bool = False
     """If enabled, will use the rich library to format the Python logger output."""
     rich_tracebacks: bool = True
     """If enabled, will use the rich library to format the Python logger tracebacks."""

@@ -1,7 +1,7 @@
 import copy
 import os
-import tempfile
 import traceback
+import uuid
 from collections import Counter
 from collections.abc import Mapping, Sequence
 from contextlib import ExitStack
@@ -247,7 +247,9 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         config_pickle_save_path: Path | None = None,
         reset_id: bool = True,
         snapshot: bool | SnapshotConfig = False,
-        delete_run_script_after_launch: bool = True,
+        delete_run_script_after_launch: bool = False,
+        prologue: list[str] | None = None,
+        env: Mapping[str, str] | None = None,
     ):
         """
         Launches len(sessions) local runs in different environments using `screen`.
@@ -268,12 +270,28 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
             Whether to snapshot the environment before launching the sessions.
         delete_run_script_after_launch : bool, optional
             Whether to delete the run shell script after launching the sessions.
+        prologue : list[str], optional
+            A list of commands to run at the beginning of the shell script.
+        env : Mapping[str, str], optional
+            Additional environment variables to set.
 
         Returns
         -------
         list[TReturn]
             A list of names for each screen session.
         """
+
+        # Generate a random ID for the job.
+        # We'll use this ID for snapshotting, as well as for
+        #   defining the name of the shell script that will launch the sessions.
+        id = str(uuid.uuid4())
+
+        # If `env` is set, just add it to the prologues
+        if env:
+            if prologue is None:
+                prologue = []
+            # Prepend so env takes precedence
+            prologue = [f"export {k}={v}" for k, v in env.items()] + prologue
 
         if isinstance(sessions, int):
             sessions = [{} for _ in range(sessions)]
@@ -283,13 +301,18 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
             raise RuntimeError("This function only works in conda environments.")
 
         if config_pickle_save_path is None:
-            config_pickle_save_path = Path(tempfile.mkdtemp())
+            config_pickle_save_path = Path.cwd() / f"ll_{id}"
+            config_pickle_save_path.mkdir(exist_ok=True)
+
+            # Add a gitignore file to the directory so that the entire directory is ignored by git
+            with (config_pickle_save_path / ".gitignore").open("w") as f:
+                f.write("*\n")
 
         resolved_runs = self._resolve_runs(runs, reset_id=reset_id)
         self._validate_runs(resolved_runs)
 
         # Take a snapshot of the environment
-        snapshot_path = self._snapshot(snapshot, resolved_runs)
+        snapshot_path = self._snapshot(snapshot, resolved_runs, id)
 
         # Save all configs to pickle files
         config_paths: list[Path] = []
@@ -359,6 +382,13 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
             # Enable error checking
             f.write("set -e\n\n")
 
+            # If a prologue is provided, run it
+            if prologue:
+                f.write("# Prologue\n")
+                for command in prologue:
+                    f.write(f"{command}\n")
+                f.write("\n")
+
             # If we're in a snapshot, we need to activate the snapshot before launching the sessions
             if snapshot_path:
                 snapshot_str = str(snapshot_path.resolve().absolute())
@@ -377,7 +407,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
 
             # Delete the script after launching the sessions
             if delete_run_script_after_launch:
-                f.write(f"rm {script_path}\n")
+                f.write(f"\nrm {script_path}\n")
 
         # Make the script executable
         script_path.chmod(0o755)
@@ -412,6 +442,8 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         config_pickle_save_path: Path | None = None,
         reset_id: bool = True,
         snapshot: bool | SnapshotConfig = False,
+        prologue: list[str] | None = None,
+        env: Mapping[str, str] | None = None,
     ):
         """
         Launches len(sessions) local runs in different environments using `screen`.
@@ -434,6 +466,10 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
             Whether to snapshot the environment before launching the sessions.
         name : str, optional
             The name of this job. This name is pre-pended to the `screen` session names.
+        prologue : list[str], optional
+            A list of commands to run at the beginning of the shell script.
+        env : Mapping[str, str], optional
+            Additional environment variables to set.
 
         Returns
         -------
@@ -478,6 +514,8 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
             config_pickle_save_path=config_pickle_save_path,
             reset_id=reset_id,
             snapshot=snapshot,
+            prologue=prologue,
+            env=env,
         )
 
     def fast_dev_run(
@@ -555,6 +593,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         self,
         snapshot: bool | SnapshotConfig,
         resolved_runs: list[tuple[TConfig, tuple[Unpack[TArguments]]]],
+        id: str | None = None,
     ):
         # Handle snapshot
         snapshot_config: SnapshotConfig | None = None
@@ -602,7 +641,9 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
                 module = module.split(".", 1)[0]
                 snapshot_modules_set.add(module)
 
-        snapshot_path = snapshot_modules(snapshot_base, list(snapshot_modules_set))
+        snapshot_path = snapshot_modules(
+            snapshot_base, list(snapshot_modules_set), id=id
+        )
         return snapshot_path.absolute()
 
     @remove_slurm_environment_variables()
