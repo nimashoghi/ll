@@ -165,26 +165,46 @@ ProfilerConfig: TypeAlias = Annotated[
 ]
 
 
-class EnvironmentConfig(TypedConfig):
-    cwd: str | None = None
+class EnvironmentClassInformationConfig(TypedConfig):
+    name: str
+    module: str
+    full_name: str
 
-    python_executable: str | None = None
-    python_path: list[str] | None = None
+    file_path: Path
+    source_file_path: Path | None = None
+
+
+class EnvironmentSLURMInformationConfig(TypedConfig):
+    hostname: str
+    hostnames: list[str]
+    job_id: str
+    raw_job_id: str
+    array_job_id: str | None
+    array_task_id: str | None
+    num_tasks: int
+    num_nodes: int
+    node: int
+    global_rank: int
+    local_rank: int
+
+
+class EnvironmentConfig(TypedConfig):
+    cwd: Path | None = None
+
+    python_executable: Path | None = None
+    python_path: list[Path] | None = None
     python_version: str | None = None
 
-    config: dict[str, Any] | None = None
-    model: dict[str, Any] | None = None
-    data: dict[str, Any] | None = None
+    config: EnvironmentClassInformationConfig | None = None
+    model: EnvironmentClassInformationConfig | None = None
+    data: EnvironmentClassInformationConfig | None = None
 
-    slurm: dict[str, Any] | None = None
+    slurm: EnvironmentSLURMInformationConfig | None = None
 
-    log_dir: str | None = None
+    log_dir: Path | None = None
 
     seed: int | None = None
     seed_workers: bool | None = None
-
-    sweep_id: str | None = None
-    sweep_config: dict[str, Any] | None = None
 
 
 class WandbWatchConfig(TypedConfig):
