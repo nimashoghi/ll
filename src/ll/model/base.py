@@ -1,12 +1,15 @@
 import inspect
 import os
+import platform
 import sys
 from abc import ABC, abstractmethod
 from collections.abc import Callable, MutableMapping
+from datetime import timedelta
 from logging import getLogger
 from pathlib import Path
 from typing import Any, Generic, cast
 
+import psutil
 import torch
 import torch.nn as nn
 from lightning.pytorch import LightningDataModule, LightningModule, Trainer
@@ -20,6 +23,7 @@ from ..util import log_batch_info, skip_batch
 from .config import (
     BaseConfig,
     EnvironmentClassInformationConfig,
+    EnvironmentLinuxEnvironmentConfig,
     EnvironmentSLURMInformationConfig,
 )
 from .modules.callback import CallbackModuleMixin, CallbackRegistrarModuleMixin
@@ -251,6 +255,20 @@ class LightningModuleBase(
             bool(int(seed_everything))
             if (seed_everything := os.environ.get("PL_SEED_WORKERS"))
             else None
+        )
+        hparams.environment.linux = EnvironmentLinuxEnvironmentConfig(
+            user=os.getlogin(),
+            hostname=platform.node(),
+            system=platform.system(),
+            release=platform.release(),
+            version=platform.version(),
+            machine=platform.machine(),
+            processor=platform.processor(),
+            cpu_count=os.cpu_count(),
+            memory=psutil.virtual_memory().total,
+            uptime=timedelta(seconds=psutil.boot_time()),
+            boot_time=psutil.boot_time(),
+            load_avg=os.getloadavg(),
         )
 
     def pre_init_update_hparams_dict(self, hparams: MutableMapping[str, Any]):

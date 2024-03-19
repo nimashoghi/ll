@@ -188,6 +188,25 @@ class EnvironmentSLURMInformationConfig(TypedConfig):
     local_rank: int
 
 
+class EnvironmentLinuxEnvironmentConfig(TypedConfig):
+    """
+    Information about the Linux environment (e.g., current user, hostname, etc.)
+    """
+
+    user: str | None = None
+    hostname: str | None = None
+    system: str | None = None
+    release: str | None = None
+    version: str | None = None
+    machine: str | None = None
+    processor: str | None = None
+    cpu_count: int | None = None
+    memory: int | None = None
+    uptime: timedelta | None = None
+    boot_time: float | None = None
+    load_avg: tuple[float, float, float] | None = None
+
+
 class EnvironmentConfig(TypedConfig):
     cwd: Path | None = None
 
@@ -198,6 +217,8 @@ class EnvironmentConfig(TypedConfig):
     config: EnvironmentClassInformationConfig | None = None
     model: EnvironmentClassInformationConfig | None = None
     data: EnvironmentClassInformationConfig | None = None
+
+    linux: EnvironmentLinuxEnvironmentConfig | None = None
 
     slurm: EnvironmentSLURMInformationConfig | None = None
 
