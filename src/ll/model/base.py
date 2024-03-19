@@ -1,3 +1,4 @@
+import getpass
 import inspect
 import os
 import platform
@@ -209,6 +210,17 @@ def _cls_info(cls: type):
     )
 
 
+T = TypeVar("T")
+
+
+def _try_get(fn: Callable[[], T]) -> T | None:
+    try:
+        return fn()
+    except Exception as e:
+        log.warning(f"Failed to get value: {e}")
+        return None
+
+
 class LightningModuleBase(
     ProfilerMixin,
     LogDirMixin,
@@ -257,18 +269,18 @@ class LightningModuleBase(
             else None
         )
         hparams.environment.linux = EnvironmentLinuxEnvironmentConfig(
-            user=os.getlogin(),
-            hostname=platform.node(),
-            system=platform.system(),
-            release=platform.release(),
-            version=platform.version(),
-            machine=platform.machine(),
-            processor=platform.processor(),
-            cpu_count=os.cpu_count(),
-            memory=psutil.virtual_memory().total,
-            uptime=timedelta(seconds=psutil.boot_time()),
-            boot_time=psutil.boot_time(),
-            load_avg=os.getloadavg(),
+            user=_try_get(lambda: getpass.getuser()),
+            hostname=_try_get(lambda: platform.node()),
+            system=_try_get(lambda: platform.system()),
+            release=_try_get(lambda: platform.release()),
+            version=_try_get(lambda: platform.version()),
+            machine=_try_get(lambda: platform.machine()),
+            processor=_try_get(lambda: platform.processor()),
+            cpu_count=_try_get(lambda: os.cpu_count()),
+            memory=_try_get(lambda: psutil.virtual_memory().total),
+            uptime=_try_get(lambda: timedelta(seconds=psutil.boot_time())),
+            boot_time=_try_get(lambda: psutil.boot_time()),
+            load_avg=_try_get(lambda: os.getloadavg()),
         )
 
     def pre_init_update_hparams_dict(self, hparams: MutableMapping[str, Any]):
