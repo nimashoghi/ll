@@ -1,3 +1,4 @@
+from collections.abc import Sequence
 from logging import getLogger
 from typing import cast
 
@@ -12,12 +13,18 @@ from .callback import CallbackRegistrarModuleMixin
 log = getLogger(__name__)
 
 
+def _parameters_to_names(parameters: Sequence[nn.Parameter], model: nn.Module):
+    mapping = {id(p): n for n, p in model.named_parameters()}
+    return [mapping[id(p)] for p in parameters]
+
+
 class SharedParametersModuleMixin(mixin_base_type(CallbackRegistrarModuleMixin)):
     @override
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
         self.shared_parameters: list[tuple[nn.Parameter, int | float]] = []
+        self._warned_shared_parameters = False
 
         def on_after_backward(_trainer: Trainer, pl_module: LightningModule):
             nonlocal self
@@ -27,20 +34,23 @@ class SharedParametersModuleMixin(mixin_base_type(CallbackRegistrarModuleMixin))
                 return
 
             log.debug(f"Scaling {len(self.shared_parameters)} shared parameters...")
-            warned_shared_param_no_grad = False
+            no_grad_parameters: list[nn.Parameter] = []
             for p, factor in self.shared_parameters:
                 if not hasattr(p, "grad") or p.grad is None:
-                    warned_shared_param_no_grad = True
+                    no_grad_parameters.append(p)
                     continue
 
                 _ = p.grad.data.div_(factor)
 
-            if warned_shared_param_no_grad:
-                log.warning(
-                    "Some shared parameters do not have a gradient. "
-                    "Please check if all shared parameters are used "
-                    "and point to PyTorch parameters."
+            if no_grad_parameters and not self._warned_shared_parameters:
+                no_grad_parameters_str = ", ".join(
+                    _parameters_to_names(no_grad_parameters, pl_module)
                 )
+                log.warning(
+                    "The following parameters were marked as shared, but had no gradients: "
+                    f"{no_grad_parameters_str}"
+                )
+                self._warned_shared_parameters = True
 
             log.debug(
                 f"Done scaling shared parameters. (len={len(self.shared_parameters)})"
