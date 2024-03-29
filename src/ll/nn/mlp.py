@@ -1,8 +1,12 @@
+import copy
 from collections.abc import Callable
+from typing import Literal
 
 import torch
 import torch.nn as nn
 from typing_extensions import override
+
+from .nonlinearity import NonlinearityConfig
 
 
 class ResidualSequential(nn.Sequential):
@@ -13,10 +17,10 @@ class ResidualSequential(nn.Sequential):
 
 def MLP(
     dims: list[int],
-    activation: Callable[[], nn.Module],
+    activation: NonlinearityConfig | nn.Module | Callable[[], nn.Module],
     bias: bool = True,
     no_bias_scalar: bool = True,
-    ln: bool | str = False,
+    ln: bool | Literal["pre", "post"] = False,
     dropout: float | None = None,
     residual: bool = False,
     pre_layers: list[nn.Module] = [],
@@ -30,7 +34,7 @@ def MLP(
         activation (Callable[[], nn.Module]): Activation function to use between layers.
         bias (bool, optional): Whether to include bias terms in the linear layers. Defaults to True.
         no_bias_scalar (bool, optional): Whether to exclude bias terms when the output dimension is 1. Defaults to True.
-        ln (bool | str, optional): Whether to apply layer normalization before or after the linear layers. Defaults to False.
+        ln (bool | Literal["pre", "post"], optional): Whether to apply layer normalization before or after the linear layers. Defaults to False.
         dropout (float | None, optional): Dropout probability to apply between layers. Defaults to None.
         residual (bool, optional): Whether to use residual connections between layers. Defaults to False.
         pre_layers (list[nn.Module], optional): List of layers to insert before the linear layers. Defaults to [].
@@ -61,7 +65,15 @@ def MLP(
         if dropout is not None:
             layers.append(nn.Dropout(dropout))
         if i < len(dims) - 2:
-            layers.append(activation())
+            match activation:
+                case NonlinearityConfig():
+                    layers.append(activation.create_module())
+                case nn.Module():
+                    # In this case, we create a deep copy of the module to avoid sharing parameters (if any).
+                    layers.append(copy.deepcopy(activation))
+                case _:
+                    assert callable(activation), "activation must be callable"
+                    layers.append(activation())
 
     layers.extend(post_layers)
 
