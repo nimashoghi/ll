@@ -49,15 +49,13 @@ def _copy(source: Path, location: Path):
     )
 
 
-def snapshot_modules(
+def resolve_snapshot_dir(
     base: str | Path,
-    modules: Sequence[str],
-    *,
     id: str | None = None,
     add_date_to_dir: bool = True,
     error_on_existing: bool = True,
-):
-    if not id:
+) -> Path:
+    if id is None:
         id = str(uuid.uuid4())
 
     snapshot_dir = Path(base)
@@ -65,7 +63,10 @@ def snapshot_modules(
         snapshot_dir = snapshot_dir / datetime.now().strftime("%Y-%m-%d")
     snapshot_dir = snapshot_dir / id
     snapshot_dir.mkdir(parents=True, exist_ok=not error_on_existing)
+    return snapshot_dir
 
+
+def snapshot_modules(snapshot_dir: Path, modules: Sequence[str]):
     log.critical(f"Snapshotting {modules=} to {snapshot_dir}")
 
     moved_modules = defaultdict[str, list[tuple[Path, Path]]](list)

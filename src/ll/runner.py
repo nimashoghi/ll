@@ -10,7 +10,7 @@ from datetime import timedelta
 from functools import wraps
 from logging import getLogger
 from pathlib import Path
-from typing import Generic, Protocol, TypedDict, cast, runtime_checkable
+from typing import Generic, Protocol, TypeAlias, TypedDict, cast, runtime_checkable
 
 import cloudpickle as pickle
 from tqdm.auto import tqdm
@@ -30,8 +30,8 @@ log = getLogger(__name__)
 
 
 class SnapshotConfig(TypedDict, total=False):
-    base_path: Path
-    """The base path to save snapshots to. Default: `~/.ll_snapshots`."""
+    dir: Path
+    """The directory to save snapshots to. Default: `{cwd}/ll-{id}/snapshot`."""
 
     snapshot_ll: bool
     """Whether to snapshot the `ll` module. Default: `True`."""
@@ -66,6 +66,9 @@ class RunnerSession:
 
     name: str | None = None
     """The name of the session."""
+
+
+SessionGPUIndex: TypeAlias = int | tuple[int, ...]
 
 
 class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
@@ -285,6 +288,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         # We'll use this ID for snapshotting, as well as for
         #   defining the name of the shell script that will launch the sessions.
         id = str(uuid.uuid4())
+        local_data_path = self._local_data_path(id)
 
         # If `env` is set, just add it to the prologues
         if env:
@@ -301,18 +305,14 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
             raise RuntimeError("This function only works in conda environments.")
 
         if config_pickle_save_path is None:
-            config_pickle_save_path = Path.cwd() / f"ll_{id}"
+            config_pickle_save_path = local_data_path / "sessions"
             config_pickle_save_path.mkdir(exist_ok=True)
-
-            # Add a gitignore file to the directory so that the entire directory is ignored by git
-            with (config_pickle_save_path / ".gitignore").open("w") as f:
-                f.write("*\n")
 
         resolved_runs = self._resolve_runs(runs, reset_id=reset_id)
         self._validate_runs(resolved_runs)
 
         # Take a snapshot of the environment
-        snapshot_path = self._snapshot(snapshot, resolved_runs, id)
+        snapshot_path = self._snapshot(snapshot, resolved_runs, local_data_path)
 
         # Save all configs to pickle files
         config_paths: list[Path] = []
@@ -437,7 +437,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         self,
         runs: Sequence[TConfig] | Sequence[tuple[TConfig, Unpack[TArguments]]],
         name: str = "ll",
-        gpus: list[int] | dict[int, int] | None = None,
+        gpus: Sequence[SessionGPUIndex] | Mapping[SessionGPUIndex, int] | None = None,
         num_jobs_per_gpu: int | None = None,
         config_pickle_save_path: Path | None = None,
         reset_id: bool = True,
@@ -454,7 +454,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
             A sequence of runs to launch.
         num_jobs_per_gpu : int, optional
             The number of jobs to launch per GPU. (default: 1)
-        gpus : list[int] | dict[int, int] | None, optional
+        gpus : list[SessionGPUIndex] | dict[SessionGPUIndex, int] | None, optional
             The GPUs to use.
             - If a dictionary is provided, it should map GPU indices to the number of jobs to launch on that GPU.
             - If a list is provided, it should be a list of GPU indices to use. In this case, `num_jobs_per_gpu` will be used to determine the number of jobs to launch on each GPU.
@@ -488,18 +488,26 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
             n = num_jobs_per_gpu or 1
             gpus = {gpu: n for gpu in gpus}
 
-        # Make sure all the requested GPUs are available
-        for gpu in gpus:
-            if gpu not in all_gpus:
-                raise ValueError(f"GPU {gpu} is not available.")
+        gpus_dict = {
+            ((gpu_idx,) if not isinstance(gpu_idx, tuple) else gpu_idx): num_jobs
+            for gpu_idx, num_jobs in gpus.items()
+        }
+        del gpus
 
-        log.critical(f"Detected {len(gpus)} GPUs; {gpus=}.")
+        # Make sure all the requested GPUs are available
+        for gpu_idxs in gpus_dict:
+            for gpu_idx in gpu_idxs:
+                if gpu_idx not in all_gpus:
+                    raise ValueError(f"GPU {gpu_idx} is not available.")
+
+        log.critical(f"Detected {len(gpus_dict)} GPUs; {gpus_dict=}.")
 
         # Create a session for each GPU
         sessions: list[RunnerSession] = []
-        for gpu_idx, num_jobs_per_gpu in gpus.items():
-            session_env = {"CUDA_VISIBLE_DEVICES": str(gpu_idx)}
-            session_name_gpu = f"gpu{gpu_idx}"
+        for gpu_idxs, num_jobs_per_gpu in gpus_dict.items():
+            gpu_idxs_str = ",".join(str(i) for i in gpu_idxs)
+            session_env = {"CUDA_VISIBLE_DEVICES": gpu_idxs_str}
+            session_name_gpu = f"gpu{gpu_idxs_str}"
             for job_idx in range(num_jobs_per_gpu):
                 session_name = session_name_gpu
                 if num_jobs_per_gpu > 1:
@@ -589,11 +597,21 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
             if count > 1:
                 raise ValueError(f"Duplicate id {id=}")
 
+    def _local_data_path(self, id: str):
+        local_data_path = Path.cwd() / f"ll_{id}"
+        local_data_path.mkdir(exist_ok=True)
+
+        # Add a gitignore file to the directory so that the entire directory is ignored by git
+        with (local_data_path / ".gitignore").open("w") as f:
+            f.write("*\n")
+
+        return local_data_path
+
     def _snapshot(
         self,
         snapshot: bool | SnapshotConfig,
         resolved_runs: list[tuple[TConfig, tuple[Unpack[TArguments]]]],
-        id: str | None = None,
+        local_data_path: Path,
     ):
         # Handle snapshot
         snapshot_config: SnapshotConfig | None = None
@@ -604,12 +622,13 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         elif isinstance(snapshot, Mapping):
             snapshot_config = {**SNAPSHOT_CONFIG_DEFAULT, **snapshot}
 
+        del snapshot
         if snapshot_config is None:
             return None
 
         # Set the snapshot base to the user's home directory
-        snapshot_base = snapshot_config.get("base_path", Path.home() / ".ll_snapshots")
-        snapshot_base.mkdir(exist_ok=True, parents=True)
+        snapshot_dir = snapshot_config.get("dir", local_data_path / "snapshot")
+        snapshot_dir.mkdir(exist_ok=True, parents=True)
 
         snapshot_modules_set: set[str] = set()
         snapshot_modules_set.update(snapshot_config.get("modules", []))
@@ -641,9 +660,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
                 module = module.split(".", 1)[0]
                 snapshot_modules_set.add(module)
 
-        snapshot_path = snapshot_modules(
-            snapshot_base, list(snapshot_modules_set), id=id
-        )
+        snapshot_path = snapshot_modules(snapshot_dir, list(snapshot_modules_set))
         return snapshot_path.absolute()
 
     @remove_slurm_environment_variables()
@@ -682,7 +699,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
             The number of CPUs per task.
         snapshot : bool | Path
             The base path to save snapshots to.
-                - If `True`, the default path will be used (`/home/<user>/.ll_snapshots`).
+                - If `True`, the default path will be used (`{cwd}/ll-{id}/snapshot`).
                 - If `False`, no snapshots will be used.
         constraint : str, optional
             The name of the constraint to use.
@@ -695,11 +712,14 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         slurm_additional_parameters : Mapping[str, str], optional
             Additional parameters to pass to the SLUR
         """
+        id = str(uuid.uuid4())
+        local_data_path = self._local_data_path(id)
+
         resolved_runs = self._resolve_runs(runs)
         self._validate_runs(resolved_runs)
 
         # Handle snapshot
-        snapshot_path = self._snapshot(snapshot, resolved_runs)
+        snapshot_path = self._snapshot(snapshot, resolved_runs, local_data_path)
 
         env = {**self.env, **(env or {})}
 
