@@ -101,6 +101,22 @@ def _make_error_str(input: Any, t: Any) -> str:
 
 T = TypeVar("T", bound=torch.Tensor, infer_variance=True)
 
+"""
+Patch to jaxtyping:
+
+In `jaxtyping._import_hook`, we add:
+def _has_isinstance_or_tassert(func_def):
+    for node in ast.walk(func_def):
+        if isinstance(node, ast.Call):
+            if isinstance(node.func, ast.Name) and node.func.id == "isinstance":
+                return True
+            elif isinstance(node.func, ast.Name) and node.func.id == "tassert":
+                return True
+    return False
+
+and we check this when adding the decorators.
+"""
+
 
 def tassert(t: Any, input: T) -> T:
     """
