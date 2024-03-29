@@ -44,7 +44,7 @@ def MLP(
         raise ValueError("mlp requires at least 2 dimensions")
     if ln is True:
         ln = "pre"
-    elif isinstance(ln, str) and not ln in ("pre", "post"):
+    elif isinstance(ln, str) and ln not in ("pre", "post"):
         raise ValueError("ln must be a boolean or 'pre' or 'post'")
 
     layers: list[nn.Module] = []
