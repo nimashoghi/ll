@@ -1,5 +1,5 @@
-from abc import ABC, abstractclassmethod, abstractmethod
-from typing import Annotated, Literal, TypeAlias
+from abc import ABC, abstractmethod
+from typing import Annotated, Literal
 
 import torch.nn as nn
 from typing_extensions import override
@@ -7,98 +7,70 @@ from typing_extensions import override
 from ..config import Field, TypedConfig
 
 
-class NonlinearityConfig(TypedConfig, ABC):
-    @classmethod
-    @abstractmethod
-    def name(cls) -> str: ...
-
+class BaseNonlinearityConfig(TypedConfig, ABC):
     @abstractmethod
     def create_module(self) -> nn.Module:
         pass
 
 
-class ReLUNonlinearityConfig(NonlinearityConfig):
-    @override
-    @classmethod
-    def name(cls):
-        return "relu"
+class ReLUNonlinearityConfig(BaseNonlinearityConfig):
+    name: Literal["relu"] = "relu"
 
     @override
     def create_module(self) -> nn.Module:
         return nn.ReLU()
 
 
-class SigmoidNonlinearityConfig(NonlinearityConfig):
-    @override
-    @classmethod
-    def name(cls):
-        return "sigmoid"
+class SigmoidNonlinearityConfig(BaseNonlinearityConfig):
+    name: Literal["sigmoid"] = "sigmoid"
 
     @override
     def create_module(self) -> nn.Module:
         return nn.Sigmoid()
 
 
-class TanhNonlinearityConfig(NonlinearityConfig):
-    @override
-    @classmethod
-    def name(cls):
-        return "tanh"
+class TanhNonlinearityConfig(BaseNonlinearityConfig):
+    name: Literal["tanh"] = "tanh"
 
     @override
     def create_module(self) -> nn.Module:
         return nn.Tanh()
 
 
-class SoftmaxNonlinearityConfig(NonlinearityConfig):
-    @override
-    @classmethod
-    def name(cls):
-        return "softmax"
+class SoftmaxNonlinearityConfig(BaseNonlinearityConfig):
+    name: Literal["softmax"] = "softmax"
 
     @override
     def create_module(self) -> nn.Module:
         return nn.Softmax(dim=1)
 
 
-class SoftplusNonlinearityConfig(NonlinearityConfig):
-    @override
-    @classmethod
-    def name(cls):
-        return "softplus"
+class SoftplusNonlinearityConfig(BaseNonlinearityConfig):
+    name: Literal["softplus"] = "softplus"
 
     @override
     def create_module(self) -> nn.Module:
         return nn.Softplus()
 
 
-class SoftsignNonlinearityConfig(NonlinearityConfig):
-    @override
-    @classmethod
-    def name(cls):
-        return "softsign"
+class SoftsignNonlinearityConfig(BaseNonlinearityConfig):
+    name: Literal["softsign"] = "softsign"
 
     @override
     def create_module(self) -> nn.Module:
         return nn.Softsign()
 
 
-class ELUNonlinearityConfig(NonlinearityConfig):
-    @override
-    @classmethod
-    def name(cls):
-        return "elu"
+class ELUNonlinearityConfig(BaseNonlinearityConfig):
+    name: Literal["elu"] = "elu"
 
     @override
     def create_module(self) -> nn.Module:
         return nn.ELU()
 
 
-class LeakyReLUNonlinearityConfig(NonlinearityConfig):
-    @override
-    @classmethod
-    def name(cls):
-        return "leaky_relu"
+class LeakyReLUNonlinearityConfig(BaseNonlinearityConfig):
+    name: Literal["leaky_relu"] = "leaky_relu"
 
     negative_slope: float | None = None
 
@@ -110,56 +82,59 @@ class LeakyReLUNonlinearityConfig(NonlinearityConfig):
         return nn.LeakyReLU(**kwargs)
 
 
-class PReLUConfig(NonlinearityConfig):
-    @override
-    @classmethod
-    def name(cls):
-        return "prelu"
+class PReLUConfig(BaseNonlinearityConfig):
+    name: Literal["prelu"] = "prelu"
 
     @override
     def create_module(self) -> nn.Module:
         return nn.PReLU()
 
 
-class GELUNonlinearityConfig(NonlinearityConfig):
-    @override
-    @classmethod
-    def name(cls):
-        return "gelu"
+class GELUNonlinearityConfig(BaseNonlinearityConfig):
+    name: Literal["gelu"] = "gelu"
 
     @override
     def create_module(self) -> nn.Module:
         return nn.GELU()
 
 
-class SwishNonlinearityConfig(NonlinearityConfig):
-    @override
-    @classmethod
-    def name(cls):
-        return "swish"
+class SwishNonlinearityConfig(BaseNonlinearityConfig):
+    name: Literal["swish"] = "swish"
 
     @override
     def create_module(self) -> nn.Module:
         return nn.SiLU()
 
 
-class SiLUNonlinearityConfig(NonlinearityConfig):
-    @override
-    @classmethod
-    def name(cls):
-        return "silu"
+class SiLUNonlinearityConfig(BaseNonlinearityConfig):
+    name: Literal["silu"] = "silu"
 
     @override
     def create_module(self) -> nn.Module:
         return nn.SiLU()
 
 
-class MishNonlinearityConfig(NonlinearityConfig):
-    @override
-    @classmethod
-    def name(cls):
-        return "mish"
+class MishNonlinearityConfig(BaseNonlinearityConfig):
+    name: Literal["mish"] = "mish"
 
     @override
     def create_module(self) -> nn.Module:
         return nn.Mish()
+
+
+NonlinearityConfig = Annotated[
+    ReLUNonlinearityConfig
+    | SigmoidNonlinearityConfig
+    | TanhNonlinearityConfig
+    | SoftmaxNonlinearityConfig
+    | SoftplusNonlinearityConfig
+    | SoftsignNonlinearityConfig
+    | ELUNonlinearityConfig
+    | LeakyReLUNonlinearityConfig
+    | PReLUConfig
+    | GELUNonlinearityConfig
+    | SwishNonlinearityConfig
+    | SiLUNonlinearityConfig
+    | MishNonlinearityConfig,
+    Field(discriminator="name"),
+]

@@ -2,6 +2,7 @@ from .mlp import MLP as MLP
 from .mlp import ResidualSequential as ResidualSequential
 from .module_dict import TypedModuleDict as TypedModuleDict
 from .module_list import TypedModuleList as TypedModuleList
+from .nonlinearity import BaseNonlinearityConfig as BaseNonlinearityConfig
 from .nonlinearity import ELUNonlinearityConfig as ELUNonlinearityConfig
 from .nonlinearity import GELUNonlinearityConfig as GELUNonlinearityConfig
 from .nonlinearity import LeakyReLUNonlinearityConfig as LeakyReLUNonlinearityConfig

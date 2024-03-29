@@ -6,7 +6,7 @@ import torch
 import torch.nn as nn
 from typing_extensions import override
 
-from .nonlinearity import NonlinearityConfig
+from .nonlinearity import BaseNonlinearityConfig
 
 
 class ResidualSequential(nn.Sequential):
@@ -17,7 +17,7 @@ class ResidualSequential(nn.Sequential):
 
 def MLP(
     dims: list[int],
-    activation: NonlinearityConfig | nn.Module | Callable[[], nn.Module],
+    activation: BaseNonlinearityConfig | nn.Module | Callable[[], nn.Module],
     bias: bool = True,
     no_bias_scalar: bool = True,
     ln: bool | Literal["pre", "post"] = False,
@@ -66,7 +66,7 @@ def MLP(
             layers.append(nn.Dropout(dropout))
         if i < len(dims) - 2:
             match activation:
-                case NonlinearityConfig():
+                case BaseNonlinearityConfig():
                     layers.append(activation.create_module())
                 case nn.Module():
                     # In this case, we create a deep copy of the module to avoid sharing parameters (if any).
