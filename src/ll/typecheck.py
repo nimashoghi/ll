@@ -99,7 +99,7 @@ def _make_error_str(input: Any, t: Any) -> str:
     return "\n".join(error_components)
 
 
-T = TypeVar("T", infer_variance=True)
+T = TypeVar("T", bound=torch.Tensor, infer_variance=True)
 
 
 def tassert(t: Any, input: T) -> T:
