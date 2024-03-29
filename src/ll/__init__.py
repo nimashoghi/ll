@@ -1,6 +1,7 @@
 from . import actsave as A
+from . import nn as nn
 from .actsave import ActSave
-from .config import AllowMissing, Field, MissingField, PrivateAttr, TypedConfig
+from .config import MISSING, AllowMissing, Field, MissingField, PrivateAttr, TypedConfig
 from .data import dataset_transform
 from .exception import SkipBatch
 from .model.base import Base, LightningDataModuleBase, LightningModuleBase
@@ -27,7 +28,9 @@ from .util.typed import TypedModuleDict, TypedModuleList
 
 __all__ = [
     "A",
+    "nn",
     "ActSave",
+    "MISSING",
     "AllowMissing",
     "Field",
     "MissingField",
