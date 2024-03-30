@@ -222,7 +222,12 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
 
         return return_values
 
-    def _launch_session(self, config_paths: list[Path], session_name: str):
+    def _launch_session(
+        self,
+        config_paths: list[Path],
+        config_base_path: Path,
+        session_name: str,
+    ):
         # All we need to do here is launch `python -m ll.local_sessions_runner`
         # with the config paths as arguments. The `local_sessions_runner` will take care of the rest.
         # Obviously, the command above needs to be run in a screen session, so we can come back to it later.
@@ -234,7 +239,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
                 # Save the logs to a file
                 "-L",
                 "-Logfile",
-                f"{session_name}.log",
+                str((config_base_path / f"{session_name}.log").absolute()),
                 # Enable UTF-8 encoding
                 "-U",
             ]
@@ -367,7 +372,11 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
             if not session_config_paths:
                 continue
 
-            command = self._launch_session(session_config_paths, session_name)
+            command = self._launch_session(
+                session_config_paths,
+                config_pickle_save_path,
+                session_name,
+            )
 
             # log.critical(f"Sesssion {i+1}/{n_sessions} command: {command_str}")
             command_prefix = " ".join(f'{k}="{v}"' for k, v in session_env.items())
