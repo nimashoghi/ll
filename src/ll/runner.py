@@ -636,7 +636,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
             return None
 
         # Set the snapshot base to the user's home directory
-        snapshot_dir = snapshot_config.get("dir", local_data_path / "snapshot")
+        snapshot_dir = snapshot_config.get("dir", local_data_path / "ll_snapshot")
         snapshot_dir.mkdir(exist_ok=True, parents=True)
 
         snapshot_modules_set: set[str] = set()
