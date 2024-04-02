@@ -741,6 +741,25 @@ class BaseConfig(TypedConfig):
             c.id = BaseConfig.generate_id()
         return c
 
+    # region Helper methods
+    def debug_and_disable_logging_(self):
+        """
+        Enable debug mode and disable logging. Useful for debugging.
+
+        This method sets the `debug` attribute to True, disables logging in the trainer,
+        and sets the log level to DEBUG.
+
+        Returns:
+            self: The current instance of the class.
+        """
+        self.debug = True
+        self.trainer.logging.enabled = False
+        self.trainer.python_logging.log_level = "DEBUG"
+
+        return self
+
+    # endregion
+
     # region Seeding
 
     _rng: ClassVar[np.random.Generator | None] = None
