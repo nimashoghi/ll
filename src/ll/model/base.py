@@ -8,11 +8,12 @@ from collections.abc import Callable, MutableMapping
 from datetime import timedelta
 from logging import getLogger
 from pathlib import Path
-from typing import Any, Generic, cast
+from typing import IO, Any, Generic, Self, cast
 
 import psutil
 import torch
 import torch.nn as nn
+from lightning.fabric.utilities.types import _MAP_LOCATION_TYPE, _PATH
 from lightning.pytorch import LightningDataModule, LightningModule, Trainer
 from lightning.pytorch.callbacks import Callback
 from typing_extensions import TypeVar, deprecated, override
@@ -240,12 +241,53 @@ class LightningModuleBase(
     ABC,
     Generic[THparams],
 ):
+    @classmethod
+    def _validate_class_for_ckpt_loading(cls):
+        # Make sure that the `__init__` method takes a single argument, `hparams`.
+        if (init_fn := getattr(cls, "__init__", None)) is None:
+            return
+
+        if not inspect.isfunction(init_fn):
+            raise TypeError(f"__init__ must be a function: {init_fn}")
+
+        parameters = inspect.signature(init_fn).parameters
+        if len(parameters) != 1:
+            raise TypeError(
+                f"__init__ must take a single argument, got {len(parameters)}: {init_fn}"
+            )
+
+        if "hparams" not in parameters:
+            raise TypeError(f"__init__'s argument must be named 'hparams': {init_fn}")
+
     hparams: THparams
     hparams_initial: THparams
 
     @classmethod
     @abstractmethod
     def config_cls(cls) -> type[THparams]: ...
+
+    @classmethod
+    def load_checkpoint(
+        cls,
+        checkpoint_path: _PATH | IO,
+        hparams: THparams | MutableMapping[str, Any] | None = None,
+        map_location: _MAP_LOCATION_TYPE = None,
+        strict: bool = True,
+    ) -> Self:
+        if strict:
+            cls._validate_class_for_ckpt_loading()
+
+        kwargs: dict[str, Any] = {}
+        if hparams is not None:
+            kwargs["hparams"] = hparams
+
+        return super().load_from_checkpoint(
+            checkpoint_path,
+            map_location=map_location,
+            hparams_file=None,
+            strict=strict,
+            **kwargs,
+        )
 
     @classmethod
     def _update_environment(cls, hparams: THparams):
