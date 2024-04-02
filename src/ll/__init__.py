@@ -1,5 +1,7 @@
 from . import actsave as A
 from . import nn as nn
+from . import typecheck
+from . import typecheck as tc
 from .actsave import ActSave
 from .config import MISSING, AllowMissing, Field, MissingField, PrivateAttr, TypedConfig
 from .data import dataset_transform
@@ -29,6 +31,8 @@ from .util.typed import TypedModuleDict, TypedModuleList
 __all__ = [
     "A",
     "nn",
+    "typecheck",
+    "tc",
     "ActSave",
     "MISSING",
     "AllowMissing",
