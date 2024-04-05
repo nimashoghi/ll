@@ -1,13 +1,13 @@
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Annotated, Any, Literal, TypeAlias, Unpack, cast
+from typing import TYPE_CHECKING, Annotated, Any, Literal, TypeAlias, cast
 
 from pydantic import BaseModel, Field
 from pydantic.config import JsonDict
 from pydantic.fields import AliasChoices, AliasPath, FieldInfo, _EmptyKwargs, _Unset
 from pydantic.types import Discriminator
 from pydantic_core import PydanticCustomError, PydanticUndefined
-from typing_extensions import TypeVar
+from typing_extensions import TypeVar, Unpack
 
 
 @dataclass

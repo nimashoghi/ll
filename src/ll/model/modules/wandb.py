@@ -32,7 +32,12 @@ class WandbWrapperMixin(mixin_base_type(CallbackModuleMixin)):
 
             if (
                 logger := next(
-                    (l for l in trainer.loggers if isinstance(l, WandbLogger)), None
+                    (
+                        logger
+                        for logger in trainer.loggers
+                        if isinstance(logger, WandbLogger)
+                    ),
+                    None,
                 )
             ) is None:
                 log.warning("Could not find wandb logger or module to log")

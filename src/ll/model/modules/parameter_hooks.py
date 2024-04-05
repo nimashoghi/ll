@@ -29,7 +29,7 @@ class ParameterHookModuleMixin(mixin_base_type(CallbackRegistrarModuleMixin)):
             if not config.trainer.supports_parameter_hooks:
                 return
 
-            log.debug(f"Running after_backward hooks...")
+            log.debug("Running after_backward hooks...")
             for parameters, hook in self.after_backward_hooks:
                 for parameter in parameters:
                     hook(parameter)

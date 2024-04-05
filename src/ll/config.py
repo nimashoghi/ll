@@ -56,7 +56,7 @@ class TypedConfig(BaseModel, _MutableMappingBase):
         strict=True,
         revalidate_instances="always",
         arbitrary_types_allowed=True,
-        extra="forbid",
+        extra="ignore",
     )
 
     def __draft_pre_init__(self):

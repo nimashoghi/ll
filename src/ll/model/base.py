@@ -8,7 +8,7 @@ from collections.abc import Callable, MutableMapping
 from datetime import timedelta
 from logging import getLogger
 from pathlib import Path
-from typing import IO, Any, Generic, Self, cast
+from typing import IO, Any, Generic, cast
 
 import psutil
 import torch
@@ -16,7 +16,7 @@ import torch.nn as nn
 from lightning.fabric.utilities.types import _MAP_LOCATION_TYPE, _PATH
 from lightning.pytorch import LightningDataModule, LightningModule, Trainer
 from lightning.pytorch.callbacks import Callback
-from typing_extensions import TypeVar, deprecated, override
+from typing_extensions import Self, TypeVar, deprecated, override
 
 from .. import actsave
 from ..nn.mlp import MLP

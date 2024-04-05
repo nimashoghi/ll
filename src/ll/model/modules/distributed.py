@@ -62,7 +62,7 @@ class DistributedMixin(mixin_base_type(LightningModule)):
     ) -> torch.Tensor:
         if isinstance(reduce_op, str):
             # validate reduce_op
-            if not reduce_op in VALID_REDUCE_OPS:
+            if reduce_op not in VALID_REDUCE_OPS:
                 raise ValueError(
                     f"reduce_op must be one of {VALID_REDUCE_OPS}, got {reduce_op}"
                 )

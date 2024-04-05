@@ -12,7 +12,6 @@ from typing import (
     ClassVar,
     Literal,
     Protocol,
-    Self,
     TypeAlias,
     runtime_checkable,
 )
@@ -23,7 +22,7 @@ from lightning.fabric.plugins.precision.precision import _PRECISION_INPUT
 from lightning.pytorch.plugins.layer_sync import LayerSync
 from lightning.pytorch.plugins.precision.precision import Precision
 from lightning.pytorch.profilers import Profiler
-from typing_extensions import TypeVar, deprecated, override
+from typing_extensions import Self, TypeVar, deprecated, override
 
 from ..config import Field, TypedConfig
 
@@ -361,7 +360,28 @@ class PluginConfigProtocol(Protocol[TPlugin]):
     def construct_plugin(self) -> TPlugin: ...
 
 
+class CheckpointConfig(TypedConfig):
+    path: Literal["best", "last", "hpc"] | str | Path | None = None
+    """
+    Checkpoint path to use when loading a checkpoint.
+
+    - "best" will load the best checkpoint.
+    - "last" will load the last checkpoint.
+    - "hpc" will load the SLURM pre-empted checkpoint.
+    - Any other string or Path will load the checkpoint from the specified path.
+    """
+    load_on_init_only: bool = True
+    """
+    If enabled, will only load the checkpoint on the first call to the Trainer. For subsequent calls (e.g., when resuming training due to a pre-emption), the checkpoint will not be loaded.
+
+    This is the ideal behavior for most cases, as it allows the trainer to load the hpc checkpoint when resuming training after a pre-emption.
+    """
+
+
 class TrainerConfig(TypedConfig):
+    checkpoint: CheckpointConfig = CheckpointConfig()
+    """Checkpoint loading configuration options."""
+
     python_logging: PythonLogging = PythonLogging()
     """Python logging configuration options."""
 
@@ -375,8 +395,6 @@ class TrainerConfig(TypedConfig):
     """Seed for the random number generator. If None, will use a random seed."""
     seed_workers: bool = False
     """Whether to seed the workers of the dataloader."""
-    default_ckpt_path: str | None = None
-    """Default checkpoint path to use when loading a checkpoint. "last" will load the last checkpoint. "hpc" will load the SLURM pre-empted checkpoint."""
 
     auto_wrap_trainer: bool = True
     """If enabled, will automatically wrap the `run` function with a `Trainer.context()` context manager. Should be `True` most of the time."""
@@ -770,6 +788,23 @@ class BaseConfig(TypedConfig):
         length: int = 8,
         ignore_rng: bool = False,
     ) -> str:
+        """
+        Generate a random ID of specified length.
+
+        Args:
+            length (int): The length of the generated ID. Default is 8.
+            ignore_rng (bool): If True, ignore the global random number generator and use a new one. Default is False.
+
+        Returns:
+            str: The generated random ID.
+
+        Raises:
+            IdSeedWarning: If the global random number generator is None and ignore_rng is False.
+
+        Notes:
+            - The generated IDs will not be reproducible if the global random number generator is None and ignore_rng is False.
+            - To ensure reproducibility, call BaseConfig.set_seed(...) before generating any IDs.
+        """
         rng = BaseConfig._rng if not ignore_rng else np.random.default_rng()
         if rng is None:
             warnings.warn(
@@ -786,6 +821,15 @@ class BaseConfig(TypedConfig):
 
     @staticmethod
     def set_seed(seed: int | None = None) -> None:
+        """
+        Set the seed for the random number generator.
+
+        Args:
+            seed (int | None, optional): The seed value to set. If None, a seed based on the current time will be used. Defaults to None.
+
+        Returns:
+            None
+        """
         if seed is None:
             seed = int(time.time() * 1000)
         log.critical(f"Seeding BaseConfig with seed {seed}")

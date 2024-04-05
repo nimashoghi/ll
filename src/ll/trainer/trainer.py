@@ -1,13 +1,14 @@
 import contextlib
+import hashlib
 import logging
 from collections import abc
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from pathlib import Path
 from types import NoneType
 from typing import Any
 
 import torch
-from lightning.pytorch import LightningModule
+from lightning.pytorch import LightningDataModule, LightningModule
 from lightning.pytorch import Trainer as LightningTrainer
 from lightning.pytorch.callbacks import (
     ModelCheckpoint,
@@ -17,12 +18,12 @@ from lightning.pytorch.callbacks import (
 from lightning.pytorch.plugins.environments import SLURMEnvironment
 from lightning.pytorch.profilers import Profiler
 from lightning.pytorch.utilities.types import _EVALUATE_OUTPUT, _PREDICT_OUTPUT
-from lightning_fabric.utilities.types import _PATH
 from typing_extensions import override
 
 from ..model.config import (
     BaseConfig,
     BaseProfilerConfig,
+    CheckpointConfig,
     PythonLogging,
     RunnerOutputSaveConfig,
 )
@@ -40,6 +41,16 @@ log = logging.getLogger(__name__)
 
 
 def _save_output_dir(root_config: BaseConfig, config: RunnerOutputSaveConfig):
+    """
+    Save the output directory for the runner.
+
+    Args:
+        root_config (BaseConfig): The root configuration object.
+        config (RunnerOutputSaveConfig): The configuration object for saving the output.
+
+    Returns:
+        Path: The resolved output directory path.
+    """
     if not (dirpath := config.dirpath):
         dirpath = default_root_dir(root_config, logs_dirname="ll_runner_logs")
     dirpath = Path(dirpath).resolve()
@@ -51,6 +62,17 @@ def _save_output_dir(root_config: BaseConfig, config: RunnerOutputSaveConfig):
 
 
 def _default_log_handlers(root_config: BaseConfig):
+    """
+    Returns a generator of log handlers based on the provided root configuration.
+
+    Args:
+        root_config (BaseConfig): The root configuration object.
+
+    Yields:
+        logging.Handler: A log handler object.
+
+    """
+    # Implementation goes here
     if (config := root_config.runner.save_output) is None or not config.enabled:
         return
 
@@ -64,6 +86,16 @@ def _default_log_handlers(root_config: BaseConfig):
 
 
 def _setup_logger(root_config: BaseConfig, config: PythonLogging):
+    """
+    Sets up the logger with the specified configurations.
+
+    Args:
+        root_config (BaseConfig): The root configuration object.
+        config (PythonLogging): The Python logging configuration object.
+
+    Returns:
+        None
+    """
     if config.lovely_tensors:
         try:
             import lovely_tensors
@@ -127,6 +159,19 @@ class Trainer(LightningTrainer):
     @classmethod
     @contextlib.contextmanager
     def output_save_context(cls, root_config: BaseConfig):
+        """
+        A context manager that saves the output logs to a specified directory.
+
+        Args:
+            root_config (BaseConfig): The root configuration object.
+
+        Yields:
+            None: This context manager does not return any value.
+
+        Example:
+            with Trainer.output_save_context(root_config):
+                # Code block where the output logs will be saved
+        """
         if (config := root_config.runner.save_output) is None or not config.enabled:
             yield
             return
@@ -148,6 +193,22 @@ class Trainer(LightningTrainer):
     @classmethod
     @contextlib.contextmanager
     def ll_initialize(cls, config: BaseConfig):
+        """
+        Context manager for initializing the trainer.
+
+        Args:
+            config (BaseConfig): The configuration object.
+
+        Yields:
+            None
+
+        Raises:
+            ValueError: If both `config.trainer.default_root_dir` and `config.trainer.auto_set_default_root_dir` are set.
+
+        Example:
+            with Trainer.ll_initialize(config):
+                # Code to initialize the trainer
+        """
         with contextlib.ExitStack() as stack:
             if not config.runner.auto_call_trainer_init_from_runner:
                 stack.enter_context(cls.runner_init(config))
@@ -168,14 +229,33 @@ class Trainer(LightningTrainer):
     @classmethod
     @contextlib.contextmanager
     def runner_init(cls, config: BaseConfig):
+        """
+        Context manager for initializing the runner.
+
+        Args:
+            config (BaseConfig): The configuration object.
+
+        Yields:
+            None
+
+        """
         with contextlib.ExitStack() as stack:
             cls.setup_python_logging(config)
-            # Save stdout/stderr to a file
+            # Save stdout/stderr to a file.
             stack.enter_context(Trainer.output_save_context(config))
             yield
 
     @classmethod
     def ll_default_callbacks(cls, config: BaseConfig):
+        """
+        Returns a generator of default callbacks for the LL trainer, based on the provided configuration.
+
+        Args:
+            config (BaseConfig): The configuration object.
+
+        Yields:
+            Callback: The default callbacks for the LL trainer.
+        """
         if config.trainer.on_exception_checkpoint:
             if config.trainer.default_root_dir is None:
                 raise ValueError(
@@ -342,7 +422,7 @@ class Trainer(LightningTrainer):
             # otherweise, we assume 1 node
             else:
                 kwargs["num_nodes"] = 1
-                log.critical(f"Setting num_nodes to 1 (no SLURM detected).")
+                log.critical("Setting num_nodes to 1 (no SLURM detected).")
 
         if config.trainer.default_root_dir:
             kwargs["default_root_dir"] = str(config.trainer.default_root_dir)
@@ -409,8 +489,8 @@ class Trainer(LightningTrainer):
 
         log.critical(f"Setting {model_ckpt.__class__.__name__}.save_last=True.")
         model_ckpt.save_last = True
-        # hacky: call the `__validate_init_configuration` method to ensure that the `save_last` parameter is valid.
-        # model_ckpt.__validate_init_configuration() <- this doesn't work because it's a private method
+        # HACK: call the `__validate_init_configuration` method to ensure that the `save_last` parameter is valid.
+        # `model_ckpt.__validate_init_configuration()` <- this doesn't work because it's a private method.
         if (
             validate_init_configuration := getattr(
                 model_ckpt,
@@ -427,7 +507,7 @@ class Trainer(LightningTrainer):
 
     @override
     def _run(
-        self, model: LightningModule, ckpt_path: _PATH | None = None
+        self, model: LightningModule, ckpt_path: str | Path | None = None
     ) -> _EVALUATE_OUTPUT | _PREDICT_OUTPUT | None:
         """
         Lightning doesn't support gradient clipping with manual optimization.
@@ -448,3 +528,122 @@ class Trainer(LightningTrainer):
             )
 
         return super()._run(model, ckpt_path)
+
+    def _resolve_ckpt_path_get_valid_path(
+        self,
+        ckpt_path: str | Path | None,
+        config: CheckpointConfig,
+    ):
+        if ckpt_path is not None:
+            return ckpt_path
+
+        if (candidate_path := config.path) is not None:
+            return candidate_path
+
+        return None
+
+    def _resolve_ckpt_path(self, ckpt_path: str | Path | None):
+        config = self._ll_config.trainer.checkpoint
+
+        # First, let's just try to get a non-None path.
+        ckpt_path = self._resolve_ckpt_path_get_valid_path(ckpt_path, config)
+
+        # Now, let's do some resolutions.
+        # If the `load_on_init_only` is set, then we only load the checkpoint on initialization.
+        if config.load_on_init_only:
+            # Here, we should check to see if this checkpoint has already been loaded by a previous process.
+            # If it has, then we should just return `None`.
+            ckpt_path_value_str = str(ckpt_path)
+            ckpt_path_value_hash = hashlib.md5(ckpt_path_value_str.encode()).hexdigest()
+
+            # See if we have a file with the same hash in the log directory.
+            if (log_dir := self.log_dir) is None:
+                log.warning(
+                    "The `log_dir` is not set. Skipping `load_on_init_only` resolution."
+                )
+                return ckpt_path
+
+            marker_path = Path(log_dir) / f".loaded_ckpt_{ckpt_path_value_hash}"
+            if marker_path.exists():
+                log.critical(
+                    f"Checkpoint {ckpt_path_value_str} has already been loaded. Skipping `ckpt_path` argument."
+                )
+                return None
+
+            # Synchronize all processes to prevent a scenario where rank 0 makes the file and rank 1 reads it.
+            self.strategy.barrier()
+
+            # Otherwise, we create the file to indicate that the checkpoint has been loaded.
+            # However, we should only do this on the main process.
+            if self.global_rank == 0:
+                marker_path.touch(exist_ok=True)
+
+        return ckpt_path
+
+    @override
+    def fit(
+        self,
+        model: LightningModule,
+        train_dataloaders: Any | LightningDataModule | None = None,
+        val_dataloaders: Any | None = None,
+        datamodule: LightningDataModule | None = None,
+        ckpt_path: str | Path | None = None,
+    ) -> None:
+        return super().fit(
+            model,
+            train_dataloaders,
+            val_dataloaders,
+            datamodule,
+            self._resolve_ckpt_path(ckpt_path),
+        )
+
+    @override
+    def validate(
+        self,
+        model: LightningModule | None = None,
+        dataloaders: Any | LightningDataModule | None = None,
+        ckpt_path: str | Path | None = None,
+        verbose: bool = True,
+        datamodule: LightningDataModule | None = None,
+    ) -> list[Mapping[str, float]]:
+        return super().validate(
+            model,
+            dataloaders,
+            self._resolve_ckpt_path(ckpt_path),
+            verbose,
+            datamodule,
+        )
+
+    @override
+    def test(
+        self,
+        model: LightningModule | None = None,
+        dataloaders: Any | LightningDataModule | None = None,
+        ckpt_path: str | Path | None = None,
+        verbose: bool = True,
+        datamodule: LightningDataModule | None = None,
+    ) -> list[Mapping[str, float]]:
+        return super().test(
+            model,
+            dataloaders,
+            self._resolve_ckpt_path(ckpt_path),
+            verbose,
+            datamodule,
+        )
+
+    @override
+    def predict(
+        self,
+        model: LightningModule | None = None,
+        dataloaders: Any | LightningDataModule | None = None,
+        datamodule: LightningDataModule | None = None,
+        return_predictions: bool | None = None,
+        ckpt_path: str | Path | None = None,
+    ) -> list[Any] | None:
+        return super().predict(
+            model,
+            dataloaders,
+            datamodule,
+            return_predictions,
+            self._resolve_ckpt_path(ckpt_path),
+        )
