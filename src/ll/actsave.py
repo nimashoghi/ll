@@ -290,12 +290,10 @@ class ActSaveProvider:
         acts: dict[str, ValueOrLambda] | None = None,
         /,
         **kwargs: ValueOrLambda,
-    ):
-        ...
+    ): ...
 
     @overload
-    def __call__(self, acts: Callable[[], dict[str, ValueOrLambda]], /):
-        ...
+    def __call__(self, acts: Callable[[], dict[str, ValueOrLambda]], /): ...
 
     def __call__(
         self,
@@ -346,12 +344,10 @@ class LoadedActivation:
         return cast(np.ndarray, np.load(activation_path, allow_pickle=True))
 
     @overload
-    def __getitem__(self, item: int) -> np.ndarray:
-        ...
+    def __getitem__(self, item: int) -> np.ndarray: ...
 
     @overload
-    def __getitem__(self, item: slice | list[int]) -> list[np.ndarray]:
-        ...
+    def __getitem__(self, item: slice | list[int]) -> list[np.ndarray]: ...
 
     def __getitem__(
         self, item: int | slice | list[int]
@@ -414,9 +410,11 @@ class ActivationLoader:
 
     @cached_property
     def activations(self):
-        return {
-            p.name: LoadedActivation(self._dir, p.name) for p in self._dir.iterdir()
-        }
+        dirs = list(self._dir.iterdir())
+        # Sort the dirs by the last modified time
+        dirs.sort(key=lambda p: p.stat().st_mtime)
+
+        return {p.name: LoadedActivation(self._dir, p.name) for p in dirs}
 
     def __iter__(self):
         return iter(self.activations.values())

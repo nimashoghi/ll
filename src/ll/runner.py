@@ -1,5 +1,6 @@
 import copy
 import os
+import sys
 import traceback
 import uuid
 from collections import Counter
@@ -305,10 +306,6 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         if isinstance(sessions, int):
             sessions = [{} for _ in range(sessions)]
 
-        # This only works in conda environments, so we need to make sure we're in one
-        if (current_env := os.environ.get("CONDA_DEFAULT_ENV")) is None:
-            raise RuntimeError("This function only works in conda environments.")
-
         if config_pickle_save_path is None:
             config_pickle_save_path = local_data_path / "sessions"
             config_pickle_save_path.mkdir(exist_ok=True)
@@ -407,8 +404,8 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
 
             # Activate the conda environment
             f.write('eval "$(conda shell.bash hook)"\n')
-            f.write(f'echo "Activating conda environment {current_env}"\n')
-            f.write(f"conda activate {current_env}\n\n")
+            f.write(f'echo "Activating conda environment {sys.prefix}"\n')
+            f.write(f"conda activate {sys.prefix}\n\n")
 
             # Launch the sessions
             for command in commands:
