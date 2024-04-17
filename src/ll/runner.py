@@ -718,14 +718,12 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
             setup_commands.append(f"echo 'Activating conda environment {sys.prefix}'")
             setup_commands.append(f"conda activate {sys.prefix}")
 
-        job_kwargs["environment"] = {**self.env, **job_kwargs.get("environment", {})}
+        job_kwargs["environment"] = {
+            **self.env,
+            **job_kwargs.get("environment", {}),
+            **(env or {}),
+        }
         job_kwargs["setup_commands"] = setup_commands
-
-        # Set the environment
-        environment = job_kwargs.get("environment", {})
-        if env:
-            environment.update(env)
-        job_kwargs["environment"] = environment
 
         base_path = local_data_path / "submit"
         base_path.mkdir(exist_ok=True, parents=True)
