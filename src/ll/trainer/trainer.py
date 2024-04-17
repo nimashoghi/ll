@@ -47,9 +47,7 @@ def _stdio_log_dir(
         Path: The resolved output directory path.
     """
     if not (dirpath := config.dirpath):
-        dirpath = root_config.trainer.directory.resolve_subdirectory(
-            root_config.id, "stdio"
-        )
+        dirpath = root_config.directory.resolve_subdirectory(root_config.id, "stdio")
 
     dirpath = Path(dirpath).resolve()
 
@@ -366,14 +364,12 @@ class Trainer(LightningTrainer):
                 raise ValueError(
                     "You have set `config.trainer.default_root_dir`. "
                     "But we are trying to set it automatically. "
-                    "Please use `config.trainer.directory.base` rather than `config.trainer.default_root_dir`. "
+                    "Please use `config.directory.base` rather than `config.trainer.default_root_dir`. "
                     "If you want to set it manually, please set `config.trainer.auto_set_default_root_dir=False`."
                 )
 
             _update_kwargs(
-                default_root_dir=config.trainer.directory.resolve_base_directory(
-                    config.id
-                )
+                default_root_dir=config.directory.resolve_base_directory(config.id)
             )
 
         if (precision := config.trainer.precision) is not None:

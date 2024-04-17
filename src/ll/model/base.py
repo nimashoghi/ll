@@ -251,16 +251,16 @@ class LightningModuleBase(  # pyright: ignore[reportIncompatibleMethodOverride]
         hparams.environment.config = _cls_info(cls.config_cls())
         hparams.environment.model = _cls_info(cls)
         hparams.environment.slurm = _slurm_session_info()
-        hparams.environment.base_dir = hparams.trainer.directory.resolve_base_directory(
+        hparams.environment.base_dir = hparams.directory.resolve_base_directory(
             hparams.id
         )
-        hparams.environment.log_dir = hparams.trainer.directory.resolve_subdirectory(
+        hparams.environment.log_dir = hparams.directory.resolve_subdirectory(
             hparams.id, "log"
         )
-        hparams.environment.checkpoint_dir = (
-            hparams.trainer.directory.resolve_subdirectory(hparams.id, "checkpoint")
+        hparams.environment.checkpoint_dir = hparams.directory.resolve_subdirectory(
+            hparams.id, "checkpoint"
         )
-        hparams.environment.stdio_dir = hparams.trainer.directory.resolve_subdirectory(
+        hparams.environment.stdio_dir = hparams.directory.resolve_subdirectory(
             hparams.id, "stdio"
         )
         hparams.environment.seed = (

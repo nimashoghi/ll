@@ -322,7 +322,7 @@ class WandbLoggerConfig(BaseLoggerConfig):
 
         from lightning.pytorch.loggers.wandb import WandbLogger
 
-        save_dir = root_config.trainer.directory.resolve_log_directory_for_logger(
+        save_dir = root_config.directory.resolve_log_directory_for_logger(
             root_config.id,
             self,
         )
@@ -361,7 +361,7 @@ class CSVLoggerConfig(BaseLoggerConfig):
 
         from lightning.pytorch.loggers.csv_logs import CSVLogger
 
-        save_dir = root_config.trainer.directory.resolve_log_directory_for_logger(
+        save_dir = root_config.directory.resolve_log_directory_for_logger(
             root_config.id,
             self,
         )
@@ -425,7 +425,7 @@ class TensorboardLoggerConfig(BaseLoggerConfig):
 
         from lightning.pytorch.loggers.tensorboard import TensorBoardLogger
 
-        save_dir = root_config.trainer.directory.resolve_log_directory_for_logger(
+        save_dir = root_config.directory.resolve_log_directory_for_logger(
             root_config.id,
             self,
         )
@@ -712,7 +712,7 @@ class ModelCheckpointCallbackConfig(CheckpointCallbackBaseConfig):
 
     dirpath: str | Path | None = None
     """
-    Directory path to save the model file. If `None`, we save to the checkpoint directory set in `config.trainer.directory`.
+    Directory path to save the model file. If `None`, we save to the checkpoint directory set in `config.directory`.
     """
 
     filename: str | None = None
@@ -788,7 +788,7 @@ class ModelCheckpointCallbackConfig(CheckpointCallbackBaseConfig):
     def construct_callback(self, root_config):
         from lightning.pytorch.callbacks.model_checkpoint import ModelCheckpoint
 
-        dirpath = self.dirpath or root_config.trainer.directory.resolve_subdirectory(
+        dirpath = self.dirpath or root_config.directory.resolve_subdirectory(
             root_config.id, "checkpoint"
         )
 
@@ -823,7 +823,7 @@ class OnExceptionCheckpointCallbackConfig(CheckpointCallbackBaseConfig):
     def construct_callback(self, root_config):
         from ..trainer.on_exception_checkpoint import OnExceptionCheckpoint
 
-        dirpath = self.dirpath or root_config.trainer.directory.resolve_subdirectory(
+        dirpath = self.dirpath or root_config.directory.resolve_subdirectory(
             root_config.id, "checkpoint"
         )
 
@@ -1096,9 +1096,6 @@ class LightningTrainerKwargs(TypedDict, total=False):
 
 
 class TrainerConfig(TypedConfig):
-    directory: DirectoryConfig = DirectoryConfig()
-    """Directory configuration options."""
-
     checkpoint_loading: CheckpointLoadingConfig = CheckpointLoadingConfig()
     """Checkpoint loading configuration options."""
 
@@ -1320,6 +1317,9 @@ class BaseConfig(TypedConfig):
         repr=False,
     )
     """A snapshot of the current environment information (e.g. python version, slurm info, etc.). This is automatically populated by the run script."""
+
+    directory: DirectoryConfig = DirectoryConfig()
+    """Directory configuration options."""
     trainer: TrainerConfig = TrainerConfig()
     """PyTorch Lightning trainer configuration options. Check Lightning's `Trainer` documentation for more information."""
     runner: RunnerConfig = RunnerConfig()
@@ -1335,6 +1335,19 @@ class BaseConfig(TypedConfig):
         return c
 
     # region Helper methods
+    def with_base_dir_(self, base_dir: Path) -> Self:
+        """
+        Set the base directory for the trainer.
+
+        Args:
+            base_dir (Path): The base directory to use.
+
+        Returns:
+            self: The current instance of the class.
+        """
+        self.directory.base = base_dir
+        return self
+
     def debug_and_disable_logging_(self):
         """
         Enable debug mode and disable logging. Useful for debugging.
