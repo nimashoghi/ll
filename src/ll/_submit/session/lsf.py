@@ -1,10 +1,11 @@
+import os
 import re
 import subprocess
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import timedelta
 from pathlib import Path
-from typing import Any, TypedDict, Unpack, overload
+from typing import Any, TypeAlias, TypedDict, Unpack, overload
 
 from typing_extensions import TypeVarTuple
 
@@ -13,6 +14,8 @@ from ...picklerunner import serialize_many, serialize_single
 DEFAULT_JOB_NAME = "ll"
 
 TArgs = TypeVarTuple("TArgs")
+
+_Path: TypeAlias = str | Path | os.PathLike
 
 
 class LSFJobKwargs(TypedDict, total=False):
@@ -30,14 +33,14 @@ class LSFJobKwargs(TypedDict, total=False):
     This corresponds to the "-q" option in bsub. If not specified, the default queue will be used.
     """
 
-    output_file: str
+    output_file: _Path
     """
     The file to write the job output to.
 
     This corresponds to the "-o" option in bsub. If not specified, the output will be written to the default output file.
     """
 
-    error_file: str
+    error_file: _Path
     """
     The file to write the job errors to.
 
@@ -130,18 +133,28 @@ class LSFJobKwargs(TypedDict, total=False):
     """
 
 
+def _append_job_index_to_path(path: Path) -> Path:
+    # If job array, append the job index to the output file
+    # E.g., if `output_file` is "output_%J.out", we want "output_%J_%I.out"
+    stem = path.stem
+    suffix = path.suffix
+    new_stem = f"{stem}_%I"
+    new_path = path.with_name(new_stem + suffix)
+    return new_path
+
+
 def _write_batch_script_to_file(
     path: Path,
     kwargs: LSFJobKwargs,
     command: str,
-    jobarray_n_jobs: int | None = None,
+    job_array_n_jobs: int | None = None,
 ):
     with path.open("w") as f:
         f.write("#!/bin/bash\n")
 
         name = kwargs.get("name", DEFAULT_JOB_NAME)
-        if jobarray_n_jobs is not None:
-            name += "[1-" + str(jobarray_n_jobs) + "]"
+        if job_array_n_jobs is not None:
+            name += "[1-" + str(job_array_n_jobs) + "]"
         f.write(f"#BSUB -J {name}\n")
 
         if (project := kwargs.get("project")) is not None:
@@ -154,9 +167,17 @@ def _write_batch_script_to_file(
             f.write(f"#BSUB -nnodes {nodes}\n")
 
         if (output_file := kwargs.get("output_file")) is not None:
+            output_file = Path(output_file).absolute()
+            if job_array_n_jobs is not None:
+                output_file = _append_job_index_to_path(output_file)
+            output_file = str(output_file)
             f.write(f"#BSUB -o {output_file}\n")
 
         if (error_file := kwargs.get("error_file")) is not None:
+            error_file = Path(error_file).absolute()
+            if job_array_n_jobs is not None:
+                error_file = _append_job_index_to_path(error_file)
+            error_file = str(error_file)
             f.write(f"#BSUB -e {error_file}\n")
 
         f.write("\n")
@@ -169,10 +190,6 @@ def _write_batch_script_to_file(
         for setup_command in kwargs.get("setup_commands", []):
             f.write(f"{setup_command}\n")
 
-        f.write("\n")
-
-        f.write("cd $LSB_OUTDIR\n")
-        f.write("date\n")
         f.write("\n")
 
         f.write(f"{command}\n")
@@ -287,7 +304,7 @@ def to_array_batch_script(
         dest / "launch.sh",
         kwargs,
         command,
-        jobarray_n_jobs=num_jobs,
+        job_array_n_jobs=num_jobs,
     )
 
 

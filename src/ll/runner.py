@@ -705,8 +705,11 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         job_kwargs["environment"] = {**self.env, **job_kwargs.get("environment", {})}
         job_kwargs["setup_commands"] = setup_commands
 
-        base_path = local_data_path / "submit_logs"
+        base_path = local_data_path / "submit"
         base_path.mkdir(exist_ok=True, parents=True)
+
+        if job_kwargs.get("output_file") is None:
+            job_kwargs["output_file"] = base_path / "logs"
 
         # Serialize the runs
         map_array_args: list[tuple[TConfig, Unpack[TArguments]]] = list(
