@@ -335,7 +335,11 @@ class WandbLoggerConfig(BaseLoggerConfig):
             name=root_config.name,
             version=root_config.id,
             log_model=self.log_model,
-            notes=root_config.notes,
+            notes=(
+                "\n".join(f"- {note}" for note in root_config.notes)
+                if root_config.notes
+                else None
+            ),
             tags=root_config.tags,
         )
 

@@ -153,12 +153,24 @@ class LSFJobKwargs(TypedDict, total=False):
     """
 
     # Our own custom options
-    # Is this being sent to the Summit cluster?
     summit: bool
+    """
+    Whether the job is being submitted to Summit.
+
+    If set to True, the job will be submitted to Summit and the default Summit options will be used.
+    """
+
+    load_job_step_viewer: bool
+    """
+    Whether to load the job step viewer.
+
+    The job step viewer is a tool that can be used to view the job steps.
+    """
 
 
 SUMMIT_DEFAULTS: LSFJobKwargs = {
     "command_prefix": "jsrun -n6 -c7 -g1 -a1",
+    "load_job_step_viewer": True,
 }
 
 
@@ -271,6 +283,10 @@ def _write_batch_script_to_file(
                 if (x_stripped := x.strip())
             )
         f.write(f"{command}\n")
+
+        if kwargs.get("load_job_step_viewer", False):
+            f.write("\n")
+            f.write("module load job-step-viewer\n")
 
     return path
 
