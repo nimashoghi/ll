@@ -4,12 +4,15 @@ import subprocess
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import timedelta
+from logging import getLogger
 from pathlib import Path
 from typing import Any, TypedDict, overload
 
 from typing_extensions import TypeAlias, TypeVarTuple, Unpack
 
 from ...picklerunner import serialize_many, serialize_single
+
+log = getLogger(__name__)
 
 DEFAULT_JOB_NAME = "ll"
 DEFAULT_NODES = 1
@@ -409,7 +412,9 @@ class LSFSubmissionOutput:
 
 def submit_job(script_path: Path) -> LSFSubmissionOutput:
     # Submit the job using bsub
-    output = subprocess.check_output(["bsub", str(script_path)], text=True)
+    command_args = ["bsub", str(script_path)]
+    log.critical(f"Submitting job using bsub: {script_path}. Command: {command_args}")
+    output = subprocess.check_output(command_args, text=True)
 
     # Extract the job IDs from the bsub output
     job_ids = re.findall(r"Job <(\d+)> is submitted", output)
