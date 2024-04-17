@@ -5,13 +5,15 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import timedelta
 from pathlib import Path
-from typing import Any, TypedDict, overload
+from typing import Any, TypeAlias, TypedDict, overload
 
 from typing_extensions import TypeAlias, TypeVarTuple, Unpack
 
 from ...picklerunner import serialize_many, serialize_single
 
 DEFAULT_JOB_NAME = "ll"
+DEFAULT_NODES = 1
+DEFAULT_WALLTIME = timedelta(hours=72)
 
 TArgs = TypeVarTuple("TArgs")
 
@@ -160,10 +162,10 @@ def _write_batch_script_to_file(
         if (project := kwargs.get("project")) is not None:
             f.write(f"#BSUB -P {project}\n")
 
-        if (walltime := kwargs.get("walltime")) is not None:
+        if (walltime := kwargs.get("walltime", DEFAULT_WALLTIME)) is not None:
             f.write(f"#BSUB -W {walltime}\n")
 
-        if (nodes := kwargs.get("nodes")) is not None:
+        if (nodes := kwargs.get("nodes", DEFAULT_NODES)) is not None:
             f.write(f"#BSUB -nnodes {nodes}\n")
 
         if (output_file := kwargs.get("output_file")) is not None:
