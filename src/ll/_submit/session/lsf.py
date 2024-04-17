@@ -187,6 +187,13 @@ def _write_batch_script_to_file(
             f.write(f"#BSUB -P {project}\n")
 
         if (walltime := kwargs.get("walltime", DEFAULT_WALLTIME)) is not None:
+            # Convert the walltime to the format expected by LSF:
+            # -W [hour:]minute[/host_name | /host_model]
+            # E.g., 72 hours -> 72:00
+            total_minutes = walltime.total_seconds() // 60
+            hours = int(total_minutes // 60)
+            minutes = int(total_minutes % 60)
+            walltime = f"{hours:02d}:{minutes:02d}"
             f.write(f"#BSUB -W {walltime}\n")
 
         if (nodes := kwargs.get("nodes", DEFAULT_NODES)) is not None:
