@@ -1246,6 +1246,13 @@ class TrainerConfig(TypedConfig):
     """If enabled, will automatically set the default root dir to [cwd/lightning_logs/<id>/]. There is basically no reason to disable this."""
     auto_add_trainer_finalizer: bool = True
     """If enabled, will automatically finalize the trainer (e.g., call `wandb.finish()`) when the run ends. Should be `True` most of the time."""
+    apply_lsf_cluster_environment_hack: bool = True
+    """
+    If enabled, will apply a hack to fix the behavior where PyTorch Lightning does not properly handle the LSF environment.
+
+    Specifically, PyTorch Lightning expects all GPUs to be present to all resource sets (tasks), but this is not the case
+    when we use `jsrun -n6 -g1 -a1 -c7`. This hack will fix this.
+    """
 
     supports_skip_batch_exception: bool = True
     """If enabled, the model supports skipping an entire batch by throwing a `SkipBatch` exception."""

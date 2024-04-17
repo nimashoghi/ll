@@ -714,7 +714,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         if enable_conda:
             # Activate the conda environment
             setup_commands.append('eval "$(conda shell.bash hook)"')
-            setup_commands.append(f"Echo 'Activating conda environment {sys.prefix}'")
+            setup_commands.append(f"echo 'Activating conda environment {sys.prefix}'")
             setup_commands.append(f"conda activate {sys.prefix}")
 
         job_kwargs["environment"] = {**self.env, **job_kwargs.get("environment", {})}
