@@ -739,7 +739,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         ] = [(self._run, self._init_kwargs, c, args) for c, args in resolved_runs]
         script_path = lsf.to_array_batch_script(
             base_path,
-            lsf_cluster_main_function,
+            _runner_main,
             map_array_args,
             **job_kwargs,
         )
@@ -883,7 +883,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
 
 
 # First, let's create the function that's going to be run on the cluster.
-def lsf_cluster_main_function(
+def _runner_main(
     run_fn: RunProtocol[TConfig, TReturn, Unpack[TArguments]],
     runner_kwargs: Mapping[str, Any],
     config: TConfig,
