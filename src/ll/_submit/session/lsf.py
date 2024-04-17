@@ -171,6 +171,22 @@ class LSFJobKwargs(TypedDict, total=False):
     The job step viewer is a tool that can be used to view the job steps.
     """
 
+    unset_cuda_visible_devices: bool
+    """
+    Whether to unset the CUDA_VISIBLE_DEVICES environment variable.
+
+    This is a hack to fix issues with PyTorch Lightning and Summit.
+    """
+
+
+def _unset_cuda_visible_devices_setup_commands(config: LSFJobKwargs):
+    if not config.get("unset_cuda_visible_devices", True):
+        return
+
+    yield "unset CUDA_VISIBLE_DEVICES"
+    for i in range(40):
+        yield f"unset CUDA_VISIBLE_DEVICES{i}"
+
 
 def _summit_command_prefix(num_nodes: int) -> str:
     # The n flag is the total number of resource sets requested
@@ -178,6 +194,14 @@ def _summit_command_prefix(num_nodes: int) -> str:
     n = 6 * num_nodes
     # The r flag is the number of resource sets requested on each node.
     r = 6
+
+    # Regarding the -D CUDA_VISIBLE_DEVICES flag:
+    # PyTorch Lightning expects all GPUs to be present to all resource sets (tasks), but this is not the case
+    #   when we use `jsrun -n6 -g1 -a1 -c7`. This is because `jsrun` automatically sets the `CUDA_VISIBLE_DEVICES`
+    #   environment variable to the local rank of the task. PyTorch Lightning does not expect this and will fail
+    #   with an error message like `RuntimeError: CUDA error: invalid device ordinal`. This hack will fix this by
+    #   unsetting the `CUDA_VISIBLE_DEVICES` environment variable, so that PyTorch Lightning can see all GPUs.
+    #   This is a hack and should be removed once PyTorch Lightning supports this natively.
     return f"jsrun -D CUDA_VISIBLE_DEVICES -n{n} -r{r} -c7 -g1 -a1 -brs"
 
 
@@ -284,7 +308,10 @@ def _write_batch_script_to_file(
 
         f.write("\n")
 
-        for setup_command in kwargs.get("setup_commands", []):
+        setup_commands: list[str] = []
+        setup_commands.extend(kwargs.get("setup_commands", []))
+        setup_commands.extend(_unset_cuda_visible_devices_setup_commands(kwargs))
+        for setup_command in setup_commands:
             f.write(f"{setup_command}\n")
 
         if kwargs.get("load_job_step_viewer", False):
