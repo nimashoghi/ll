@@ -12,15 +12,12 @@ from typing import IO, Any, Generic, cast
 
 import psutil
 import torch
-import torch.nn as nn
 from lightning.fabric.utilities.types import _MAP_LOCATION_TYPE, _PATH
 from lightning.pytorch import LightningDataModule, LightningModule, Trainer
 from lightning.pytorch.callbacks import Callback
-from typing_extensions import Self, TypeVar, deprecated, override
+from typing_extensions import Self, TypeVar, override
 
 from .. import actsave
-from ..nn.mlp import MLP
-from ..trainer import Trainer as LLTrainer
 from ..util import log_batch_info, skip_batch
 from .config import (
     BaseConfig,
@@ -49,51 +46,6 @@ THparams = TypeVar("THparams", bound=BaseConfig, infer_variance=True)
 
 
 class Base(DebugModuleMixin, Generic[THparams]):
-    @torch.jit.unused
-    @deprecated("Use ll.nn.MLP instead")
-    def mlp(
-        self,
-        dims: list[int],
-        *,
-        activation: Callable[[], nn.Module],
-        bias: bool = True,
-        no_bias_scalar: bool = True,
-        ln: bool | str = False,
-        dropout: float | None = None,
-        residual: bool = False,
-        pre_layers: list[nn.Module] = [],
-        post_layers: list[nn.Module] = [],
-    ) -> nn.Sequential:
-        """
-        Constructs a multi-layer perceptron (MLP) with the given dimensions and activation function.
-
-        Args:
-            dims (list[int]): List of integers representing the dimensions of the MLP.
-            activation (Callable[[], nn.Module]): Activation function to use between layers.
-            bias (bool, optional): Whether to include bias terms in the linear layers. Defaults to True.
-            no_bias_scalar (bool, optional): Whether to exclude bias terms when the output dimension is 1. Defaults to True.
-            ln (bool | str, optional): Whether to apply layer normalization before or after the linear layers. Defaults to False.
-            dropout (float | None, optional): Dropout probability to apply between layers. Defaults to None.
-            residual (bool, optional): Whether to use residual connections between layers. Defaults to False.
-            pre_layers (list[nn.Module], optional): List of layers to insert before the linear layers. Defaults to [].
-            post_layers (list[nn.Module], optional): List of layers to insert after the linear layers. Defaults to [].
-
-        Returns:
-            nn.Sequential: The constructed MLP.
-        """
-
-        return MLP(
-            dims,
-            activation=activation,
-            bias=bias,
-            no_bias_scalar=no_bias_scalar,
-            ln=ln,
-            dropout=dropout,
-            residual=residual,
-            pre_layers=pre_layers,
-            post_layers=post_layers,
-        )
-
     @torch.jit.unused
     @property
     def config(self) -> THparams:
@@ -298,11 +250,10 @@ class LightningModuleBase(
         hparams.environment.config = _cls_info(cls.config_cls())
         hparams.environment.model = _cls_info(cls)
         hparams.environment.slurm = _slurm_session_info()
-        hparams.environment.base_dir = hparams.trainer.base_directory_or_cwd
-        hparams.environment.log_dir = Path(
-            hparams.trainer.default_root_dir
-            or LLTrainer.ll_default_root_dir(hparams).absolute()
+        hparams.environment.base_dir = (
+            hparams.trainer.directory.resolve_base_directory()
         )
+        hparams.environment.log_dir = hparams.trainer.directory.resolve_log_directory()
         hparams.environment.seed = (
             int(seed_str) if (seed_str := os.environ.get("PL_GLOBAL_SEED")) else None
         )

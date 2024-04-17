@@ -1,8 +1,10 @@
 import contextlib
+import datetime
 import hashlib
 import logging
+import os
 from collections import abc
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from types import NoneType
 from typing import Any
@@ -12,7 +14,6 @@ from lightning.pytorch import LightningDataModule, LightningModule
 from lightning.pytorch import Trainer as LightningTrainer
 from lightning.pytorch.callbacks import (
     ModelCheckpoint,
-    OnExceptionCheckpoint,
     RichProgressBar,
 )
 from lightning.pytorch.plugins.environments import SLURMEnvironment
@@ -23,24 +24,21 @@ from typing_extensions import override
 from ..model.config import (
     BaseConfig,
     BaseProfilerConfig,
-    CheckpointConfig,
-    PythonLogging,
+    CheckpointLoadingConfig,
     RunnerOutputSaveConfig,
 )
 from ..util import seed
 from ..util.environment import set_additional_env_vars
 from ..util.typing_utils import copy_method_with_param
-from .logging import (
-    default_root_dir,
-    finalize_loggers,
-    loggers_from_config,
-    validate_logger,
-)
+from .logging import finalize_loggers
 
 log = logging.getLogger(__name__)
 
 
-def _save_output_dir(root_config: BaseConfig, config: RunnerOutputSaveConfig):
+def _stdio_log_dir(
+    root_config: BaseConfig,
+    config: RunnerOutputSaveConfig,
+):
     """
     Save the output directory for the runner.
 
@@ -52,7 +50,10 @@ def _save_output_dir(root_config: BaseConfig, config: RunnerOutputSaveConfig):
         Path: The resolved output directory path.
     """
     if not (dirpath := config.dirpath):
-        dirpath = default_root_dir(root_config, logs_dirname="ll_runner_logs")
+        dirpath = root_config.trainer.directory.resolve_subdirectory(
+            root_config.id, "stdio"
+        )
+
     dirpath = Path(dirpath).resolve()
 
     # Make sure that the directory exists
@@ -77,64 +78,12 @@ def _default_log_handlers(root_config: BaseConfig):
         return
 
     # Get the directory path
-    dirpath = _save_output_dir(root_config, config)
+    dirpath = _stdio_log_dir(root_config, config)
 
     # Capture the logs to `dirpath`/log.log
     log_file = dirpath / "log.log"
     log_file.touch(exist_ok=True)
     yield logging.FileHandler(log_file)
-
-
-def _setup_logger(root_config: BaseConfig, config: PythonLogging):
-    """
-    Sets up the logger with the specified configurations.
-
-    Args:
-        root_config (BaseConfig): The root configuration object.
-        config (PythonLogging): The Python logging configuration object.
-
-    Returns:
-        None
-    """
-    if config.lovely_tensors:
-        try:
-            import lovely_tensors
-
-            lovely_tensors.monkey_patch()
-        except ImportError:
-            log.warning(
-                "Failed to import lovely-tensors. Ignoring pretty PyTorch tensor formatting"
-            )
-
-    if config.lovely_numpy:
-        try:
-            import lovely_numpy
-
-            lovely_numpy.set_config(repr=lovely_numpy.lovely)
-        except ImportError:
-            log.warning(
-                "Failed to import lovely-numpy. Ignoring pretty numpy array formatting"
-            )
-
-    log_handlers: list[logging.Handler] = [*_default_log_handlers(root_config)]
-    if config.rich:
-        try:
-            from rich.logging import RichHandler  # type: ignore
-
-            log_handlers.append(RichHandler())
-        except ImportError:
-            log.warning(
-                "Failed to import rich. Falling back to default Python logging."
-            )
-
-    logging.basicConfig(
-        level=config.log_level,
-        format="%(message)s",
-        datefmt="[%X]",
-        handlers=log_handlers,
-    )
-
-    logging.basicConfig(level=config.log_level)
 
 
 class Trainer(LightningTrainer):
@@ -146,15 +95,57 @@ class Trainer(LightningTrainer):
         """
         finalize_loggers(self.loggers)
 
-    @staticmethod
-    def ll_default_root_dir(
-        config: BaseConfig, *, logs_dirname: str = "lightning_logs"
-    ):
-        return default_root_dir(config, logs_dirname=logs_dirname)
-
     @classmethod
-    def setup_python_logging(cls, config: BaseConfig):
-        _setup_logger(config, config.trainer.python_logging)
+    def setup_python_logging(cls, root_config: BaseConfig):
+        """
+        Sets up the logger with the specified configurations.
+
+        Args:
+            root_config (BaseConfig): The root configuration object.
+            config (PythonLogging): The Python logging configuration object.
+
+        Returns:
+            None
+        """
+        config = root_config.trainer.python_logging
+
+        if config.lovely_tensors:
+            try:
+                import lovely_tensors
+
+                lovely_tensors.monkey_patch()
+            except ImportError:
+                log.warning(
+                    "Failed to import lovely-tensors. Ignoring pretty PyTorch tensor formatting"
+                )
+
+        if config.lovely_numpy:
+            try:
+                import lovely_numpy
+
+                lovely_numpy.set_config(repr=lovely_numpy.lovely)
+            except ImportError:
+                log.warning(
+                    "Failed to import lovely-numpy. Ignoring pretty numpy array formatting"
+                )
+
+        log_handlers: list[logging.Handler] = [*_default_log_handlers(root_config)]
+        if config.rich:
+            try:
+                from rich.logging import RichHandler  # type: ignore
+
+                log_handlers.append(RichHandler())
+            except ImportError:
+                log.warning(
+                    "Failed to import rich. Falling back to default Python logging."
+                )
+
+        logging.basicConfig(
+            level=config.log_level,
+            format="%(message)s",
+            datefmt="[%X]",
+            handlers=log_handlers,
+        )
 
     @classmethod
     @contextlib.contextmanager
@@ -177,7 +168,7 @@ class Trainer(LightningTrainer):
             return
 
         # Get the directory path
-        dirpath = _save_output_dir(root_config, config)
+        dirpath = _stdio_log_dir(root_config, config)
 
         # Capture the stdout and stderr logs to `dirpath`/stdout.log and `dirpath`/stderr.log
         stdout_log = dirpath / "stdout.log"
@@ -213,16 +204,19 @@ class Trainer(LightningTrainer):
             if not config.runner.auto_call_trainer_init_from_runner:
                 stack.enter_context(cls.runner_init(config))
 
+            # Set the default root directory
             if config.trainer.auto_set_default_root_dir:
                 if config.trainer.default_root_dir:
                     raise ValueError(
-                        "You have set both `config.trainer.default_root_dir` and `config.trainer.auto_set_default_root_dir`. "
-                        "Please set only one of them."
+                        "You have set `config.trainer.default_root_dir`. "
+                        "But we are trying to set it automatically. "
+                        "Please use `config.trainer.directory.base` rather than `config.trainer.default_root_dir`. "
+                        "If you want to set it manually, please set `config.trainer.auto_set_default_root_dir=False`."
                     )
-                config.trainer.default_root_dir = cls.ll_default_root_dir(
-                    config
-                ).absolute()
-                log.critical(f"Setting {config.trainer.default_root_dir=}.")
+                config.trainer.default_root_dir = (
+                    config.trainer.directory.resolve_base_directory(config.id)
+                )
+                log.info(f"Setting {config.trainer.default_root_dir=}.")
 
             yield
 
@@ -232,6 +226,8 @@ class Trainer(LightningTrainer):
         """
         Context manager for initializing the runner.
 
+        Used to set up the Python logging and save the stdout/stderr to a file.
+
         Args:
             config (BaseConfig): The configuration object.
 
@@ -240,7 +236,9 @@ class Trainer(LightningTrainer):
 
         """
         with contextlib.ExitStack() as stack:
+            # Set up the Python logging
             cls.setup_python_logging(config)
+
             # Save stdout/stderr to a file.
             stack.enter_context(Trainer.output_save_context(config))
             yield
@@ -257,13 +255,13 @@ class Trainer(LightningTrainer):
             Callback: The default callbacks for the LL trainer.
         """
         if config.trainer.on_exception_checkpoint:
-            if config.trainer.default_root_dir is None:
-                raise ValueError(
-                    "You must specify `config.trainer.default_root_dir` "
-                    "to use `config.trainer.on_exception_checkpoint`."
-                )
-            log_dir = Path(config.trainer.default_root_dir)
-            yield OnExceptionCheckpoint(log_dir, filename=f"on_exception_{config.id}")
+            log_dir = Path(
+                config.trainer.directory.resolve_subdirectory(config.id, "checkpoint")
+            )
+            yield OnExceptionCheckpoint(
+                log_dir,
+                filename=f"on_exception_{config.id}",
+            )
 
         if config.trainer.python_logging.use_rich_progress_bar:
             yield RichProgressBar()
@@ -275,10 +273,13 @@ class Trainer(LightningTrainer):
             stack.enter_context(cls.ll_initialize(config))
 
             cls._finalizers.clear()
-            if config.trainer.seed is not None:
+            if (
+                seed_config := config.trainer.reproducibility.seed_everything
+            ) is not None:
                 stack.enter_context(
                     seed.seed_context(
-                        config.trainer.seed, workers=config.trainer.seed_workers
+                        seed_config.seed,
+                        workers=seed_config.seed_workers,
                     )
                 )
 
@@ -321,7 +322,7 @@ class Trainer(LightningTrainer):
             "devices": config.trainer.devices,
             "num_nodes": config.trainer.num_nodes,
             "precision": config.trainer.precision,
-            "logger": config.trainer.experiment_tracking.enabled,
+            "logger": config.trainer.logging.enabled,
             "fast_dev_run": config.trainer.fast_dev_run,
             "max_epochs": config.trainer.max_epochs,
             "min_epochs": config.trainer.min_epochs,
@@ -341,7 +342,7 @@ class Trainer(LightningTrainer):
             "enable_progress_bar": config.trainer.enable_progress_bar,
             "enable_model_summary": config.trainer.enable_model_summary,
             "accumulate_grad_batches": config.trainer.accumulate_grad_batches,
-            "deterministic": config.trainer.deterministic,
+            "deterministic": config.trainer.reproducibility.deterministic,
             "benchmark": config.trainer.benchmark,
             "inference_mode": config.trainer.inference_mode,
             "use_distributed_sampler": config.trainer.use_distributed_sampler,
@@ -393,11 +394,11 @@ class Trainer(LightningTrainer):
             if int(config.trainer.fast_dev_run) > 0:
                 log.critical("Disabling loggers because fast_dev_run is enabled.")
             else:
-                loggers = loggers_from_config(config)
+                loggers = config.trainer.logging.construct_loggers(config)
                 if existing_loggers is not None and not isinstance(
                     existing_loggers, bool
                 ):
-                    if not isinstance(existing_loggers, list):
+                    if not isinstance(existing_loggers, Sequence):
                         existing_loggers = [existing_loggers]
                     loggers.extend(existing_loggers)
 
@@ -448,10 +449,6 @@ class Trainer(LightningTrainer):
         kwargs = self._update_kwargs(config, kwargs)
         log.critical(f"LightningTrainer.__init__ with {args=} and {kwargs=}.")
         super().__init__(*args, **kwargs)
-
-        if config.trainer.enable_logger_validation:
-            for logger in self.loggers:
-                validate_logger(logger, config.id)
 
         if config.trainer.checkpoint_last_by_default:
             self._patch_checkpoint_last_by_default()
@@ -532,7 +529,7 @@ class Trainer(LightningTrainer):
     def _resolve_ckpt_path_get_valid_path(
         self,
         ckpt_path: str | Path | None,
-        config: CheckpointConfig,
+        config: CheckpointLoadingConfig,
     ):
         if ckpt_path is not None:
             return ckpt_path
@@ -543,7 +540,7 @@ class Trainer(LightningTrainer):
         return None
 
     def _resolve_ckpt_path(self, ckpt_path: str | Path | None):
-        config = self._ll_config.trainer.checkpoint
+        config = self._ll_config.trainer.checkpoint_loading
 
         # First, let's just try to get a non-None path.
         ckpt_path = self._resolve_ckpt_path_get_valid_path(ckpt_path, config)

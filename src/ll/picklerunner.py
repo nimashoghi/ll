@@ -153,6 +153,9 @@ def picklerunner_main():
     if not paths:
         raise ValueError("No paths provided")
 
+    # Sort by the job index.
+    paths = sorted(paths, key=lambda path: int(path.stem))
+
     # Make sure all paths exist
     for path in paths:
         if not path.exists():

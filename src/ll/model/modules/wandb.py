@@ -23,8 +23,8 @@ class WandbWrapperMixin(mixin_base_type(CallbackModuleMixin)):
 
             config = cast(BaseConfig, self.hparams)
             if (
-                not config.trainer.experiment_tracking.enabled
-                or (wandb_config := config.trainer.experiment_tracking.wandb) is None
+                not config.trainer.logging.enabled
+                or (wandb_config := config.trainer.logging.wandb) is None
                 or not wandb_config.watch
                 or not wandb_config.watch.enabled
             ):

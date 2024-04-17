@@ -18,7 +18,7 @@ def _log_epoch_callback(module: LightningModule, trainer: Trainer, *, prefix: st
     if trainer.logger is None:
         return
 
-    config = cast(BaseConfig, module.hparams).trainer.experiment_tracking
+    config = cast(BaseConfig, module.hparams).trainer.logging
     if not config.log_epoch:
         return
 

@@ -20,6 +20,8 @@ from typing import (
 import numpy as np
 from lightning.fabric.plugins import CheckpointIO, ClusterEnvironment
 from lightning.fabric.plugins.precision.precision import _PRECISION_INPUT
+from lightning.pytorch.callbacks.checkpoint import Checkpoint
+from lightning.pytorch.loggers import Logger
 from lightning.pytorch.plugins.layer_sync import LayerSync
 from lightning.pytorch.plugins.precision.precision import Precision
 from lightning.pytorch.profilers import Profiler
@@ -249,11 +251,38 @@ class BaseLoggerConfig(TypedConfig, ABC):
     log_dir: DirectoryPath | None = None
     """Directory to save the logs to. If None, will use the default log directory for the trainer."""
 
+    @abstractmethod
+    def construct_logger(self, root_config: "BaseConfig") -> Logger | None: ...
+
+
+def _project_name(
+    root_config: "BaseConfig",
+    default_project: str = "lightning_logs",
+):
+    # If the config has a project name, use that.
+    if project := root_config.project:
+        return project
+
+    # Otherwise, we should use the name of the module that the config is defined in,
+    #   if we can find it.
+    # If this isn't in a module, use the default project name.
+    if not (module := root_config.__module__):
+        return default_project
+
+    # If the module is a package, use the package name.
+    if not (module := module.split(".", maxsplit=1)[0].strip()):
+        return default_project
+
+    return module
+
 
 class WandbLoggerConfig(BaseLoggerConfig):
     kind: Literal["wandb"] = "wandb"
 
-    log_model: bool | str = False
+    project: str | None = None
+    """WandB project name to use for the logger. If None, will use the root config's project name."""
+
+    log_model: bool | Literal["all"] = False
     """
     Whether to log the model checkpoints to wandb.
     Valid values are:
@@ -268,25 +297,172 @@ class WandbLoggerConfig(BaseLoggerConfig):
     priority: int = 2
     """Priority of the logger. Higher values are logged first."""
 
+    @override
+    def construct_logger(self, root_config):
+        if not self.enabled:
+            return None
+
+        from lightning.pytorch.loggers.wandb import WandbLogger
+
+        save_dir = root_config.trainer.directory.resolve_log_directory_for_logger(
+            root_config.id,
+            self,
+        )
+        save_dir = save_dir / "wandb"
+        save_dir.mkdir(parents=True, exist_ok=True)
+        return WandbLogger(
+            save_dir=save_dir,
+            project=self.project or _project_name(root_config),
+            name=root_config.name,
+            version=root_config.id,
+            log_model=self.log_model,
+            notes=root_config.notes,
+            tags=root_config.tags,
+        )
+
 
 class CSVLoggerConfig(BaseLoggerConfig):
     kind: Literal["csv"] = "csv"
 
+    prefix: str = ""
+    """A string to put at the beginning of metric keys."""
+
+    flush_logs_every_n_steps: int = 100
+    """How often to flush logs to disk."""
+
     priority: int = 0
     """Priority of the logger. Higher values are logged first."""
+
+    @override
+    def construct_logger(self, root_config):
+        if not self.enabled:
+            return None
+
+        from lightning.pytorch.loggers.csv_logs import CSVLogger
+
+        save_dir = root_config.trainer.directory.resolve_log_directory_for_logger(
+            root_config.id,
+            self,
+        )
+        save_dir = save_dir / "csv"
+        save_dir.mkdir(parents=True, exist_ok=True)
+        return CSVLogger(
+            save_dir=save_dir,
+            name=root_config.name or root_config.id,
+            version=root_config.id,
+            prefix=self.prefix,
+            flush_logs_every_n_steps=self.flush_logs_every_n_steps,
+        )
 
 
 class TensorboardLoggerConfig(BaseLoggerConfig):
     kind: Literal["tensorboard"] = "tensorboard"
 
+    log_graph: bool = False
+    """
+    Adds the computational graph to tensorboard. This requires that
+        the user has defined the `self.example_input_array` attribute in their
+        model.
+    """
+
+    default_hp_metric: bool = True
+    """
+    Enables a placeholder metric with key `hp_metric` when `log_hyperparams` is
+        called without a metric (otherwise calls to log_hyperparams without a metric are ignored).
+    """
+
+    prefix: str = ""
+    """A string to put at the beginning of metric keys."""
+
     priority: int = 2
     """Priority of the logger. Higher values are logged first."""
+
+    @override
+    def construct_logger(self, root_config):
+        if not self.enabled:
+            return None
+
+        from lightning.pytorch.loggers.tensorboard import TensorBoardLogger
+
+        save_dir = root_config.trainer.directory.resolve_log_directory_for_logger(
+            root_config.id,
+            self,
+        )
+        save_dir = save_dir / "tensorboard"
+        save_dir.mkdir(parents=True, exist_ok=True)
+        return TensorBoardLogger(
+            save_dir=save_dir,
+            name=root_config.name or root_config.id,
+            version=root_config.id,
+            log_graph=self.log_graph,
+            default_hp_metric=self.default_hp_metric,
+        )
 
 
 LoggerConfig: TypeAlias = Annotated[
     WandbLoggerConfig | CSVLoggerConfig | TensorboardLoggerConfig,
     Field(discriminator="kind"),
 ]
+
+
+class LoggingConfig(TypedConfig):
+    enabled: bool = True
+    """Enable experiment tracking."""
+
+    loggers: Sequence[LoggerConfig] = [
+        WandbLoggerConfig(enabled=True),
+        CSVLoggerConfig(enabled=True),
+        TensorboardLoggerConfig(enabled=True),
+    ]
+    """Loggers to use for experiment tracking."""
+
+    log_lr: bool | Literal["step", "epoch"] = True
+    """If enabled, will register a `LearningRateMonitor` callback to log the learning rate to the logger."""
+    log_epoch: bool = True
+    """If enabled, will log the fractional epoch number to the logger."""
+
+    @property
+    def wandb(self) -> WandbLoggerConfig | None:
+        return next(
+            (
+                logger
+                for logger in self.loggers
+                if isinstance(logger, WandbLoggerConfig)
+            ),
+        )
+
+    @property
+    def csv(self) -> CSVLoggerConfig | None:
+        return next(
+            (logger for logger in self.loggers if isinstance(logger, CSVLoggerConfig)),
+        )
+
+    @property
+    def tensorboard(self) -> TensorboardLoggerConfig | None:
+        return next(
+            (
+                logger
+                for logger in self.loggers
+                if isinstance(logger, TensorboardLoggerConfig)
+            ),
+        )
+
+    def construct_loggers(self, root_config: "BaseConfig"):
+        """
+        Constructs and returns a list of loggers based on the provided root configuration.
+
+        Args:
+            root_config (BaseConfig): The root configuration object.
+
+        Returns:
+            list[Logger]: A list of constructed loggers.
+        """
+        loggers: list[Logger] = []
+        for logger_config in self.loggers:
+            if (logger := logger_config.construct_logger(root_config)) is None:
+                continue
+            loggers.append(logger)
+        return loggers
 
 
 class GradientClippingConfig(TypedConfig):
@@ -367,7 +543,7 @@ class PluginConfigProtocol(Protocol[TPlugin]):
     def construct_plugin(self) -> TPlugin: ...
 
 
-class CheckpointConfig(TypedConfig):
+class CheckpointLoadingConfig(TypedConfig):
     path: Literal["best", "last", "hpc"] | str | Path | None = None
     """
     Checkpoint path to use when loading a checkpoint.
@@ -377,6 +553,7 @@ class CheckpointConfig(TypedConfig):
     - "hpc" will load the SLURM pre-empted checkpoint.
     - Any other string or Path will load the checkpoint from the specified path.
     """
+
     load_on_init_only: bool = True
     """
     If enabled, will only load the checkpoint on the first call to the Trainer. For subsequent calls (e.g., when resuming training due to a pre-emption), the checkpoint will not be loaded.
@@ -385,95 +562,268 @@ class CheckpointConfig(TypedConfig):
     """
 
 
-class ExperimentTrackingConfig(TypedConfig):
-    enabled: bool = True
-    """Enable experiment tracking."""
-
-    loggers: Sequence[LoggerConfig] = [
-        WandbLoggerConfig(enabled=True),
-        CSVLoggerConfig(enabled=True),
-        TensorboardLoggerConfig(enabled=True),
-    ]
-    """Loggers to use for experiment tracking."""
-
-    log_lr: bool | Literal["step", "epoch"] = True
-    """If enabled, will register a `LearningRateMonitor` callback to log the learning rate to the logger."""
-    log_epoch: bool = True
-    """If enabled, will log the fractional epoch number to the logger."""
-
-    @property
-    def wandb(self) -> WandbLoggerConfig | None:
-        return next(
-            (
-                logger
-                for logger in self.loggers
-                if isinstance(logger, WandbLoggerConfig)
-            ),
-        )
-
-    @property
-    def csv(self) -> CSVLoggerConfig | None:
-        return next(
-            (logger for logger in self.loggers if isinstance(logger, CSVLoggerConfig)),
-        )
-
-    @property
-    def tensorboard(self) -> TensorboardLoggerConfig | None:
-        return next(
-            (
-                logger
-                for logger in self.loggers
-                if isinstance(logger, TensorboardLoggerConfig)
-            ),
-        )
-
-
 class DirectoryConfig(TypedConfig):
-    base: DirectoryPath | None = None
-    """Base directory to use for the trainer. If None, will use the current working directory."""
+    base: Path | None = None
+    """Base directory to use for the trainer. If None, will use {current working directory}/.llruns/{run_id}/."""
 
-    log: DirectoryPath | None = None
-    """Log directory to use for the trainer. If None, will use the base directory."""
+    log: Path | None = None
+    """Base directory for all experiment tracking (e.g., WandB, Tensorboard, etc.) files. If None, will use .llruns/{id}/experiments/."""
 
-    checkpoint: DirectoryPath | None = None
-    """Checkpoint directory to use for the trainer. If None, will use the base directory."""
+    stdio: Path | None = None
+    """stdout/stderr log directory to use for the trainer. If None, will use .llruns/{id}/log/."""
 
-    def resolve_base_directory(self) -> Path:
-        if self.base is None:
-            return Path.cwd()
-        return self.base
+    checkpoint: Path | None = None
+    """Checkpoint directory to use for the trainer. If None, will use .llruns/{id}/checkpoint/."""
 
-    def resolve_log_directory(self) -> Path:
-        if self.log is None:
-            return self.resolve_base_directory()
-        return self.log
+    def resolve_base_directory(self, run_id: str) -> Path:
+        if (base := self.base) is None:
+            base = Path.cwd()
 
-    def resolve_checkpoint_directory(self) -> Path:
-        if self.checkpoint is None:
-            return self.resolve_base_directory()
-        return self.checkpoint
+        # The default base dir is $CWD/.llruns/{id}/
+        llruns_dir = base / ".llruns"
+        llruns_dir.mkdir(exist_ok=True)
 
-    def resolve_log_directory_for_logger(self, logger: BaseLoggerConfig) -> Path:
+        # Add a .gitignore file to the .llruns directory
+        #   which will ignore all files except for the .gitignore file itself
+        gitignore_path = llruns_dir / ".gitignore"
+        if gitignore_path.exists():
+            gitignore_path.unlink()
+        gitignore_path.touch()
+        gitignore_path.write_text("*\n!.gitignore\n")
+
+        base_dir = llruns_dir / run_id
+        base_dir.mkdir(exist_ok=True)
+
+        return base_dir
+
+    def resolve_subdirectory(
+        self,
+        run_id: str,
+        subdirectory: Literal["log", "stdio", "checkpoint"],
+    ) -> Path:
+        # The subdir will be $CWD/.llruns/{id}/{experiment,checkpoint,log}
+        if (subdir := getattr(self, subdirectory)) is not None:
+            assert isinstance(
+                subdir, Path
+            ), f"Expected a Path for {subdirectory}, got {type(subdir)}"
+            return subdir
+
+        dir = self.resolve_base_directory(run_id)
+        dir = dir / subdirectory
+        dir.mkdir(exist_ok=True)
+        return dir
+
+    def resolve_log_directory_for_logger(
+        self,
+        run_id: str,
+        logger: LoggerConfig,
+    ) -> Path:
         if (log_dir := logger.log_dir) is not None:
             return log_dir
-        return self.resolve_log_directory()
+
+        # Save to .llruns/{id}/log/{logger kind}/{id}/
+        log_dir = self.resolve_subdirectory(run_id, "log")
+        log_dir = log_dir / logger.kind
+
+        return log_dir
+
+
+class SeedEverythingConfig(TypedConfig):
+    seed: int | None = 0
+    """Seed for the random number generator. If None, will use a random seed."""
+
+    seed_workers: bool = False
+    """Whether to seed the workers of the dataloader."""
+
+
+class ReproducibilityConfig(TypedConfig):
+    seed_everything: SeedEverythingConfig | None = None
+    """Seed everything configuration options."""
+
+    deterministic: bool | str | None = None
+    """
+    If ``True``, sets whether PyTorch operations must use deterministic algorithms.
+        Set to ``"warn"`` to use deterministic algorithms whenever possible, throwing warnings on operations
+        that don't support deterministic mode. If not set, defaults to ``False``. Default: ``None``.
+    """
+
+
+class CheckpointCallbackBaseConfig(TypedConfig, ABC):
+    enabled: bool = True
+
+    @abstractmethod
+    def construct_callback(self, root_config: "BaseConfig") -> Checkpoint: ...
+
+
+class ModelCheckpointCallbackConfig(CheckpointCallbackBaseConfig):
+    """Arguments for the ModelCheckpoint callback."""
+
+    kind: Literal["model_checkpoint"] = "model_checkpoint"
+
+    dirpath: str | Path | None = None
+    """
+    Directory path to save the model file. If `None`, we save to the checkpoint directory set in `config.trainer.directory`.
+    """
+
+    filename: str | None = None
+    """
+    Checkpoint filename.
+        If None, a default template is used (see :attr:`ModelCheckpoint.CHECKPOINT_JOIN_CHAR`).
+    """
+
+    monitor: str | None = None
+    """
+    Quantity to monitor for saving checkpoints.
+        If None, no metric is monitored and checkpoints are saved at the end of every epoch.
+    """
+
+    verbose: bool = False
+    """Verbosity mode. If True, print additional information about checkpoints."""
+
+    save_last: Literal[True, False, "link"] | None = None
+    """
+    Whether to save the last checkpoint.
+        If True, saves a copy of the last checkpoint separately.
+        If "link", creates a symbolic link to the last checkpoint.
+    """
+
+    save_top_k: int = 1
+    """
+    Number of best models to save.
+        If -1, all models are saved.
+        If 0, no models are saved.
+    """
+
+    save_weights_only: bool = False
+    """Whether to save only the model's weights or the entire model object."""
+
+    mode: str = "min"
+    """
+    One of "min" or "max".
+        If "min", training will stop when the metric monitored has stopped decreasing.
+        If "max", training will stop when the metric monitored has stopped increasing.
+    """
+
+    auto_insert_metric_name: bool = True
+    """Whether to automatically insert the metric name in the checkpoint filename."""
+
+    every_n_train_steps: int | None = None
+    """
+    Number of training steps between checkpoints.
+        If None or 0, no checkpoints are saved during training.
+    """
+
+    train_time_interval: timedelta | None = None
+    """
+    Time interval between checkpoints during training.
+        If None, no checkpoints are saved during training based on time.
+    """
+
+    every_n_epochs: int | None = None
+    """
+    Number of epochs between checkpoints.
+        If None or 0, no checkpoints are saved at the end of epochs.
+    """
+
+    save_on_train_epoch_end: bool | None = None
+    """
+    Whether to run checkpointing at the end of the training epoch.
+        If False, checkpointing runs at the end of the validation.
+    """
+
+    enable_version_counter: bool = True
+    """Whether to append a version to the existing file name."""
+
+    @override
+    def construct_callback(self, root_config):
+        from lightning.pytorch.callbacks.model_checkpoint import ModelCheckpoint
+
+        dirpath = self.dirpath or root_config.trainer.directory.resolve_subdirectory(
+            root_config.id, "checkpoint"
+        )
+
+        return ModelCheckpoint(
+            dirpath=dirpath,
+            filename=self.filename,
+            monitor=self.monitor,
+            verbose=self.verbose,
+            save_last=self.save_last,
+            save_top_k=self.save_top_k,
+            save_weights_only=self.save_weights_only,
+            mode=self.mode,
+            auto_insert_metric_name=self.auto_insert_metric_name,
+            every_n_train_steps=self.every_n_train_steps,
+            train_time_interval=self.train_time_interval,
+            every_n_epochs=self.every_n_epochs,
+            save_on_train_epoch_end=self.save_on_train_epoch_end,
+            enable_version_counter=self.enable_version_counter,
+        )
+
+
+class OnExceptionCheckpointCallbackConfig(CheckpointCallbackBaseConfig):
+    kind: Literal["on_exception_checkpoint"] = "on_exception_checkpoint"
+
+    dirpath: str | Path | None = None
+    """Directory path to save the checkpoint file."""
+
+    filename: str | None = None
+    """Checkpoint filename. This must not include the extension. If `None`, `on_exception_{id}_{timestamp}` is used."""
+
+    @override
+    def construct_callback(self, root_config):
+        from ..trainer.on_exception_checkpoint import OnExceptionCheckpoint
+
+        dirpath = self.dirpath or root_config.trainer.directory.resolve_subdirectory(
+            root_config.id, "checkpoint"
+        )
+
+        if not (filename := self.filename):
+            filename = f"on_exception_{root_config.id}"
+        return OnExceptionCheckpoint(dirpath=dirpath, filename=filename)
+
+
+CheckpointCallbackConfig: TypeAlias = Annotated[
+    ModelCheckpointCallbackConfig | OnExceptionCheckpointCallbackConfig,
+    Field(discriminator="kind"),
+]
+
+
+class CheckpointSavingConfig(TypedConfig):
+    checkpoint_callbacks: Sequence[CheckpointCallbackConfig] = [
+        ModelCheckpointCallbackConfig(enabled=True),
+        OnExceptionCheckpointCallbackConfig(enabled=True),
+    ]
+
+    def construct_callbacks(self, root_config):
+        callbacks: list[Checkpoint] = []
+        for callback_config in self.checkpoint_callbacks:
+            if not callback_config.enabled:
+                continue
+            callbacks.append(callback_config.construct_callback(root_config))
+        return callbacks
 
 
 class TrainerConfig(TypedConfig):
     directory: DirectoryConfig = DirectoryConfig()
     """Directory configuration options."""
 
-    checkpoint: CheckpointConfig = CheckpointConfig()
+    checkpoint_loading: CheckpointLoadingConfig = CheckpointLoadingConfig()
     """Checkpoint loading configuration options."""
+
+    checkpoint_saving: CheckpointSavingConfig = CheckpointSavingConfig()
+    """Checkpoint saving configuration options."""
 
     python_logging: PythonLogging = PythonLogging()
     """Python logging configuration options."""
 
-    experiment_tracking: ExperimentTrackingConfig = ExperimentTrackingConfig()
-    """Experiment tracking (e.g., WandB) configuration options."""
+    logging: LoggingConfig = LoggingConfig()
+    """Logging/experiment tracking (e.g., WandB) configuration options."""
 
     optimizer: OptimizerConfig = OptimizerConfig()
     """Optimizer configuration options."""
+
+    reproducibility: ReproducibilityConfig = ReproducibilityConfig()
+    """Reproducibility configuration options."""
 
     seed: int | None = 0
     """Seed for the random number generator. If None, will use a random seed."""
@@ -483,9 +833,7 @@ class TrainerConfig(TypedConfig):
     auto_wrap_trainer: bool = True
     """If enabled, will automatically wrap the `run` function with a `Trainer.context()` context manager. Should be `True` most of the time."""
     auto_set_default_root_dir: bool = True
-    """If enabled, will automatically set the default root dir to [cwd/lightning_logs/<id>/]. Should be `True` most of the time."""
-    auto_set_default_root_dir_base_path: DirectoryPath | None = None
-    """Base path to use when setting the default root dir. If None, will use the current working directory."""
+    """If enabled, will automatically set the default root dir to [cwd/lightning_logs/<id>/]. There is basically no reason to disable this."""
     auto_set_loggers: bool = True
     """If enabled, will automatically set the loggers to [WandbLogger, CSVLogger, TensorboardLogger] as defined in `config.logging`. Should be `True` most of the time."""
     checkpoint_last_by_default: bool = True
@@ -494,8 +842,6 @@ class TrainerConfig(TypedConfig):
     """If enabled, will checkpoint the model when an exception is thrown during training."""
     auto_add_trainer_finalizer: bool = True
     """If enabled, will automatically finalize the trainer (e.g., call `wandb.finish()`) when the run ends. Should be `True` most of the time."""
-    enable_logger_validation: bool = True
-    """If enabled, will validate loggers. This makes sure that the logger's log_dirs are correct given the current config id. Should be `True` most of the time."""
 
     supports_skip_batch_exception: bool = True
     """If enabled, the model supports skipping an entire batch by throwing a `SkipBatch` exception."""
@@ -857,7 +1203,7 @@ class BaseConfig(TypedConfig):
             self: The current instance of the class.
         """
         self.debug = True
-        self.trainer.experiment_tracking.enabled = False
+        self.trainer.logging.enabled = False
         self.trainer.python_logging.log_level = "DEBUG"
 
         return self
