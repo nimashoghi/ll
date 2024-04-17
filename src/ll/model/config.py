@@ -23,6 +23,7 @@ from lightning.fabric.plugins import CheckpointIO, ClusterEnvironment
 from lightning.fabric.plugins.precision.precision import _PRECISION_INPUT
 from lightning.pytorch.callbacks.checkpoint import Checkpoint
 from lightning.pytorch.loggers import Logger
+from lightning.pytorch.plugins import _PLUGIN_INPUT
 from lightning.pytorch.plugins.layer_sync import LayerSync
 from lightning.pytorch.plugins.precision.precision import Precision
 from lightning.pytorch.profilers import Profiler
@@ -819,6 +820,231 @@ class LightningTrainerKwargs(TypedDict, total=False):
         Default: ``True``.
     """
 
+    accelerator: Literal["cpu", "gpu", "tpu", "ipu", "hpu", "mps", "auto"]
+    """
+    Supports passing different accelerator types ("cpu", "gpu", "tpu", "ipu", "hpu", "mps", "auto")
+        as well as custom accelerator instances.
+
+        Default: ``"auto"``.
+    """
+    strategy: str
+    """
+    Supports different training strategies with aliases as well custom strategies.
+        Default: ``"auto"``.
+    """
+    devices: list[int] | str | int
+    """
+    The devices to use. Can be set to a positive number (int or str), a sequence of device indices
+        (list or str), the value ``-1`` to indicate all available devices should be used, or ``"auto"`` for
+        automatic selection based on the chosen accelerator. Default: ``"auto"``.
+    """
+    num_nodes: int
+    """
+    Number of GPU nodes for distributed training,
+        or ``"auto"`` to automatically detect the number of nodes.
+    """
+    precision: _PRECISION_INPUT
+    """
+    Double precision (64, '64' or '64-true'), full precision (32, '32' or '32-true'),
+        16bit mixed precision (16, '16', '16-mixed') or bfloat16 mixed precision ('bf16', 'bf16-mixed').
+        Can be used on CPU, GPU, TPUs, HPUs or IPUs.
+        Default: ``'32-true'``.
+    """
+    logger: bool
+    """
+    Logger (or iterable collection of loggers) for experiment tracking. A ``True`` value uses
+        the default ``TensorBoardLogger`` if it is installed, otherwise ``CSVLogger``.
+        ``False`` will disable logging. If multiple loggers are provided, local files
+        (checkpoints, profiler traces, etc.) are saved in the ``log_dir`` of the first logger.
+        Default: ``True``.
+    """
+    fast_dev_run: int | bool
+    """
+    Runs n if set to ``n`` (int) else 1 if set to ``True`` batch(es)
+        of train, val and test to find any bugs (ie: a sort of unit test).
+        Default: ``False``.
+    """
+    max_epochs: int | None
+    """
+    Stop training once this number of epochs is reached. Disabled by default (None).
+        If both max_epochs and max_steps are not specified, defaults to ``max_epochs = 1000``.
+        To enable infinite training, set ``max_epochs = -1``.
+    """
+    min_epochs: int | None
+    """Force training for at least these many epochs. Disabled by default (None)."""
+    max_steps: int
+    """
+    Stop training after this number of steps. Disabled by default (-1). If ``max_steps = -1``
+        and ``max_epochs = None``, will default to ``max_epochs = 1000``. To enable infinite training, set
+        ``max_epochs`` to ``-1``.
+    """
+    min_steps: int | None
+    """Force training for at least these number of steps. Disabled by default (``None``)."""
+    max_time: str | timedelta | dict[str, Any] | None
+    """
+    Stop training after this amount of time has passed. Disabled by default (``None``).
+        The time duration can be specified in the format DD:HH:MM:SS (days, hours, minutes seconds), as a
+        :class:`datetime.timedelta`, or a dictionary with keys that will be passed to
+        :class:`datetime.timedelta`.
+    """
+    limit_train_batches: int | float | None
+    """
+    How much of training dataset to check (float = fraction, int = num_batches).
+        Default: ``1.0``.
+    """
+    limit_val_batches: int | float | None
+    """
+    How much of validation dataset to check (float = fraction, int = num_batches).
+        Default: ``1.0``.
+    """
+    limit_test_batches: int | float | None
+    """
+    How much of test dataset to check (float = fraction, int = num_batches).
+        Default: ``1.0``.
+    """
+    limit_predict_batches: int | float | None
+    """
+    How much of prediction dataset to check (float = fraction, int = num_batches).
+        Default: ``1.0``.
+    """
+    overfit_batches: int | float
+    """
+    Overfit a fraction of training/validation data (float) or a set number of batches (int).
+        ``0.0`` means no overfitting. Default: ``0.0``.
+    """
+    val_check_interval: int | float | None
+    """
+    How often to check the validation set. Pass a ``float`` in the range [0.0, 1.0] to check
+        after a fraction of the training epoch. Pass an ``int`` to check after a fixed number of training
+        batches. An ``int`` value can only be higher than the number of training batches when
+        ``check_val_every_n_epoch=None``, which validates after every ``N`` training batches
+        across epochs or during iteration-based training.
+        Default: ``1.0``.
+    """
+    check_val_every_n_epoch: int | None
+    """
+    Perform a validation loop every after every `N` training epochs. If ``None``,
+        validation will be done solely based on the number of training batches, requiring ``val_check_interval``
+        to be an integer value.
+        Default: ``1``.
+    """
+    num_sanity_val_steps: int | None
+    """
+    Sanity check runs n validation batches before starting the training routine.
+        Set it to `-1` to run all batches in all validation dataloaders.
+        Default: ``2``.
+    """
+    log_every_n_steps: int
+    """
+    How often to log within steps.
+        Default: ``50``.
+    """
+    enable_progress_bar: bool | None
+    """
+    Whether to enable to progress bar by default.
+        Default: ``True``.
+    """
+    enable_model_summary: bool | None
+    """
+    Whether to enable model summarization by default.
+        Default: ``True``.
+    """
+    accumulate_grad_batches: int
+    """
+    Accumulates gradients over k batches before stepping the optimizer.
+        ``1`` means no gradient accumulation (i.e., performs a step after each batch).
+        Default: ``1``.
+    """
+    gradient_clip_val: int | float | None
+    """
+    The value at which to clip gradients. Passing ``gradient_clip_val=None`` disables
+        gradient clipping. If using Automatic Mixed Precision (AMP), the gradients will be unscaled before.
+        Default: ``None``.
+    """
+    gradient_clip_algorithm: Literal["norm", "value"] | None
+    """
+    The gradient clipping algorithm to use. Pass ``gradient_clip_algorithm="value"``
+        to clip by value, and ``gradient_clip_algorithm="norm"`` to clip by norm. By default it will
+        be set to ``"norm"``.
+    """
+    deterministic: bool | Literal["warn"] | None
+    """
+    If ``True``, sets whether PyTorch operations must use deterministic algorithms.
+        Set to ``"warn"`` to use deterministic algorithms whenever possible, throwing warnings on operations
+        that don't support deterministic mode. If not set, defaults to ``False``. Default: ``None``.
+    """
+    benchmark: bool | None
+    """
+    The value (``True`` or ``False``) to set ``torch.backends.cudnn.benchmark`` to.
+        The value for ``torch.backends.cudnn.benchmark`` set in the current session will be used
+        (``False`` if not manually set). If :paramref:`~lightning.pytorch.trainer.trainer.Trainer.deterministic`
+        is set to ``True``, this will default to ``False``. Override to manually set a different value.
+        Default: ``None``.
+    """
+    inference_mode: bool
+    """
+    Whether to use :func:`torch.inference_mode` (if `True`) or :func:`torch.no_grad` (if `False`) during
+        evaluation (``validate``/``test``/``predict``).
+    """
+    use_distributed_sampler: bool
+    """
+    Whether to wrap the DataLoader's sampler with
+        :class:`torch.utils.data.DistributedSampler`. If not specified this is toggled automatically for
+        strategies that require it. By default, it will add ``shuffle=True`` for the train sampler and
+        ``shuffle=False`` for validation/test/predict samplers. If you want to disable this logic, you can pass
+        ``False`` and add your own distributed sampler in the dataloader hooks. If ``True`` and a distributed
+        sampler was already added, Lightning will not replace the existing one. For iterable-style datasets,
+        we don't do this automatically.
+    """
+    profiler: str | Profiler | None
+    """
+    To profile individual steps during training and assist in identifying bottlenecks.
+        Default: ``None``.
+    """
+    detect_anomaly: bool
+    """
+    Enable anomaly detection for the autograd engine.
+        Default: ``False``.
+    """
+    barebones: bool
+    """
+    Whether to run in "barebones mode", where all features that may impact raw speed are
+        disabled. This is meant for analyzing the Trainer overhead and is discouraged during regular training
+        runs. The following features are deactivated:
+        :paramref:`~lightning.pytorch.trainer.trainer.Trainer.enable_checkpointing`,
+        :paramref:`~lightning.pytorch.trainer.trainer.Trainer.logger`,
+        :paramref:`~lightning.pytorch.trainer.trainer.Trainer.enable_progress_bar`,
+        :paramref:`~lightning.pytorch.trainer.trainer.Trainer.log_every_n_steps`,
+        :paramref:`~lightning.pytorch.trainer.trainer.Trainer.enable_model_summary`,
+        :paramref:`~lightning.pytorch.trainer.trainer.Trainer.num_sanity_val_steps`,
+        :paramref:`~lightning.pytorch.trainer.trainer.Trainer.fast_dev_run`,
+        :paramref:`~lightning.pytorch.trainer.trainer.Trainer.detect_anomaly`,
+        :paramref:`~lightning.pytorch.trainer.trainer.Trainer.profiler`,
+        :meth:`~lightning.pytorch.core.LightningModule.log`,
+        :meth:`~lightning.pytorch.core.LightningModule.log_dict`.
+    """
+    plugins: _PLUGIN_INPUT | list[_PLUGIN_INPUT] | None
+    """
+    Plugins allow modification of core behavior like ddp and amp, and enable custom lightning plugins.
+        Default: ``None``.
+    """
+    sync_batchnorm: bool
+    """
+    Synchronize batch norm layers between process groups/whole world.
+        Default: ``False``.
+    """
+    reload_dataloaders_every_n_epochs: int
+    """
+    Set to a positive integer to reload dataloaders every n epochs.
+        Default: ``0``.
+    """
+    default_root_dir: Path | None
+    """
+    Default path for logs and weights when no logger/ckpt_callback passed.
+        Default: ``os.getcwd()``.
+        Can be remote file paths such as `s3://mybucket/path` or 'hdfs://path/'
+    """
+
 
 class TrainerConfig(TypedConfig):
     directory: DirectoryConfig = DirectoryConfig()
@@ -907,273 +1133,6 @@ class TrainerConfig(TypedConfig):
 
     set_float32_matmul_precision: Literal["medium", "high", "highest"] | None = None
     """If enabled, will set the torch float32 matmul precision to the specified value. Useful for faster training on Ampere+ GPUs."""
-
-    accelerator: Literal["cpu", "gpu", "tpu", "ipu", "hpu", "mps", "auto"] = "auto"
-    """
-    Supports passing different accelerator types ("cpu", "gpu", "tpu", "ipu", "hpu", "mps", "auto")
-        as well as custom accelerator instances.
-    """
-    strategy: str = "auto"
-    """
-    Supports different training strategies with aliases as well custom strategies.
-        Default: ``"auto"``.
-    """
-    devices: list[int] | str | int = "auto"
-    """
-    The devices to use. Can be set to a positive number (int or str), a sequence of device indices
-        (list or str), the value ``-1`` to indicate all available devices should be used, or ``"auto"`` for
-        automatic selection based on the chosen accelerator. Default: ``"auto"``.
-    """
-    num_nodes: Literal["auto"] | int = "auto"
-    """
-    Number of GPU nodes for distributed training,
-        or ``"auto"`` to automatically detect the number of nodes.
-    """
-    precision: _PRECISION_INPUT = "32-true"
-    """
-    Double precision (64, '64' or '64-true'), full precision (32, '32' or '32-true'),
-        16bit mixed precision (16, '16', '16-mixed') or bfloat16 mixed precision ('bf16', 'bf16-mixed').
-        Can be used on CPU, GPU, TPUs, HPUs or IPUs.
-        Default: ``'32-true'``.
-    """
-    logger: bool | None = None
-    """
-    Logger (or iterable collection of loggers) for experiment tracking. A ``True`` value uses
-        the default ``TensorBoardLogger`` if it is installed, otherwise ``CSVLogger``.
-        ``False`` will disable logging. If multiple loggers are provided, local files
-        (checkpoints, profiler traces, etc.) are saved in the ``log_dir`` of the first logger.
-        Default: ``True``.
-    """
-    fast_dev_run: int | bool = False
-    """
-    Runs n if set to ``n`` (int) else 1 if set to ``True`` batch(es)
-        of train, val and test to find any bugs (ie: a sort of unit test).
-        Default: ``False``.
-    """
-    max_epochs: int | None = None
-    """
-    Stop training once this number of epochs is reached. Disabled by default (None).
-        If both max_epochs and max_steps are not specified, defaults to ``max_epochs = 1000``.
-        To enable infinite training, set ``max_epochs = -1``.
-    """
-    min_epochs: int | None = None
-    """Force training for at least these many epochs. Disabled by default (None)."""
-    max_steps: int = -1
-    """
-    Stop training after this number of steps. Disabled by default (-1). If ``max_steps = -1``
-        and ``max_epochs = None``, will default to ``max_epochs = 1000``. To enable infinite training, set
-        ``max_epochs`` to ``-1``.
-    """
-    min_steps: int | None = None
-    """Force training for at least these number of steps. Disabled by default (``None``)."""
-    max_time: str | timedelta | dict[str, Any] | None = None
-    """
-    Stop training after this amount of time has passed. Disabled by default (``None``).
-        The time duration can be specified in the format DD:HH:MM:SS (days, hours, minutes seconds), as a
-        :class:`datetime.timedelta`, or a dictionary with keys that will be passed to
-        :class:`datetime.timedelta`.
-    """
-    limit_train_batches: int | float | None = None
-    """
-    How much of training dataset to check (float = fraction, int = num_batches).
-        Default: ``1.0``.
-    """
-    limit_val_batches: int | float | None = None
-    """
-    How much of validation dataset to check (float = fraction, int = num_batches).
-        Default: ``1.0``.
-    """
-    limit_test_batches: int | float | None = None
-    """
-    How much of test dataset to check (float = fraction, int = num_batches).
-        Default: ``1.0``.
-    """
-    limit_predict_batches: int | float | None = None
-    """
-    How much of prediction dataset to check (float = fraction, int = num_batches).
-        Default: ``1.0``.
-    """
-    overfit_batches: int | float = 0.0
-    """
-    Overfit a fraction of training/validation data (float) or a set number of batches (int).
-        ``0.0`` means no overfitting. Default: ``0.0``.
-    """
-    val_check_interval: int | float | None = None
-    """
-    How often to check the validation set. Pass a ``float`` in the range [0.0, 1.0] to check
-        after a fraction of the training epoch. Pass an ``int`` to check after a fixed number of training
-        batches. An ``int`` value can only be higher than the number of training batches when
-        ``check_val_every_n_epoch=None``, which validates after every ``N`` training batches
-        across epochs or during iteration-based training.
-        Default: ``1.0``.
-    """
-    check_val_every_n_epoch: int | None = 1
-    """
-    Perform a validation loop every after every `N` training epochs. If ``None``,
-        validation will be done solely based on the number of training batches, requiring ``val_check_interval``
-        to be an integer value.
-        Default: ``1``.
-    """
-    num_sanity_val_steps: int | None = None
-    """
-    Sanity check runs n validation batches before starting the training routine.
-        Set it to `-1` to run all batches in all validation dataloaders.
-        Default: ``2``.
-    """
-    log_every_n_steps: int = 50
-    """
-    How often to log within steps.
-        Default: ``50``.
-    """
-    enable_progress_bar: bool | None = None
-    """
-    Whether to enable to progress bar by default.
-        Default: ``True``.
-    """
-    enable_model_summary: bool | None = None
-    """
-    Whether to enable model summarization by default.
-        Default: ``True``.
-    """
-    accumulate_grad_batches: int = 1
-    """
-    Accumulates gradients over k batches before stepping the optimizer.
-        ``1`` means no gradient accumulation (i.e., performs a step after each batch).
-        Default: ``1``.
-    """
-    deterministic: bool | str | None = None
-    """
-    If ``True``, sets whether PyTorch operations must use deterministic algorithms.
-        Set to ``"warn"`` to use deterministic algorithms whenever possible, throwing warnings on operations
-        that don't support deterministic mode. If not set, defaults to ``False``. Default: ``None``.
-    """
-    benchmark: bool | None = None
-    """
-    The value (``True`` or ``False``) to set ``torch.backends.cudnn.benchmark`` to.
-        The value for ``torch.backends.cudnn.benchmark`` set in the current session will be used
-        (``False`` if not manually set). If :paramref:`~lightning.pytorch.trainer.trainer.Trainer.deterministic`
-        is set to ``True``, this will default to ``False``. Override to manually set a different value.
-        Default: ``None``.
-    """
-    inference_mode: bool = True
-    """
-    Whether to use :func:`torch.inference_mode` (if `True`) or :func:`torch.no_grad` (if `False`) during
-        evaluation (``validate``/``test``/``predict``).
-    """
-    use_distributed_sampler: bool = True
-    """
-    Whether to wrap the DataLoader's sampler with
-        :class:`torch.utils.data.DistributedSampler`. If not specified this is toggled automatically for
-        strategies that require it. By default, it will add ``shuffle=True`` for the train sampler and
-        ``shuffle=False`` for validation/test/predict samplers. If you want to disable this logic, you can pass
-        ``False`` and add your own distributed sampler in the dataloader hooks. If ``True`` and a distributed
-        sampler was already added, Lightning will not replace the existing one. For iterable-style datasets,
-        we don't do this automatically.
-    """
-    profiler: str | ProfilerConfig | None = None
-    """
-    To profile individual steps during training and assist in identifying bottlenecks.
-        Default: ``None``.
-    """
-    detect_anomaly: bool = False
-    """
-    Enable anomaly detection for the autograd engine.
-        Default: ``False``.
-    """
-    barebones: bool = False
-    """
-    Whether to run in "barebones mode", where all features that may impact raw speed are
-        disabled. This is meant for analyzing the Trainer overhead and is discouraged during regular training
-        runs. The following features are deactivated:
-        :paramref:`~lightning.pytorch.trainer.trainer.Trainer.enable_checkpointing`,
-        :paramref:`~lightning.pytorch.trainer.trainer.Trainer.logger`,
-        :paramref:`~lightning.pytorch.trainer.trainer.Trainer.enable_progress_bar`,
-        :paramref:`~lightning.pytorch.trainer.trainer.Trainer.log_every_n_steps`,
-        :paramref:`~lightning.pytorch.trainer.trainer.Trainer.enable_model_summary`,
-        :paramref:`~lightning.pytorch.trainer.trainer.Trainer.num_sanity_val_steps`,
-        :paramref:`~lightning.pytorch.trainer.trainer.Trainer.fast_dev_run`,
-        :paramref:`~lightning.pytorch.trainer.trainer.Trainer.detect_anomaly`,
-        :paramref:`~lightning.pytorch.trainer.trainer.Trainer.profiler`,
-        :meth:`~lightning.pytorch.core.LightningModule.log`,
-        :meth:`~lightning.pytorch.core.LightningModule.log_dict`.
-    """
-    plugins: list[PluginConfigProtocol] | None = None
-    """
-    Plugins allow modification of core behavior like ddp and amp, and enable custom lightning plugins.
-        Default: ``None``.
-    """
-    sync_batchnorm: bool = False
-    """
-    Synchronize batch norm layers between process groups/whole world.
-        Default: ``False``.
-    """
-    reload_dataloaders_every_n_epochs: int = 0
-    """
-    Set to a positive integer to reload dataloaders every n epochs.
-        Default: ``0``.
-    """
-    default_root_dir: DirectoryPath | None = None
-    """
-    Default path for logs and weights when no logger/ckpt_callback passed.
-        Default: ``os.getcwd()``.
-        Can be remote file paths such as `s3://mybucket/path` or 'hdfs://path/'
-    """
-
-    # region Deprecated fields
-    @property
-    @deprecated("Please use trainer.optimizer.gradient_clipping instead.")
-    def automatic_gradient_clip(self):
-        if (config := self.optimizer.gradient_clipping) is None or not config.enabled:
-            return False
-        return True
-
-    @automatic_gradient_clip.setter
-    @deprecated("Please use trainer.optimizer.gradient_clipping instead.")
-    def automatic_gradient_clip(self, value: bool):
-        if self.optimizer.gradient_clipping is None:
-            self.optimizer.gradient_clipping = GradientClippingConfig(
-                enabled=False, value=1.0, algorithm="norm"
-            )
-        self.optimizer.gradient_clipping.enabled = value
-
-    @property
-    @deprecated("Please use trainer.optimizer.gradient_clipping instead.")
-    def gradient_clip_algorithm(self):
-        if (config := self.optimizer.gradient_clipping) is None or not config.enabled:
-            return "norm"
-        return config.algorithm
-
-    @gradient_clip_algorithm.setter
-    @deprecated("Please use trainer.optimizer.gradient_clipping instead.")
-    def gradient_clip_algorithm(self, value: Literal["value", "norm"]):
-        if self.optimizer.gradient_clipping is None:
-            self.optimizer.gradient_clipping = GradientClippingConfig(
-                enabled=False, value=1.0, algorithm=value
-            )
-        self.optimizer.gradient_clipping.algorithm = value
-
-    @property
-    @deprecated("Please use trainer.optimizer.gradient_clipping instead.")
-    def gradient_clip_val(self):
-        if (config := self.optimizer.gradient_clipping) is None or not config.enabled:
-            return None
-        return config.value
-
-    @gradient_clip_val.setter
-    @deprecated("Please use trainer.optimizer.gradient_clipping instead.")
-    def gradient_clip_val(self, value: int | float | None):
-        if value is None:
-            self.optimizer.gradient_clipping = None
-            return
-
-        if self.optimizer.gradient_clipping is None:
-            self.optimizer.gradient_clipping = GradientClippingConfig(
-                enabled=False, value=value, algorithm="norm"
-            )
-        self.optimizer.gradient_clipping.enabled = True
-        self.optimizer.gradient_clipping.value = value
-
-    # endregion
 
 
 class RunnerOutputSaveConfig(TypedConfig):
