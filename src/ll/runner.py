@@ -164,6 +164,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         self.validate_config_before_run = validate_config_before_run
         self.validate_strict = validate_strict
         self._init_kwargs = {
+            "savedir": savedir,
             "slurm_job_name": slurm_job_name,
             "validate_config_before_run": validate_config_before_run,
             "validate_strict": validate_strict,
@@ -175,7 +176,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
 
         self._base_path.mkdir(exist_ok=True)
         # Add a gitignore file to the directory so that the entire directory is ignored by git (except for the .gitignore file itself)
-        (self._base_path / ".gitignore").write_text("*\n!.gitignore\n")
+        (self._base_path / ".gitignore").write_text("*\n")
 
     @property
     def _run_fn(self) -> RunProtocol[TConfig, TReturn, Unpack[TArguments]]:

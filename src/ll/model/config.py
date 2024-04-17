@@ -640,7 +640,7 @@ class DirectoryConfig(TypedConfig):
         if gitignore_path.exists():
             gitignore_path.unlink()
         gitignore_path.touch()
-        gitignore_path.write_text("*\n!.gitignore\n")
+        gitignore_path.write_text("*\n")
 
         base_dir = llruns_dir / run_id
         base_dir.mkdir(exist_ok=True)
