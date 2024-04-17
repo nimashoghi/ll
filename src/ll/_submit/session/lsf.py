@@ -5,7 +5,7 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import timedelta
 from pathlib import Path
-from typing import Any, TypeAlias, TypedDict, overload
+from typing import Any, TypedDict, overload
 
 from typing_extensions import TypeAlias, TypeVarTuple, Unpack
 
@@ -134,6 +134,13 @@ class LSFJobKwargs(TypedDict, total=False):
     This corresponds to the "-nnodes" option in bsub. The default is 1 node.
     """
 
+    alloc_flags: str
+    """
+    The allocation flags for the job.
+
+    This corresponds to the "-alloc_flags" option in bsub. If specified, the job will be allocated using these flags.
+    """
+
 
 def _append_job_index_to_path(path: Path) -> Path:
     # If job array, append the job index to the output file
@@ -181,6 +188,33 @@ def _write_batch_script_to_file(
                 error_file = _append_job_index_to_path(error_file)
             error_file = str(error_file)
             f.write(f"#BSUB -e {error_file}\n")
+
+        if (queue := kwargs.get("queue")) is not None:
+            f.write(f"#BSUB -q {queue}\n")
+
+        if (memory_mb := kwargs.get("memory_mb")) is not None:
+            f.write(f"#BSUB -M {memory_mb}\n")
+
+        if (cpu_limit := kwargs.get("cpu_limit")) is not None:
+            f.write(f"#BSUB -c {cpu_limit}\n")
+
+        if (rerunnable := kwargs.get("rerunnable")) is not None:
+            f.write(f"#BSUB -r {'y' if rerunnable else 'n'}\n")
+
+        for dependency_condition in kwargs.get("dependency_conditions", []):
+            f.write(f"#BSUB -w {dependency_condition}\n")
+
+        if (email := kwargs.get("email")) is not None:
+            f.write(f"#BSUB -u {email}\n")
+
+        if (notify_begin := kwargs.get("notify_begin")) is not None:
+            f.write(f"#BSUB -B {'y' if notify_begin else 'n'}\n")
+
+        if (notify_end := kwargs.get("notify_end")) is not None:
+            f.write(f"#BSUB -N {'y' if notify_end else 'n'}\n")
+
+        if (alloc_flags := kwargs.get("alloc_flags")) is not None:
+            f.write(f"#BSUB -alloc_flags {alloc_flags}\n")
 
         f.write("\n")
 
