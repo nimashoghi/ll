@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from datetime import timedelta
 from logging import getLogger
 from pathlib import Path
-from typing import Any, overload
+from typing import Any, Protocol, overload
 
 from typing_extensions import TypeAlias, TypedDict, TypeVarTuple, Unpack
 
@@ -22,6 +22,10 @@ DEFAULT_SUMMIT = False
 TArgs = TypeVarTuple("TArgs")
 
 _Path: TypeAlias = str | Path | os.PathLike
+
+
+class CommandPrefixFnProtocol(Protocol):
+    def __call__(self, num_nodes: int) -> str: ...
 
 
 class LSFJobKwargs(TypedDict, total=False):
@@ -145,7 +149,7 @@ class LSFJobKwargs(TypedDict, total=False):
     This corresponds to the "-alloc_flags" option in bsub. If specified, the job will be allocated using these flags.
     """
 
-    command_prefix: str
+    command_prefix: str | CommandPrefixFnProtocol
     """
     A command to prefix the job command with.
 
@@ -168,8 +172,14 @@ class LSFJobKwargs(TypedDict, total=False):
     """
 
 
+def _summit_command_prefix(num_nodes: int) -> str:
+    n = 6 * num_nodes
+    r = 6
+    return f"jsrun -n{n} -r {r} -c7 -g1 -a1 -brs"
+
+
 SUMMIT_DEFAULTS: LSFJobKwargs = {
-    "command_prefix": "jsrun -n6 -c7 -g1 -a1 -brs",
+    "command_prefix": _summit_command_prefix,
     "load_job_step_viewer": True,
 }
 
@@ -281,6 +291,9 @@ def _write_batch_script_to_file(
         f.write("\n")
 
         if (command_prefix := kwargs.get("command_prefix")) is not None:
+            if callable(command_prefix):
+                command_prefix = command_prefix(nodes)
+
             command = " ".join(
                 x_stripped
                 for x in (command_prefix, command)
