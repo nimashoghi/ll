@@ -17,7 +17,7 @@ log = getLogger(__name__)
 DEFAULT_JOB_NAME = "ll"
 DEFAULT_NODES = 1
 DEFAULT_WALLTIME = timedelta(hours=2)
-DEFAULT_NTASKS_PER_NODE = 6
+DEFAULT_SUMMIT = True
 
 TArgs = TypeVarTuple("TArgs")
 
@@ -274,7 +274,7 @@ def _update_kwargs(kwargs: LSFJobKwargs):
     kwargs = {**kwargs}
 
     # If the job is being submitted to Summit, update the kwargs with the Summit defaults
-    if kwargs.get("summit"):
+    if kwargs.get("summit", DEFAULT_SUMMIT):
         kwargs = {**SUMMIT_DEFAULTS, **kwargs}
 
     return kwargs
