@@ -175,6 +175,15 @@ def _write_batch_script_to_file(
     command: str,
     job_array_n_jobs: int | None = None,
 ):
+    logs_base = path.parent / "logs"
+    logs_base.mkdir(exist_ok=True)
+
+    if kwargs.get("output_file") is None:
+        kwargs["output_file"] = logs_base / "output_%J.out"
+
+    if kwargs.get("error_file") is None:
+        kwargs["error_file"] = logs_base / "error_%J.err"
+
     with path.open("w") as f:
         f.write("#!/bin/bash\n")
 
