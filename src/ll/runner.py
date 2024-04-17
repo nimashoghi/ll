@@ -12,20 +12,11 @@ from datetime import timedelta
 from functools import wraps
 from logging import getLogger
 from pathlib import Path
-from typing import (
-    Any,
-    Generic,
-    Literal,
-    Protocol,
-    TypeAlias,
-    TypedDict,
-    cast,
-    runtime_checkable,
-)
+from typing import Any, Generic, Literal, Protocol, TypeAlias, cast, runtime_checkable
 
 import cloudpickle as pickle
 from tqdm.auto import tqdm
-from typing_extensions import TypeVar, TypeVarTuple, Unpack, override
+from typing_extensions import TypedDict, TypeVar, TypeVarTuple, Unpack, override
 
 from ll.submitit import AutoExecutor
 

@@ -3,10 +3,10 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from os import PathLike
 from pathlib import Path
-from typing import Any, TypeAlias, TypedDict
+from typing import Any, TypeAlias
 
 import cloudpickle as pickle
-from typing_extensions import ParamSpec, override
+from typing_extensions import ParamSpec, TypedDict, override
 
 _Path: TypeAlias = str | Path | PathLike
 

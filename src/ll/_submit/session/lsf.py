@@ -6,9 +6,9 @@ from dataclasses import dataclass
 from datetime import timedelta
 from logging import getLogger
 from pathlib import Path
-from typing import Any, TypedDict, overload
+from typing import Any, overload
 
-from typing_extensions import TypeAlias, TypeVarTuple, Unpack
+from typing_extensions import TypeAlias, TypedDict, TypeVarTuple, Unpack
 
 from ...picklerunner import serialize_many, serialize_single
 
