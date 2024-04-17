@@ -1095,6 +1095,12 @@ class TrainerConfig(TypedConfig):
     - LSF clusters
     """
 
+    fast_dev_run: int | bool = False
+    """Runs n if set to ``n`` (int) else 1 if set to ``True`` batch(es)
+    of train, val and test to find any bugs (ie: a sort of unit test).
+    Default: ``False``.
+    """
+
     auto_wrap_trainer: bool = True
     """If enabled, will automatically wrap the `run` function with a `Trainer.context()` context manager. Should be `True` most of the time."""
     auto_set_default_root_dir: bool = True

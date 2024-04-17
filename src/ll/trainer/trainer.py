@@ -294,6 +294,7 @@ class Trainer(LightningTrainer):
     ):
         kwargs: LightningTrainerKwargs = {
             "deterministic": config.trainer.reproducibility.deterministic,
+            "fast_dev_run": config.trainer.fast_dev_run,
             "callbacks": [],
             "plugins": [],
             "logger": [],
@@ -441,8 +442,8 @@ class Trainer(LightningTrainer):
     ):
         self._ll_config = config
         kwargs = self._update_kwargs(config, kwargs)
-        log.critical(f"LightningTrainer.__init__ with {args=} and {kwargs=}.")
-        super().__init__(*args, **kwargs)
+        log.critical(f"LightningTrainer.__init__ with {kwargs=}.")
+        super().__init__(**kwargs)
 
         if config.trainer.auto_add_trainer_finalizer:
             type(self)._finalizers.append(self.finalize)
