@@ -386,7 +386,9 @@ def _tensorboard_available():
 
         if not _TENSORBOARD_AVAILABLE and not _TENSORBOARDX_AVAILABLE:
             log.warning(
-                "TensorBoard/ TensorBoardX not found. Disabling TensorBoardLogger."
+                "TensorBoard/TensorBoardX not found. Disabling TensorBoardLogger. "
+                "Please install TensorBoard with `pip install tensorboard` or "
+                "TensorBoardX with `pip install tensorboardx` to enable TensorBoard logging."
             )
             return False
         return True
