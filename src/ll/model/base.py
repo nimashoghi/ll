@@ -211,8 +211,8 @@ class LightningModuleBase(
         if "hparams" not in parameters:
             raise TypeError(f"__init__'s argument must be named 'hparams': {init_fn}")
 
-    hparams: THparams
-    hparams_initial: THparams
+    hparams: THparams  # type: ignore
+    hparams_initial: THparams  # type: ignore
 
     @classmethod
     @abstractmethod
@@ -250,10 +250,18 @@ class LightningModuleBase(
         hparams.environment.config = _cls_info(cls.config_cls())
         hparams.environment.model = _cls_info(cls)
         hparams.environment.slurm = _slurm_session_info()
-        hparams.environment.base_dir = (
-            hparams.trainer.directory.resolve_base_directory()
+        hparams.environment.base_dir = hparams.trainer.directory.resolve_base_directory(
+            hparams.id
         )
-        hparams.environment.log_dir = hparams.trainer.directory.resolve_log_directory()
+        hparams.environment.log_dir = hparams.trainer.directory.resolve_subdirectory(
+            hparams.id, "log"
+        )
+        hparams.environment.checkpoint_dir = (
+            hparams.trainer.directory.resolve_subdirectory(hparams.id, "checkpoint")
+        )
+        hparams.environment.stdio_dir = hparams.trainer.directory.resolve_subdirectory(
+            hparams.id, "stdio"
+        )
         hparams.environment.seed = (
             int(seed_str) if (seed_str := os.environ.get("PL_GLOBAL_SEED")) else None
         )
@@ -372,8 +380,8 @@ class LightningDataModuleBase(
     ABC,
     Generic[THparams],
 ):
-    hparams: THparams
-    hparams_initial: THparams
+    hparams: THparams  # type: ignore
+    hparams_initial: THparams  # type: ignore
 
     def pre_init_update_hparams_dict(self, hparams: MutableMapping[str, Any]):
         """

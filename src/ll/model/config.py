@@ -228,6 +228,8 @@ class EnvironmentConfig(TypedConfig):
 
     base_dir: Path | None = None
     log_dir: Path | None = None
+    checkpoint_dir: Path | None = None
+    stdio_dir: Path | None = None
 
     seed: int | None = None
     seed_workers: bool | None = None

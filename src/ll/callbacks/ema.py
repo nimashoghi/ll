@@ -1,7 +1,8 @@
 import contextlib
 import copy
 import threading
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
+from typing import Any, overload
 
 import lightning.pytorch as pl
 import torch
@@ -118,6 +119,7 @@ class EMA(Callback):
             yield
         finally:
             for optimizer in trainer.optimizers:
+                assert isinstance(optimizer, EMAOptimizer)
                 optimizer.save_original_optimizer_state = False
 
 
@@ -181,6 +183,8 @@ class EMAOptimizer(torch.optim.Optimizer):
                 ema_eval_accuracy = evaluate(model)
     """
 
+    stream: Any | None
+
     @override
     def __init__(
         self,
@@ -208,8 +212,14 @@ class EMAOptimizer(torch.optim.Optimizer):
     def all_parameters(self) -> Iterable[torch.Tensor]:
         return (param for group in self.param_groups for param in group["params"])
 
+    @overload
+    def step(self, closure: None = ...) -> None: ...
+
+    @overload
+    def step(self, closure: Callable[[], float]) -> float: ...
+
     @override
-    def step(self, closure=None, **kwargs):
+    def step(self, closure: Callable[[], float] | None = None) -> float | None:
         self.join()
 
         if self.first_iteration:

@@ -5,7 +5,7 @@ import sys
 import traceback
 import uuid
 from collections import Counter
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Mapping, Sequence
 from contextlib import ExitStack
 from dataclasses import dataclass
 from datetime import timedelta
@@ -692,7 +692,6 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         *,
         snapshot: bool | SnapshotConfig = False,
         enable_conda: bool = True,
-        _update_config_fn: Callable[[TConfig], TConfig] = lambda x: x,
         **job_kwargs: Unpack[lsf.LSFJobKwargs],
     ):
         """"""
@@ -700,9 +699,6 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         local_data_path = self._local_data_path(id)
 
         resolved_runs = _resolve_runs(runs)
-        resolved_runs = [
-            (_update_config_fn(config), args) for config, args in resolved_runs
-        ]
         _validate_runs(resolved_runs)
 
         setup_commands = list(job_kwargs.get("setup_commands", []))
@@ -753,7 +749,6 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         self,
         runs: Sequence[TConfig] | Sequence[tuple[TConfig, Unpack[TArguments]]],
         *,
-        default_log_dir: Path,
         project: str,
         nodes: int = 1,
         queue: Literal["batch", "batch-hm", "killable", "debug"] = "batch",
@@ -761,10 +756,6 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         enable_conda: bool = True,
         lsf_kwargs: lsf.LSFJobKwargs = {},
     ):
-        def _update_config_fn(config: TConfig) -> TConfig:
-            config.trainer.auto_set_default_root_dir_base_path = default_log_dir
-            return config
-
         kwargs: lsf.LSFJobKwargs = {
             "summit": True,
             "queue": queue,

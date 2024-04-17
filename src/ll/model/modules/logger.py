@@ -26,7 +26,7 @@ class LoggerModuleMixin(mixin_base_type(LightningModule)):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        self.__prefix_stack = deque[_LogContext]()
+        self._logger_prefix_stack = deque[_LogContext]()
 
     if TYPE_CHECKING:
 
@@ -47,8 +47,7 @@ class LoggerModuleMixin(mixin_base_type(LightningModule)):
             add_dataloader_idx: bool | None = None,
             batch_size: int | None = None,
             rank_zero_only: bool | None = None,
-        ) -> Generator[None, None, None]:
-            ...
+        ) -> Generator[None, None, None]: ...
 
     else:
 
@@ -56,7 +55,7 @@ class LoggerModuleMixin(mixin_base_type(LightningModule)):
         def log_context(
             self, prefix: str | None = None, *, disabled: bool | None = None, **kwargs
         ) -> Generator[None, None, None]:
-            self.__prefix_stack.append(
+            self._logger_prefix_stack.append(
                 _LogContext(
                     prefix=prefix,
                     disabled=disabled,
@@ -66,7 +65,7 @@ class LoggerModuleMixin(mixin_base_type(LightningModule)):
             try:
                 yield
             finally:
-                _ = self.__prefix_stack.pop()
+                _ = self._logger_prefix_stack.pop()
 
     if TYPE_CHECKING:
 
@@ -75,7 +74,6 @@ class LoggerModuleMixin(mixin_base_type(LightningModule)):
             self,
             name: str,
             value: _METRIC,
-            *,
             prog_bar: bool = False,
             logger: bool | None = None,
             on_step: bool | None = None,
@@ -88,20 +86,19 @@ class LoggerModuleMixin(mixin_base_type(LightningModule)):
             batch_size: int | None = None,
             metric_attribute: str | None = None,
             rank_zero_only: bool = False,
-        ) -> None:
-            ...
+        ) -> None: ...
 
     else:
 
         @override
         def log(self, name: str, value: _METRIC, **kwargs) -> None:
             # join all prefixes
-            prefix = "".join(c.prefix for c in self.__prefix_stack if c.prefix)
+            prefix = "".join(c.prefix for c in self._logger_prefix_stack if c.prefix)
             name = f"{prefix}{name}"
 
             # check for disabled context:
             # if the topmost non-null context is disabled, then we don't log
-            for c in reversed(self.__prefix_stack):
+            for c in reversed(self._logger_prefix_stack):
                 if c.disabled is not None:
                     if c.disabled:
                         rank_zero_warn(
@@ -112,15 +109,15 @@ class LoggerModuleMixin(mixin_base_type(LightningModule)):
                         break
 
             fn_kwargs = {}
-            for c in self.__prefix_stack:
+            for c in self._logger_prefix_stack:
                 fn_kwargs.update(c.kwargs)
             fn_kwargs.update(kwargs)
 
-            self.__logger_actsave(name, value)
+            self._logger_actsave(name, value)
 
             return super().log(name, value, **fn_kwargs)
 
-    def __logger_actsave(self, name: str, value: _METRIC) -> None:
+    def _logger_actsave(self, name: str, value: _METRIC) -> None:
         ActSave.save(
             {
                 f"logger::{name}": lambda: value.compute()
