@@ -14,9 +14,7 @@ from lightning.fabric.plugins.environments.slurm import SLURMEnvironment
 from lightning.fabric.plugins.precision.precision import _PRECISION_INPUT
 from lightning.pytorch import LightningDataModule, LightningModule
 from lightning.pytorch import Trainer as LightningTrainer
-from lightning.pytorch.callbacks import (
-    RichProgressBar,
-)
+from lightning.pytorch.callbacks import RichProgressBar
 from lightning.pytorch.profilers import Profiler
 from lightning.pytorch.utilities.types import _EVALUATE_OUTPUT, _PREDICT_OUTPUT
 from typing_extensions import Unpack, assert_never, override
@@ -33,21 +31,6 @@ from ..util.environment import set_additional_env_vars
 from .logging import finalize_loggers
 
 log = logging.getLogger(__name__)
-
-
-class _FixedLSFEnvironment(LSFEnvironment):
-    @override
-    def local_rank(self) -> int:
-        # HACK: Fix this later
-        return 0
-
-    @classmethod
-    def from_lsf_environment(cls, lsf_env: LSFEnvironment):
-        instance = cls()
-        instance._main_address = lsf_env._main_address
-        instance._main_port = lsf_env._main_port
-        instance._node_rank = lsf_env._node_rank
-        return instance
 
 
 def _stdio_log_dir(
@@ -263,6 +246,14 @@ class Trainer(LightningTrainer):
                 env_vars = dict(os.environ)
                 with env_vars_path.open("w") as file:
                     yaml.dump(env_vars, file)
+
+            if config.trainer.apply_lsf_cluster_environment_hack:
+                # PyTorch Lightning expects all GPUs to be present to all resource sets (tasks), but this is not the case
+                #   when we use `jsrun -n6 -g1 -a1 -c7`.
+                # This hack will fix this by setting the `JSM_NAMESPACE_LOCAL_RANK` environment variable (which
+                #   Lightning reads) to 0, which is the correct value for the case where every task has its own GPU.
+                os.environ["JSM_NAMESPACE_LOCAL_RANK"] = "0"
+                log.critical("Applied LSF cluster environment hack.")
 
             yield
 
@@ -486,21 +477,6 @@ class Trainer(LightningTrainer):
         _update_kwargs(callbacks=[*cls.ll_default_callbacks(config)])
 
         return kwargs
-
-    def _apply_lsf_cluster_environment_hack(self):
-        # PyTorch Lightning expects all GPUs to be present to all resource sets (tasks), but this is not the case
-        #   when we use `jsrun -n6 -g1 -a1 -c7`.
-        # This hack will fix this.
-        if not isinstance(
-            cluster_environment := self._accelerator_connector.cluster_environment,
-            LSFEnvironment,
-        ):
-            return
-
-        # Now, we will replace this environment with our own subclass which will fix the issue.
-        self._accelerator_connector.cluster_environment = (
-            _FixedLSFEnvironment.from_lsf_environment(cluster_environment)
-        )
 
     @override
     def __init__(
