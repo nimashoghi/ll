@@ -274,6 +274,10 @@ def _write_batch_script_to_file(
         for setup_command in kwargs.get("setup_commands", []):
             f.write(f"{setup_command}\n")
 
+        if kwargs.get("load_job_step_viewer", False):
+            f.write("\n")
+            f.write("module load job-step-viewer\n")
+
         f.write("\n")
 
         if (command_prefix := kwargs.get("command_prefix")) is not None:
@@ -283,10 +287,6 @@ def _write_batch_script_to_file(
                 if (x_stripped := x.strip())
             )
         f.write(f"{command}\n")
-
-        if kwargs.get("load_job_step_viewer", False):
-            f.write("\n")
-            f.write("module load job-step-viewer\n")
 
     return path
 
