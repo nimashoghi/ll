@@ -621,26 +621,26 @@ class CheckpointLoadingConfig(TypedConfig):
 
 class DirectoryConfig(TypedConfig):
     base: Path | None = None
-    """Base directory to use for the trainer. If None, will use {current working directory}/.llruns/{run_id}/."""
+    """Base directory to use for the trainer. If None, will use {current working directory}/llruns/{run_id}/."""
 
     log: Path | None = None
-    """Base directory for all experiment tracking (e.g., WandB, Tensorboard, etc.) files. If None, will use .llruns/{id}/experiments/."""
+    """Base directory for all experiment tracking (e.g., WandB, Tensorboard, etc.) files. If None, will use llruns/{id}/experiments/."""
 
     stdio: Path | None = None
-    """stdout/stderr log directory to use for the trainer. If None, will use .llruns/{id}/log/."""
+    """stdout/stderr log directory to use for the trainer. If None, will use llruns/{id}/log/."""
 
     checkpoint: Path | None = None
-    """Checkpoint directory to use for the trainer. If None, will use .llruns/{id}/checkpoint/."""
+    """Checkpoint directory to use for the trainer. If None, will use llruns/{id}/checkpoint/."""
 
     def resolve_base_directory(self, run_id: str) -> Path:
         if (base := self.base) is None:
             base = Path.cwd()
 
-        # The default base dir is $CWD/.llruns/{id}/
-        llruns_dir = base / ".llruns"
+        # The default base dir is $CWD/llruns/{id}/
+        llruns_dir = base / "llruns"
         llruns_dir.mkdir(exist_ok=True)
 
-        # Add a .gitignore file to the .llruns directory
+        # Add a .gitignore file to the llruns directory
         #   which will ignore all files except for the .gitignore file itself
         gitignore_path = llruns_dir / ".gitignore"
         if not gitignore_path.exists():
@@ -657,7 +657,7 @@ class DirectoryConfig(TypedConfig):
         run_id: str,
         subdirectory: Literal["log", "stdio", "checkpoint"],
     ) -> Path:
-        # The subdir will be $CWD/.llruns/{id}/{experiment,checkpoint,log}
+        # The subdir will be $CWD/llruns/{id}/{experiment,checkpoint,log}
         if (subdir := getattr(self, subdirectory)) is not None:
             assert isinstance(
                 subdir, Path
@@ -677,7 +677,7 @@ class DirectoryConfig(TypedConfig):
         if (log_dir := logger.log_dir) is not None:
             return log_dir
 
-        # Save to .llruns/{id}/log/{logger kind}/{id}/
+        # Save to llruns/{id}/log/{logger kind}/{id}/
         log_dir = self.resolve_subdirectory(run_id, "log")
         log_dir = log_dir / logger.kind
 
