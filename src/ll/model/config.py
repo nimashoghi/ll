@@ -865,7 +865,9 @@ class TrainerConfig(TypedConfig):
         - If the `interval` is epoch, it makes sure that validation is called every `frequency` epochs.
     """
 
-    lightning_kwargs: LightningTrainerKwargs = LightningTrainerKwargs()
+    lightning_kwargs: LightningTrainerKwargs = LightningTrainerKwargs(
+        enable_checkpointing=False,
+    )
     """
     Additional keyword arguments to pass to the Lightning `pl.Trainer` constructor.
 
@@ -878,6 +880,23 @@ class TrainerConfig(TypedConfig):
 
     This is essentially a non-type-checked version of `lightning_kwargs`.
     """
+
+    def _lightning_trainer_kwargs(self):
+        # TODO: Handle array fields like `plugins` and `callbacks` properly.
+
+        kwargs: dict[str, Any] = {}
+        kwargs.update(self.additional_trainer_kwargs)
+
+        # Handle lightning_kwargs
+        lightning_kwargs = copy.deepcopy(self.lightning_kwargs)
+
+        # Set `enable_checkpointing` to `False` by default. We will handle checkpointing ourselves.
+        lightning_kwargs["enable_checkpointing"] = lightning_kwargs.get(
+            "enable_checkpointing", False
+        )
+        kwargs.update(lightning_kwargs)
+
+        return kwargs
 
     additional_env_vars: dict[str, str] = {}
     """Additional environment variables to set when running the trainer."""

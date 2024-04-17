@@ -418,8 +418,7 @@ class Trainer(LightningTrainer):
             kwargs["default_root_dir"] = str(config.trainer.default_root_dir)
 
         # Update the kwargs with the additional trainer kwargs
-        kwargs.update(config.trainer.additional_trainer_kwargs)
-        kwargs.update(config.trainer.lightning_kwargs)
+        kwargs.update(config.trainer._lightning_trainer_kwargs())
 
         # Set the callbacks
         callbacks = kwargs.get("callbacks", [])
