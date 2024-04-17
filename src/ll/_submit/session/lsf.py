@@ -180,7 +180,7 @@ class LSFJobKwargs(TypedDict, total=False):
 
 
 def _unset_cuda_visible_devices_setup_commands(config: LSFJobKwargs):
-    if not config.get("unset_cuda_visible_devices", True):
+    if not config.get("unset_cuda_visible_devices", False):
         return
 
     yield "unset CUDA_VISIBLE_DEVICES"
@@ -208,6 +208,7 @@ def _summit_command_prefix(num_nodes: int) -> str:
 SUMMIT_DEFAULTS: LSFJobKwargs = {
     "command_prefix": _summit_command_prefix,
     "load_job_step_viewer": True,
+    "unset_cuda_visible_devices": True,
 }
 
 
@@ -379,11 +380,17 @@ def to_batch_script(
     if isinstance(command_or_callable, str):
         command = command_or_callable
     elif callable(command_or_callable):
+        additional_command_parts: list[str] = []
+        if kwargs.get("unset_cuda_visible_devices", False):
+            additional_command_parts.append("--unset-cuda")
+
         assert args is not None, "Expected args to be provided for callable"
         command = serialize_single(
             dest / "fn.pkl",
             command_or_callable,
-            *args,
+            args,
+            {},
+            additional_command_parts=additional_command_parts,
         ).to_command_str()
     else:
         raise TypeError(f"Expected str or callable, got {type(command_or_callable)}")
@@ -444,11 +451,17 @@ def to_array_batch_script(
 
         destdir = dest / "fns"
         destdir.mkdir(exist_ok=True)
+
+        additional_command_parts: list[str] = []
+        if kwargs.get("unset_cuda_visible_devices", False):
+            additional_command_parts.append("--unset-cuda")
+
         command = serialize_many(
             destdir,
             command_or_callable,
             [(args, {}) for args in args_list],
             start_idx=1,  # LSF job indices are 1-based
+            additional_command_parts=additional_command_parts,
         ).to_bash_command(job_index_variable)
     else:
         raise TypeError(f"Expected str or callable, got {type(command_or_callable)}")

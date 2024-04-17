@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any, TypeAlias
 
 import cloudpickle as pickle
-from typing_extensions import ParamSpec, TypedDict, override
+from typing_extensions import TypedDict, override
 
 _Path: TypeAlias = str | Path | PathLike
 
@@ -21,11 +21,19 @@ class SerializedFunctionCallDict(TypedDict):
 class SerializedFunction(PathLike):
     path: Path
 
+    _additional_command_parts: Sequence[str] = ()
+
     def to_command_parts(self, python_executable: str | None = None):
         if python_executable is None:
             python_executable = sys.executable
 
-        return [python_executable, "-m", __name__, str(self.path)]
+        return [
+            python_executable,
+            "-m",
+            __name__,
+            str(self.path),
+            *self._additional_command_parts,
+        ]
 
     def to_command_str(self, python_executable: str | None = None) -> str:
         return " ".join(self.to_command_parts(python_executable))
@@ -35,14 +43,12 @@ class SerializedFunction(PathLike):
         return str(self.path)
 
 
-P = ParamSpec("P")
-
-
 def serialize_single(
     dest: _Path,
-    fn: Callable[P, Any],
-    *args: P.args,
-    **kwargs: P.kwargs,
+    fn: Callable,
+    args: Sequence[Any],
+    kwargs: Mapping[str, Any],
+    additional_command_parts: Sequence[str] = (),
 ):
     serialized: SerializedFunctionCallDict = {"fn": fn, "args": args, "kwargs": kwargs}
 
@@ -50,13 +56,14 @@ def serialize_single(
     with dest.open("wb") as file:
         pickle.dump(serialized, file)
 
-    return SerializedFunction(dest)
+    return SerializedFunction(dest, additional_command_parts)
 
 
 @dataclass(frozen=True)
 class SerializedMultiFunction(PathLike):
     base_dir: Path
     functions: Sequence[SerializedFunction]
+    _additional_command_parts: Sequence[str] = ()
 
     def to_bash_command(
         self,
@@ -66,7 +73,11 @@ class SerializedMultiFunction(PathLike):
         if python_executable is None:
             python_executable = sys.executable
 
-        return f'{python_executable} -m {__name__} "{str(self.base_dir.absolute())}/${{{job_index_variable}}}.pkl"'
+        command = f'{python_executable} -m {__name__} "{str(self.base_dir.absolute())}/${{{job_index_variable}}}.pkl"'
+
+        if self._additional_command_parts:
+            command += " " + " ".join(self._additional_command_parts)
+        return command
 
     @override
     def __fspath__(self) -> str:
@@ -78,16 +89,21 @@ def serialize_many(
     fn: Callable,
     args_and_kwargs: Sequence[tuple[Sequence[Any], Mapping[str, Any]]],
     start_idx: int = 0,
+    additional_command_parts: Sequence[str] = (),
 ):
     serialized_list: list[SerializedFunction] = []
 
     destdir = Path(destdir)
     for i, (args, kwargs) in enumerate(args_and_kwargs):
         dest = destdir / f"{i+start_idx}.pkl"
-        serialized = serialize_single(dest, fn, *args, **kwargs)
+        serialized = serialize_single(dest, fn, args, kwargs)
         serialized_list.append(serialized)
 
-    return SerializedMultiFunction(destdir, serialized_list)
+    return SerializedMultiFunction(
+        destdir,
+        serialized_list,
+        additional_command_parts,
+    )
 
 
 def execute_single(path: _Path):
@@ -147,7 +163,20 @@ def picklerunner_main():
         nargs="+",
         help="Paths to the sessions to run",
     )
+    parser.add_argument(
+        "--unset-cuda",
+        action=argparse.BooleanOptionalAction,
+        help="Unset the CUDA_VISIBLE_DEVICES environment variable",
+    )
     args = parser.parse_args()
+
+    if args.unset_cuda:
+        log.critical("Unsetting CUDA_VISIBLE_DEVICES...")
+        import os
+
+        os.environ.pop("CUDA_VISIBLE_DEVICES", None)
+        for i in range(40):
+            os.environ.pop(f"CUDA_VISIBLE_DEVICES{i}", None)
 
     paths = list(_resolve_paths(args.paths))
     if not paths:
