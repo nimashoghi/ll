@@ -12,7 +12,16 @@ from datetime import timedelta
 from functools import wraps
 from logging import getLogger
 from pathlib import Path
-from typing import Any, Generic, Protocol, TypeAlias, TypedDict, cast, runtime_checkable
+from typing import (
+    Any,
+    Generic,
+    Literal,
+    Protocol,
+    TypeAlias,
+    TypedDict,
+    cast,
+    runtime_checkable,
+)
 
 import cloudpickle as pickle
 from tqdm.auto import tqdm
@@ -676,13 +685,13 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         return snapshot_path.absolute()
 
     @remove_lsf_environment_variables()
-    @remove_slurm_environment_variables()
     @remove_wandb_environment_variables()
     def submit_lsf(
         self,
         runs: Sequence[TConfig] | Sequence[tuple[TConfig, Unpack[TArguments]]],
         *,
         snapshot: bool | SnapshotConfig = False,
+        enable_conda: bool = True,
         **job_kwargs: Unpack[lsf.LSFJobKwargs],
     ):
         """"""
@@ -701,6 +710,13 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
             setup_commands.append(f"export {self.SNAPSHOT_ENV_NAME}={snapshot_str}")
             setup_commands.append(f"export PYTHONPATH={snapshot_str}:$PYTHONPATH")
 
+        # Conda environment
+        if enable_conda:
+            # Activate the conda environment
+            setup_commands.append('eval "$(conda shell.bash hook)"')
+            setup_commands.append(f"Echo 'Activating conda environment {sys.prefix}'")
+            setup_commands.append(f"conda activate {sys.prefix}")
+
         job_kwargs["environment"] = {**self.env, **job_kwargs.get("environment", {})}
         job_kwargs["setup_commands"] = setup_commands
 
@@ -711,22 +727,39 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
             job_kwargs["output_file"] = base_path / "logs"
 
         # Serialize the runs
-        map_array_args: list[tuple[TConfig, Unpack[TArguments]]] = list(
-            zip(*[(c, *args) for c, args in resolved_runs])
-        )
-        log.critical(f"Submitting {len(resolved_runs)} jobs.")
+        map_array_args: list[
+            tuple[
+                RunProtocol[TConfig, TReturn, Unpack[TArguments]],
+                Mapping[str, Any],
+                TConfig,
+                tuple[Unpack[TArguments]],
+            ]
+        ] = [(self._run, self._init_kwargs, c, args) for c, args in resolved_runs]
         script_path = lsf.to_array_batch_script(
-            base_path, self._run_fn, map_array_args, **job_kwargs
+            base_path,
+            lsf_cluster_main_function,
+            map_array_args,
+            **job_kwargs,
         )
         command_args = ["bsub", str(script_path.absolute())]
         print("Please run the following command to submit the jobs:")
         print(" ".join(command_args))
-        print()
 
-    @remove_lsf_environment_variables()
+    def submit_summit(
+        self,
+        runs: Sequence[TConfig] | Sequence[tuple[TConfig, Unpack[TArguments]]],
+        *,
+        snapshot: bool | SnapshotConfig = False,
+        queue: Literal["batch", "batch-hm", "killable", "debug"] = "batch",
+        lsf_kwargs: lsf.LSFJobKwargs = {},
+    ):
+        kwargs: lsf.LSFJobKwargs = {"summit": True, "queue": queue}
+        kwargs.update(lsf_kwargs)
+        self.submit_lsf(runs, snapshot=snapshot, **kwargs)
+
     @remove_slurm_environment_variables()
     @remove_wandb_environment_variables()
-    def submit(
+    def submit_slurm(
         self,
         runs: Sequence[TConfig] | Sequence[tuple[TConfig, Unpack[TArguments]]],
         *,
@@ -828,6 +861,8 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         for job, (config, _) in zip(jobs, resolved_runs):
             log.critical(f"[id={config.id}] Submitted job: {job.job_id} to {partition}")
         return jobs
+
+    submit = submit_slurm
 
 
 # First, let's create the function that's going to be run on the cluster.
