@@ -225,7 +225,7 @@ class Trainer(LightningTrainer):
             # Save stdout/stderr to a file.
             stack.enter_context(Trainer.output_save_context(config))
 
-            if config.trainer.apply_lsf_cluster_environment_hack:
+            if config.trainer.apply_lsf_cluster_environment_hack and False:
                 # PyTorch Lightning expects all GPUs to be present to all resource sets (tasks), but this is not the case
                 #   when we use `jsrun -n6 -g1 -a1 -c7`. This is because `jsrun` automatically sets the `CUDA_VISIBLE_DEVICES`
                 #   environment variable to the local rank of the task. PyTorch Lightning does not expect this and will fail
