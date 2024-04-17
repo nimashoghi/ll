@@ -13,7 +13,7 @@ from ...picklerunner import serialize_many, serialize_single
 
 DEFAULT_JOB_NAME = "ll"
 DEFAULT_NODES = 1
-DEFAULT_WALLTIME = timedelta(hours=24)
+DEFAULT_WALLTIME = timedelta(hours=3)
 DEFAULT_NTASKS_PER_NODE = 6
 
 TArgs = TypeVarTuple("TArgs")
