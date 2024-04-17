@@ -1,4 +1,5 @@
 import copy
+import os
 import string
 import time
 import warnings
@@ -1335,7 +1336,7 @@ class BaseConfig(TypedConfig):
         return c
 
     # region Helper methods
-    def with_base_dir_(self, base_dir: Path) -> Self:
+    def with_base_dir_(self, base_dir: str | Path | os.PathLike) -> Self:
         """
         Set the base directory for the trainer.
 
@@ -1345,7 +1346,7 @@ class BaseConfig(TypedConfig):
         Returns:
             self: The current instance of the class.
         """
-        self.directory.base = base_dir
+        self.directory.base = Path(base_dir)
         return self
 
     def debug_and_disable_logging_(self):
