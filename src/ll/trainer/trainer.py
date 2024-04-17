@@ -254,14 +254,8 @@ class Trainer(LightningTrainer):
         Yields:
             Callback: The default callbacks for the LL trainer.
         """
-        if config.trainer.on_exception_checkpoint:
-            log_dir = Path(
-                config.trainer.directory.resolve_subdirectory(config.id, "checkpoint")
-            )
-            yield OnExceptionCheckpoint(
-                log_dir,
-                filename=f"on_exception_{config.id}",
-            )
+        if config.trainer.checkpoint_saving.enabled:
+            yield from config.trainer.checkpoint_saving.construct_callbacks(config)
 
         if config.trainer.python_logging.use_rich_progress_bar:
             yield RichProgressBar()
@@ -283,23 +277,19 @@ class Trainer(LightningTrainer):
                     )
                 )
 
-            additional_nccl_env_vars: dict[str, str] = {}
+            additional_env_vars: dict[str, str] = {**config.trainer.additional_env_vars}
             if config.trainer.set_nccl_optimal_params:
                 # We need to set these env vars before the NCCL library is loaded.
                 # Reportedly, the training performance can be improved quite a bit, see
                 #   https://lightning.ai/docs/pytorch/stable/advanced/ddp_optimizations.html#on-a-multi-node-cluster-set-nccl-parameters
                 # Details on all available env vars: https://docs.nvidia.com/deeplearning/nccl/user-guide/docs/env.html
-                additional_nccl_env_vars["NCCL_NSOCKS_PERTHREAD"] = "4"
-                additional_nccl_env_vars["NCCL_SOCKET_NTHREADS"] = "2"
+                additional_env_vars["NCCL_NSOCKS_PERTHREAD"] = "4"
+                additional_env_vars["NCCL_SOCKET_NTHREADS"] = "2"
 
             if (precision := config.trainer.set_float32_matmul_precision) is not None:
                 torch.set_float32_matmul_precision(precision)
 
-            stack.enter_context(
-                set_additional_env_vars(
-                    config.trainer.additional_env_vars | additional_nccl_env_vars
-                )
-            )
+            stack.enter_context(set_additional_env_vars(additional_env_vars))
 
             try:
                 yield
@@ -338,7 +328,6 @@ class Trainer(LightningTrainer):
             "check_val_every_n_epoch": config.trainer.check_val_every_n_epoch,
             "num_sanity_val_steps": config.trainer.num_sanity_val_steps,
             "log_every_n_steps": config.trainer.log_every_n_steps,
-            "enable_checkpointing": config.trainer.enable_checkpointing,
             "enable_progress_bar": config.trainer.enable_progress_bar,
             "enable_model_summary": config.trainer.enable_model_summary,
             "accumulate_grad_batches": config.trainer.accumulate_grad_batches,
@@ -351,10 +340,10 @@ class Trainer(LightningTrainer):
             "plugins": config.trainer.plugins,
             "sync_batchnorm": config.trainer.sync_batchnorm,
             "reload_dataloaders_every_n_epochs": config.trainer.reload_dataloaders_every_n_epochs,
+            # Moved to `lightning_kwargs`:
+            # "enable_checkpointing": config.trainer.enable_checkpointing,
         }
-        # if config.trainer.automatic_gradient_clip:
-        #     kwargs["gradient_clip_val"] = config.trainer.gradient_clip_val
-        #     kwargs["gradient_clip_algorithm"] = config.trainer.gradient_clip_algorithm
+
         if (
             grad_clip_config := config.trainer.optimizer.gradient_clipping
         ) is not None and grad_clip_config.enabled:
@@ -427,7 +416,10 @@ class Trainer(LightningTrainer):
 
         if config.trainer.default_root_dir:
             kwargs["default_root_dir"] = str(config.trainer.default_root_dir)
+
+        # Update the kwargs with the additional trainer kwargs
         kwargs.update(config.trainer.additional_trainer_kwargs)
+        kwargs.update(config.trainer.lightning_kwargs)
 
         # Set the callbacks
         callbacks = kwargs.get("callbacks", [])
@@ -450,8 +442,6 @@ class Trainer(LightningTrainer):
         log.critical(f"LightningTrainer.__init__ with {args=} and {kwargs=}.")
         super().__init__(*args, **kwargs)
 
-        if config.trainer.checkpoint_last_by_default:
-            self._patch_checkpoint_last_by_default()
         if config.trainer.auto_add_trainer_finalizer:
             type(self)._finalizers.append(self.finalize)
 
@@ -459,48 +449,6 @@ class Trainer(LightningTrainer):
         if log_dir := self.log_dir:
             log_dir = str(Path(log_dir).resolve())
         log.critical(f"LightningTrainer log directory: {self.log_dir}.")
-
-    def _patch_checkpoint_last_by_default(self):
-        """
-        Patch the default ModelCheckpoint callback to save the last checkpoint by default.
-        """
-        enable_checkpointing = (
-            True
-            if self._ll_config.trainer.enable_checkpointing is None
-            else self._ll_config.trainer.enable_checkpointing
-        )
-        if not enable_checkpointing:
-            return
-
-        if not (callbacks := getattr(self, "callbacks", None)) or not isinstance(
-            callbacks, abc.Iterable
-        ):
-            return
-
-        if (
-            model_ckpt := next(
-                (c for c in callbacks if isinstance(c, ModelCheckpoint)), None
-            )
-        ) is None:
-            return
-
-        log.critical(f"Setting {model_ckpt.__class__.__name__}.save_last=True.")
-        model_ckpt.save_last = True
-        # HACK: call the `__validate_init_configuration` method to ensure that the `save_last` parameter is valid.
-        # `model_ckpt.__validate_init_configuration()` <- this doesn't work because it's a private method.
-        if (
-            validate_init_configuration := getattr(
-                model_ckpt,
-                f"_{model_ckpt.__class__.__name__}__validate_init_configuration",
-                None,
-            )
-        ) is not None and callable(validate_init_configuration):
-            validate_init_configuration()
-        else:
-            log.warning(
-                f"Failed to find {model_ckpt.__class__.__name__}.__validate_init_configuration. "
-                "This means that we cannot validate the `save_last` parameter for ModelCheckpoint."
-            )
 
     @override
     def _run(

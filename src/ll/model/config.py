@@ -14,6 +14,7 @@ from typing import (
     Literal,
     Protocol,
     TypeAlias,
+    TypedDict,
     runtime_checkable,
 )
 
@@ -485,7 +486,7 @@ class GradientSkippingConfig(TypedConfig):
     """Number of steps to wait before starting gradient skipping."""
 
 
-class OptimizerConfig(TypedConfig):
+class OptimizationConfig(TypedConfig):
     grad_finite_checks: bool = False
     """If enabled, will check that the gradients are finite after each backward pass."""
     grad_none_checks: bool = False
@@ -789,10 +790,14 @@ CheckpointCallbackConfig: TypeAlias = Annotated[
 
 
 class CheckpointSavingConfig(TypedConfig):
+    enabled: bool = True
+    """Enable checkpoint saving."""
+
     checkpoint_callbacks: Sequence[CheckpointCallbackConfig] = [
         ModelCheckpointCallbackConfig(enabled=True),
         OnExceptionCheckpointCallbackConfig(enabled=True),
     ]
+    """Checkpoint callback configurations."""
 
     def construct_callbacks(self, root_config):
         callbacks: list[Checkpoint] = []
@@ -801,6 +806,16 @@ class CheckpointSavingConfig(TypedConfig):
                 continue
             callbacks.append(callback_config.construct_callback(root_config))
         return callbacks
+
+
+class LightningTrainerKwargs(TypedDict, total=False):
+    enable_checkpointing: bool
+    """
+    If ``True``, enable checkpointing.
+        It will configure a default ModelCheckpoint callback if there is no user-defined ModelCheckpoint in
+        :paramref:`~lightning.pytorch.trainer.trainer.Trainer.callbacks`.
+        Default: ``True``.
+    """
 
 
 class TrainerConfig(TypedConfig):
@@ -819,16 +834,11 @@ class TrainerConfig(TypedConfig):
     logging: LoggingConfig = LoggingConfig()
     """Logging/experiment tracking (e.g., WandB) configuration options."""
 
-    optimizer: OptimizerConfig = OptimizerConfig()
-    """Optimizer configuration options."""
+    optimizer: OptimizationConfig = OptimizationConfig()
+    """Optimization configuration options."""
 
     reproducibility: ReproducibilityConfig = ReproducibilityConfig()
     """Reproducibility configuration options."""
-
-    seed: int | None = 0
-    """Seed for the random number generator. If None, will use a random seed."""
-    seed_workers: bool = False
-    """Whether to seed the workers of the dataloader."""
 
     auto_wrap_trainer: bool = True
     """If enabled, will automatically wrap the `run` function with a `Trainer.context()` context manager. Should be `True` most of the time."""
@@ -836,10 +846,6 @@ class TrainerConfig(TypedConfig):
     """If enabled, will automatically set the default root dir to [cwd/lightning_logs/<id>/]. There is basically no reason to disable this."""
     auto_set_loggers: bool = True
     """If enabled, will automatically set the loggers to [WandbLogger, CSVLogger, TensorboardLogger] as defined in `config.logging`. Should be `True` most of the time."""
-    checkpoint_last_by_default: bool = True
-    """If enabled, will update the trainer to save the last checkpoint by default."""
-    on_exception_checkpoint: bool = True
-    """If enabled, will checkpoint the model when an exception is thrown during training."""
     auto_add_trainer_finalizer: bool = True
     """If enabled, will automatically finalize the trainer (e.g., call `wandb.finish()`) when the run ends. Should be `True` most of the time."""
 
@@ -859,8 +865,20 @@ class TrainerConfig(TypedConfig):
         - If the `interval` is epoch, it makes sure that validation is called every `frequency` epochs.
     """
 
+    lightning_kwargs: LightningTrainerKwargs = LightningTrainerKwargs()
+    """
+    Additional keyword arguments to pass to the Lightning `pl.Trainer` constructor.
+
+    Please refer to the Lightning documentation for a list of valid keyword arguments.
+    """
+
     additional_trainer_kwargs: dict[str, Any] = {}
-    """Additional keyword arguments to pass to the Lightning `pl.Trainer` constructor."""
+    """
+    Additional keyword arguments to pass to the Lightning `pl.Trainer` constructor.
+
+    This is essentially a non-type-checked version of `lightning_kwargs`.
+    """
+
     additional_env_vars: dict[str, str] = {}
     """Additional environment variables to set when running the trainer."""
     set_nccl_optimal_params: bool = False
@@ -985,13 +1003,6 @@ class TrainerConfig(TypedConfig):
     """
     How often to log within steps.
         Default: ``50``.
-    """
-    enable_checkpointing: bool | None = None
-    """
-    If ``True``, enable checkpointing.
-        It will configure a default ModelCheckpoint callback if there is no user-defined ModelCheckpoint in
-        :paramref:`~lightning.pytorch.trainer.trainer.Trainer.callbacks`.
-        Default: ``True``.
     """
     enable_progress_bar: bool | None = None
     """
