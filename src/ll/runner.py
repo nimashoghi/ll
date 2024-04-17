@@ -175,8 +175,6 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         }
 
         self._base_path.mkdir(exist_ok=True)
-        # Add a gitignore file to the directory so that the entire directory is ignored by git (except for the .gitignore file itself)
-        (self._base_path / ".gitignore").write_text("*\n")
 
     @property
     def _run_fn(self) -> RunProtocol[TConfig, TReturn, Unpack[TArguments]]:

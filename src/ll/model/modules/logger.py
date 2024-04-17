@@ -6,8 +6,8 @@ from typing import TYPE_CHECKING, Any
 
 import torchmetrics
 from lightning.pytorch import LightningModule
-from lightning.pytorch.utilities.rank_zero import rank_zero_warn
 from lightning.pytorch.utilities.types import _METRIC
+from lightning_utilities.core.rank_zero import rank_zero_warn
 from typing_extensions import override
 
 from ...actsave import ActSave

@@ -637,10 +637,9 @@ class DirectoryConfig(TypedConfig):
         # Add a .gitignore file to the .llruns directory
         #   which will ignore all files except for the .gitignore file itself
         gitignore_path = llruns_dir / ".gitignore"
-        if gitignore_path.exists():
-            gitignore_path.unlink()
-        gitignore_path.touch()
-        gitignore_path.write_text("*\n")
+        if not gitignore_path.exists():
+            gitignore_path.touch()
+            gitignore_path.write_text("*\n")
 
         base_dir = llruns_dir / run_id
         base_dir.mkdir(exist_ok=True)
