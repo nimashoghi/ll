@@ -16,4 +16,4 @@ reportPrivateImportUsage = false
 ignore = ["src/ll/submitit/*"]
 
 [tool.ruff.lint]
-ignore = ["F722", "F821"]
+ignore = ["F722", "F821", "E741"]

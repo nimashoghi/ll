@@ -174,7 +174,7 @@ def _try_get(fn: Callable[[], T]) -> T | None:
         return None
 
 
-class LightningModuleBase(
+class LightningModuleBase(  # pyright: ignore[reportIncompatibleMethodOverride]
     ProfilerMixin,
     LogDirMixin,
     WandbWrapperMixin,
@@ -211,8 +211,8 @@ class LightningModuleBase(
         if "hparams" not in parameters:
             raise TypeError(f"__init__'s argument must be named 'hparams': {init_fn}")
 
-    hparams: THparams  # type: ignore
-    hparams_initial: THparams  # type: ignore
+    hparams: THparams  # pyright: ignore[reportIncompatibleMethodOverride]
+    hparams_initial: THparams  # pyright: ignore[reportIncompatibleMethodOverride]
 
     @classmethod
     @abstractmethod
@@ -380,8 +380,8 @@ class LightningDataModuleBase(
     ABC,
     Generic[THparams],
 ):
-    hparams: THparams  # type: ignore
-    hparams_initial: THparams  # type: ignore
+    hparams: THparams  # pyright: ignore[reportIncompatibleMethodOverride]
+    hparams_initial: THparams  # pyright: ignore[reportIncompatibleMethodOverride]
 
     def pre_init_update_hparams_dict(self, hparams: MutableMapping[str, Any]):
         """

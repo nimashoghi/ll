@@ -1,9 +1,6 @@
 import contextlib
-import datetime
 import hashlib
 import logging
-import os
-from collections import abc
 from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from types import NoneType
@@ -13,7 +10,6 @@ import torch
 from lightning.pytorch import LightningDataModule, LightningModule
 from lightning.pytorch import Trainer as LightningTrainer
 from lightning.pytorch.callbacks import (
-    ModelCheckpoint,
     RichProgressBar,
 )
 from lightning.pytorch.plugins.environments import SLURMEnvironment

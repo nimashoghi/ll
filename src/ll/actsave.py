@@ -33,6 +33,7 @@ def _to_numpy(activation: Value) -> np.ndarray:
         return activation.cpu().numpy()
     if isinstance(activation, (int, float, complex, str, bool)):
         return np.array(activation)
+
     return activation
 
 
