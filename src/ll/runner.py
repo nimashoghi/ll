@@ -131,6 +131,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         self,
         run: RunProtocol[TConfig, TReturn, Unpack[TArguments]],
         *,
+        savedir: Path | None = None,
         slurm_job_name: str = "ll",
         validate_config_before_run: bool = True,
         validate_strict: bool = True,
@@ -143,6 +144,10 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         ----------
         run : RunProtocol[TConfig, Unpack[TArguments]]
             `run` is an instance of a class that implements the `RunProtocol` interface. It represents the main function or entry point of the program that will be executed.
+        savedir : Path, optional
+            The `savedir` parameter is a string that represents the directory where the program will save its execution files and logs.
+            This is used when submitting the program to a SLURM/LSF cluster or when using the `local_sessions` method.
+            If `None`, this will default to the current working directory / `.lljobs`.
         slurm_job_name : str, optional
             The `slurm_job_name` parameter is a string that represents the name of the job when submitting it to a SLURM cluster.
         validate_config_before_run : bool, optional
@@ -154,6 +159,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         super().__init__()
 
         self._run = run
+        self._base_path = savedir or Path.cwd() / ".lljobs"
         self.slurm_job_name = slurm_job_name
         self.validate_config_before_run = validate_config_before_run
         self.validate_strict = validate_strict
@@ -166,6 +172,10 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
             **self.DEFAULT_ENV,
             **(env or {}),
         }
+
+        self._base_path.mkdir(exist_ok=True)
+        # Add a gitignore file to the directory so that the entire directory is ignored by git (except for the .gitignore file itself)
+        (self._base_path / ".gitignore").write_text("*\n!.gitignore\n")
 
     @property
     def _run_fn(self) -> RunProtocol[TConfig, TReturn, Unpack[TArguments]]:
@@ -610,7 +620,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         gc.collect()
 
     def _local_data_path(self, id: str):
-        local_data_path = Path.cwd() / f"ll_{id}"
+        local_data_path = self._base_path / id
         local_data_path.mkdir(exist_ok=True)
 
         # Add a gitignore file to the directory so that the entire directory is ignored by git
