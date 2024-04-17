@@ -14,6 +14,7 @@ from ...picklerunner import serialize_many, serialize_single
 DEFAULT_JOB_NAME = "ll"
 DEFAULT_NODES = 1
 DEFAULT_WALLTIME = timedelta(hours=72)
+DEFAULT_NTASKS_PER_NODE = 6
 
 TArgs = TypeVarTuple("TArgs")
 
@@ -141,6 +142,22 @@ class LSFJobKwargs(TypedDict, total=False):
     This corresponds to the "-alloc_flags" option in bsub. If specified, the job will be allocated using these flags.
     """
 
+    command_prefix: str
+    """
+    A command to prefix the job command with.
+
+    This is used to add commands like `jsrun` to the job command.
+    """
+
+    # Our own custom options
+    # Is this being sent to the Summit cluster?
+    summit: bool
+
+
+SUMMIT_DEFAULTS: LSFJobKwargs = {
+    "command_prefix": "jsrun -n6 -c7 -g1 -a7 -dcyclic",
+}
+
 
 def _append_job_index_to_path(path: Path) -> Path:
     # If job array, append the job index to the output file
@@ -233,6 +250,17 @@ def _write_batch_script_to_file(
     return path
 
 
+def _update_kwargs(kwargs: LSFJobKwargs):
+    # Update the kwargs with the default values
+    kwargs = {**kwargs}
+
+    # If the job is being submitted to Summit, update the kwargs with the Summit defaults
+    if kwargs.get("summit"):
+        kwargs = {**SUMMIT_DEFAULTS, **kwargs}
+
+    return kwargs
+
+
 @overload
 def to_batch_script(
     dest: Path, command: str, /, **kwargs: Unpack[LSFJobKwargs]
@@ -259,6 +287,8 @@ def to_batch_script(
     """
     Create the batch script for the job.
     """
+
+    kwargs = _update_kwargs(kwargs)
 
     # Convert the command/callable to a string for the command
     command: str
@@ -309,6 +339,8 @@ def to_array_batch_script(
     """
     Create the batch script for the job.
     """
+
+    kwargs = _update_kwargs(kwargs)
 
     # Convert the command/callable to a string for the command
     command: str
