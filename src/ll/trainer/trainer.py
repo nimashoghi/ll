@@ -260,10 +260,13 @@ class Trainer(LightningTrainer):
 
             if config.trainer.apply_lsf_cluster_environment_hack:
                 # PyTorch Lightning expects all GPUs to be present to all resource sets (tasks), but this is not the case
-                #   when we use `jsrun -n6 -g1 -a1 -c7`.
-                # This hack will fix this by setting the `JSM_NAMESPACE_LOCAL_RANK` environment variable (which
-                #   Lightning reads) to 0, which is the correct value for the case where every task has its own GPU.
-                os.environ["JSM_NAMESPACE_LOCAL_RANK"] = "0"
+                #   when we use `jsrun -n6 -g1 -a1 -c7`. This is because `jsrun` automatically sets the `CUDA_VISIBLE_DEVICES`
+                #   environment variable to the local rank of the task. PyTorch Lightning does not expect this and will fail
+                #   with an error message like `RuntimeError: CUDA error: invalid device ordinal`. This hack will fix this by
+                #   unsetting the `CUDA_VISIBLE_DEVICES` environment variable, so that PyTorch Lightning can see all GPUs.
+                #   This is a hack and should be removed once PyTorch Lightning supports this natively.
+                if "CUDA_VISIBLE_DEVICES" in os.environ:
+                    del os.environ["CUDA_VISIBLE_DEVICES"]
                 log.critical("Applied LSF cluster environment hack.")
 
             yield
