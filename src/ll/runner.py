@@ -147,7 +147,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         savedir : Path, optional
             The `savedir` parameter is a string that represents the directory where the program will save its execution files and logs.
             This is used when submitting the program to a SLURM/LSF cluster or when using the `local_sessions` method.
-            If `None`, this will default to the current working directory / `.lljobs`.
+            If `None`, this will default to the current working directory / `lljobs`.
         slurm_job_name : str, optional
             The `slurm_job_name` parameter is a string that represents the name of the job when submitting it to a SLURM cluster.
         validate_config_before_run : bool, optional
@@ -159,7 +159,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         super().__init__()
 
         self._run = run
-        self._base_path = Path.cwd() / ".lljobs" if savedir is None else Path(savedir)
+        self._base_path = Path.cwd() / "lljobs" if savedir is None else Path(savedir)
         self.slurm_job_name = slurm_job_name
         self.validate_config_before_run = validate_config_before_run
         self.validate_strict = validate_strict
