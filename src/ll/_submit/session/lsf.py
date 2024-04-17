@@ -264,6 +264,12 @@ def _write_batch_script_to_file(
 
         f.write("\n")
 
+        if (command_prefix := kwargs.get("command_prefix")) is not None:
+            command = " ".join(
+                x_stripped
+                for x in (command_prefix, command)
+                if (x_stripped := x.strip())
+            )
         f.write(f"{command}\n")
 
     return path
