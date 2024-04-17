@@ -169,7 +169,7 @@ class LSFJobKwargs(TypedDict, total=False):
 
 
 SUMMIT_DEFAULTS: LSFJobKwargs = {
-    "command_prefix": "jsrun -n6 -c7 -g1 -a1",
+    "command_prefix": "jsrun -n6 -c7 -g1 -a1 -brs",
     "load_job_step_viewer": True,
 }
 
