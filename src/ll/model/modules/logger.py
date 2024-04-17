@@ -70,10 +70,11 @@ class LoggerModuleMixin(mixin_base_type(LightningModule)):
     if TYPE_CHECKING:
 
         @override
-        def log(
+        def log(  # type: ignore[override]
             self,
             name: str,
             value: _METRIC,
+            *,
             prog_bar: bool = False,
             logger: bool | None = None,
             on_step: bool | None = None,
