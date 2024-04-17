@@ -23,10 +23,10 @@ class WandbWrapperMixin(mixin_base_type(CallbackModuleMixin)):
 
             config = cast(BaseConfig, self.hparams)
             if (
-                not config.trainer.logging.enabled
-                or not config.trainer.logging.wandb
-                or not config.trainer.logging.wandb.watch
-                or not config.trainer.logging.wandb.watch.enabled
+                not config.trainer.experiment_tracking.enabled
+                or (wandb_config := config.trainer.experiment_tracking.wandb) is None
+                or not wandb_config.watch
+                or not wandb_config.watch.enabled
             ):
                 return
 
@@ -52,9 +52,9 @@ class WandbWrapperMixin(mixin_base_type(CallbackModuleMixin)):
 
             logger.watch(
                 module,
-                log=cast(str, config.trainer.logging.wandb.watch.log),
-                log_freq=config.trainer.logging.wandb.watch.log_freq,
-                log_graph=config.trainer.logging.wandb.watch.log_graph,
+                log=cast(str, wandb_config.watch.log),
+                log_freq=wandb_config.watch.log_freq,
+                log_graph=wandb_config.watch.log_graph,
             )
             setattr(self, "_model_watched", True)
 

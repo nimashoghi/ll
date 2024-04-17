@@ -12,8 +12,14 @@ from ..model.config import BaseConfig
 log = getLogger(__name__)
 
 
-def default_root_dir(config: BaseConfig, *, logs_dirname: str = "lightning_logs"):
-    base_path = (Path.cwd() / logs_dirname).resolve().absolute()
+def default_root_dir(
+    config: BaseConfig,
+    *,
+    logs_dirname: str = "lightning_logs",
+):
+    if (base_dir := config.trainer.default_root_dir) is None:
+        base_dir = Path.cwd()
+    base_path = (base_dir / logs_dirname).resolve().absolute()
     path = base_path / config.id
     path.mkdir(parents=True, exist_ok=True)
     return path
@@ -72,13 +78,12 @@ def _default_loggers(
 
 
 def loggers_from_config(config: BaseConfig) -> list[Logger]:
-    logging_config = config.trainer.logging
-    if not logging_config.enabled or config.trainer.logger is False:
+    if not (logging_config := config.trainer.experiment_tracking).enabled:
         return []
 
     wandb_log_model = False
     if logging_config.wandb is not None:
-        match (wandb_log_model := logging_config.wandb.log_model):
+        match wandb_log_model := logging_config.wandb.log_model:
             case True | False | "all":
                 log.info(f"W&B logging model: {wandb_log_model}.")
             case _:

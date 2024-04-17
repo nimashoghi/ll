@@ -219,9 +219,9 @@ class Trainer(LightningTrainer):
                         "You have set both `config.trainer.default_root_dir` and `config.trainer.auto_set_default_root_dir`. "
                         "Please set only one of them."
                     )
-                config.trainer.default_root_dir = str(
-                    cls.ll_default_root_dir(config).absolute()
-                )
+                config.trainer.default_root_dir = cls.ll_default_root_dir(
+                    config
+                ).absolute()
                 log.critical(f"Setting {config.trainer.default_root_dir=}.")
 
             yield
@@ -321,7 +321,7 @@ class Trainer(LightningTrainer):
             "devices": config.trainer.devices,
             "num_nodes": config.trainer.num_nodes,
             "precision": config.trainer.precision,
-            "logger": config.trainer.logger,
+            "logger": config.trainer.experiment_tracking.enabled,
             "fast_dev_run": config.trainer.fast_dev_run,
             "max_epochs": config.trainer.max_epochs,
             "min_epochs": config.trainer.min_epochs,

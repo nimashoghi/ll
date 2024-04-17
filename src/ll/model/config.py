@@ -3,6 +3,7 @@ import string
 import time
 import warnings
 from abc import ABC, abstractmethod
+from collections.abc import Sequence
 from datetime import timedelta
 from logging import getLogger
 from pathlib import Path
@@ -22,6 +23,7 @@ from lightning.fabric.plugins.precision.precision import _PRECISION_INPUT
 from lightning.pytorch.plugins.layer_sync import LayerSync
 from lightning.pytorch.plugins.precision.precision import Precision
 from lightning.pytorch.profilers import Profiler
+from pydantic import DirectoryPath
 from typing_extensions import Self, TypeVar, deprecated, override
 
 from ..config import Field, TypedConfig
@@ -221,6 +223,7 @@ class EnvironmentConfig(TypedConfig):
 
     slurm: EnvironmentSLURMInformationConfig | None = None
 
+    base_dir: Path | None = None
     log_dir: Path | None = None
 
     seed: int | None = None
@@ -236,9 +239,19 @@ class WandbWatchConfig(TypedConfig):
     log_freq: int = 100
 
 
-class WandbLoggingConfig(TypedConfig):
+class BaseLoggerConfig(TypedConfig, ABC):
     enabled: bool = True
-    """Enable logging to wandb."""
+    """Enable logging for this logger."""
+
+    priority: int = 0
+    """Priority of the logger. Higher values are logged first."""
+
+    log_dir: DirectoryPath | None = None
+    """Directory to save the logs to. If None, will use the default log directory for the trainer."""
+
+
+class WandbLoggerConfig(BaseLoggerConfig):
+    kind: Literal["wandb"] = "wandb"
 
     log_model: bool | str = False
     """
@@ -252,34 +265,28 @@ class WandbLoggingConfig(TypedConfig):
     watch: WandbWatchConfig = WandbWatchConfig()
     """WandB model watch configuration. Used to log model architecture, gradients, and parameters."""
 
-
-class CSVLoggingConfig(TypedConfig):
-    enabled: bool = True
-    """Enable logging to CSV files."""
+    priority: int = 2
+    """Priority of the logger. Higher values are logged first."""
 
 
-class TensorboardLoggingConfig(TypedConfig):
-    enabled: bool = False
-    """Enable logging to tensorboard."""
+class CSVLoggerConfig(BaseLoggerConfig):
+    kind: Literal["csv"] = "csv"
+
+    priority: int = 0
+    """Priority of the logger. Higher values are logged first."""
 
 
-class LoggingConfig(TypedConfig):
-    enabled: bool = True
-    """Enable logging."""
+class TensorboardLoggerConfig(BaseLoggerConfig):
+    kind: Literal["tensorboard"] = "tensorboard"
 
-    log_lr: bool | Literal["step", "epoch"] = True
-    """If enabled, will register a `LearningRateMonitor` callback to log the learning rate to the logger."""
-    log_epoch: bool = True
-    """If enabled, will log the fractional epoch number to the logger."""
+    priority: int = 2
+    """Priority of the logger. Higher values are logged first."""
 
-    wandb: WandbLoggingConfig = WandbLoggingConfig()
-    """WandB configuration"""
 
-    csv: CSVLoggingConfig = CSVLoggingConfig()
-    """CSV configuration"""
-
-    tensorboard: TensorboardLoggingConfig = TensorboardLoggingConfig()
-    """Tensorboard configuration"""
+LoggerConfig: TypeAlias = Annotated[
+    WandbLoggerConfig | CSVLoggerConfig | TensorboardLoggerConfig,
+    Field(discriminator="kind"),
+]
 
 
 class GradientClippingConfig(TypedConfig):
@@ -378,15 +385,92 @@ class CheckpointConfig(TypedConfig):
     """
 
 
+class ExperimentTrackingConfig(TypedConfig):
+    enabled: bool = True
+    """Enable experiment tracking."""
+
+    loggers: Sequence[LoggerConfig] = [
+        WandbLoggerConfig(enabled=True),
+        CSVLoggerConfig(enabled=True),
+        TensorboardLoggerConfig(enabled=True),
+    ]
+    """Loggers to use for experiment tracking."""
+
+    log_lr: bool | Literal["step", "epoch"] = True
+    """If enabled, will register a `LearningRateMonitor` callback to log the learning rate to the logger."""
+    log_epoch: bool = True
+    """If enabled, will log the fractional epoch number to the logger."""
+
+    @property
+    def wandb(self) -> WandbLoggerConfig | None:
+        return next(
+            (
+                logger
+                for logger in self.loggers
+                if isinstance(logger, WandbLoggerConfig)
+            ),
+        )
+
+    @property
+    def csv(self) -> CSVLoggerConfig | None:
+        return next(
+            (logger for logger in self.loggers if isinstance(logger, CSVLoggerConfig)),
+        )
+
+    @property
+    def tensorboard(self) -> TensorboardLoggerConfig | None:
+        return next(
+            (
+                logger
+                for logger in self.loggers
+                if isinstance(logger, TensorboardLoggerConfig)
+            ),
+        )
+
+
+class DirectoryConfig(TypedConfig):
+    base: DirectoryPath | None = None
+    """Base directory to use for the trainer. If None, will use the current working directory."""
+
+    log: DirectoryPath | None = None
+    """Log directory to use for the trainer. If None, will use the base directory."""
+
+    checkpoint: DirectoryPath | None = None
+    """Checkpoint directory to use for the trainer. If None, will use the base directory."""
+
+    def resolve_base_directory(self) -> Path:
+        if self.base is None:
+            return Path.cwd()
+        return self.base
+
+    def resolve_log_directory(self) -> Path:
+        if self.log is None:
+            return self.resolve_base_directory()
+        return self.log
+
+    def resolve_checkpoint_directory(self) -> Path:
+        if self.checkpoint is None:
+            return self.resolve_base_directory()
+        return self.checkpoint
+
+    def resolve_log_directory_for_logger(self, logger: BaseLoggerConfig) -> Path:
+        if (log_dir := logger.log_dir) is not None:
+            return log_dir
+        return self.resolve_log_directory()
+
+
 class TrainerConfig(TypedConfig):
+    directory: DirectoryConfig = DirectoryConfig()
+    """Directory configuration options."""
+
     checkpoint: CheckpointConfig = CheckpointConfig()
     """Checkpoint loading configuration options."""
 
     python_logging: PythonLogging = PythonLogging()
     """Python logging configuration options."""
 
-    logging: LoggingConfig = LoggingConfig()
-    """Logging (e.g., WandB logging) configuration options."""
+    experiment_tracking: ExperimentTrackingConfig = ExperimentTrackingConfig()
+    """Experiment tracking (e.g., WandB) configuration options."""
 
     optimizer: OptimizerConfig = OptimizerConfig()
     """Optimizer configuration options."""
@@ -400,6 +484,8 @@ class TrainerConfig(TypedConfig):
     """If enabled, will automatically wrap the `run` function with a `Trainer.context()` context manager. Should be `True` most of the time."""
     auto_set_default_root_dir: bool = True
     """If enabled, will automatically set the default root dir to [cwd/lightning_logs/<id>/]. Should be `True` most of the time."""
+    auto_set_default_root_dir_base_path: DirectoryPath | None = None
+    """Base path to use when setting the default root dir. If None, will use the current working directory."""
     auto_set_loggers: bool = True
     """If enabled, will automatically set the loggers to [WandbLogger, CSVLogger, TensorboardLogger] as defined in `config.logging`. Should be `True` most of the time."""
     checkpoint_last_by_default: bool = True
@@ -648,7 +734,7 @@ class TrainerConfig(TypedConfig):
     Set to a positive integer to reload dataloaders every n epochs.
         Default: ``0``.
     """
-    default_root_dir: str | Path | None = None
+    default_root_dir: DirectoryPath | None = None
     """
     Default path for logs and weights when no logger/ckpt_callback passed.
         Default: ``os.getcwd()``.
@@ -771,7 +857,7 @@ class BaseConfig(TypedConfig):
             self: The current instance of the class.
         """
         self.debug = True
-        self.trainer.logging.enabled = False
+        self.trainer.experiment_tracking.enabled = False
         self.trainer.python_logging.log_level = "DEBUG"
 
         return self

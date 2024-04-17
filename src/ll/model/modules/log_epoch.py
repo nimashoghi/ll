@@ -11,15 +11,14 @@ from .callback import CallbackModuleMixin
 @runtime_checkable
 class _HasEpochProperty(Protocol):
     @property
-    def epoch(self) -> float:
-        ...
+    def epoch(self) -> float: ...
 
 
 def _log_epoch_callback(module: LightningModule, trainer: Trainer, *, prefix: str):
     if trainer.logger is None:
         return
 
-    config = cast(BaseConfig, module.hparams).trainer.logging
+    config = cast(BaseConfig, module.hparams).trainer.experiment_tracking
     if not config.log_epoch:
         return
 
@@ -39,10 +38,12 @@ class LogEpochMixin(mixin_base_type(CallbackModuleMixin)):
         super().__init__(*args, **kwargs)
 
         self.register_callback(
-            on_train_batch_start=lambda trainer, module, *args, **kwargs: _log_epoch_callback(
-                module, trainer, prefix="train/"
-            ),
-            on_validation_batch_start=lambda trainer, module, *args, **kwargs: _log_epoch_callback(
-                module, trainer, prefix="val/"
-            ),
+            on_train_batch_start=lambda trainer,
+            module,
+            *args,
+            **kwargs: _log_epoch_callback(module, trainer, prefix="train/"),
+            on_validation_batch_start=lambda trainer,
+            module,
+            *args,
+            **kwargs: _log_epoch_callback(module, trainer, prefix="val/"),
         )

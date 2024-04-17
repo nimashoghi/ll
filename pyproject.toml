@@ -2,8 +2,15 @@
 name = "ll"
 version = "0.0.1"
 
+[tool.pytest.ini_options]
+addopts = ["--import-mode=importlib"]
+python_files = ["**/__tests__/*.py"]
+
 [tool.pyright]
 deprecateTypingAliases = true
 strictListInference = true
 strictDictionaryInference = true
 strictSetInference = true
+
+[tool.ruff.lint]
+ignore = ["F722", "F821"]

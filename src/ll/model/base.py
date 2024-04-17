@@ -298,6 +298,7 @@ class LightningModuleBase(
         hparams.environment.config = _cls_info(cls.config_cls())
         hparams.environment.model = _cls_info(cls)
         hparams.environment.slurm = _slurm_session_info()
+        hparams.environment.base_dir = hparams.trainer.base_directory_or_cwd
         hparams.environment.log_dir = Path(
             hparams.trainer.default_root_dir
             or LLTrainer.ll_default_root_dir(hparams).absolute()

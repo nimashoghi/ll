@@ -19,7 +19,7 @@ class LRMonitorMixin(mixin_base_type(CallbackModuleMixin)):
         def _lr_monitor_callback():
             nonlocal self
 
-            config = cast(BaseConfig, self.hparams).trainer.logging
+            config = cast(BaseConfig, self.hparams).trainer.experiment_tracking
             if not config.log_lr:
                 return None
 

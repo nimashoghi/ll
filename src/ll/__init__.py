@@ -9,18 +9,18 @@ from .exception import SkipBatch
 from .model.base import Base, LightningDataModuleBase, LightningModuleBase
 from .model.config import (
     BaseConfig,
-    CSVLoggingConfig,
+    CSVLoggerConfig,
     EnvironmentConfig,
+    ExperimentTrackingConfig,
     GradientClippingConfig,
     GradientSkippingConfig,
-    LoggingConfig,
     OptimizerConfig,
     PythonLogging,
     RunnerConfig,
     RunnerOutputSaveConfig,
-    TensorboardLoggingConfig,
+    TensorboardLoggerConfig,
     TrainerConfig,
-    WandbLoggingConfig,
+    WandbLoggerConfig,
     WandbWatchConfig,
 )
 from .runner import Runner, SnapshotConfig
@@ -50,7 +50,7 @@ __all__ = [
     "EnvironmentConfig",
     "GradientClippingConfig",
     "GradientSkippingConfig",
-    "LoggingConfig",
+    "ExperimentTrackingConfig",
     "OptimizerConfig",
     "PythonLogging",
     "RunnerConfig",
