@@ -1,11 +1,13 @@
 import contextlib
 import hashlib
 import logging
+import os
 from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from typing import Any, cast
 
 import torch
+import yaml
 from lightning.fabric.plugins.environments.lsf import LSFEnvironment
 from lightning.fabric.plugins.environments.slurm import SLURMEnvironment
 from lightning.fabric.plugins.precision.precision import _PRECISION_INPUT
@@ -222,6 +224,26 @@ class Trainer(LightningTrainer):
 
             # Save stdout/stderr to a file.
             stack.enter_context(Trainer.output_save_context(config))
+
+            # Dump the configuration to the log
+            if config.runner.dump_run_information:
+                dump_dir = (
+                    config.directory.resolve_subdirectory(config.id, "stdio") / "dump"
+                )
+                dump_dir.mkdir(parents=True, exist_ok=True)
+
+                # First, dump the full config
+                full_config_path = dump_dir / "config.yaml"
+                config_dict = config.model_dump(mode="json")
+                with full_config_path.open("w") as file:
+                    yaml.dump(config_dict, file)
+
+                # Dump all environment variables
+                env_vars_path = dump_dir / "env.yaml"
+                env_vars = dict(os.environ)
+                with env_vars_path.open("w") as file:
+                    yaml.dump(env_vars, file)
+
             yield
 
     @classmethod

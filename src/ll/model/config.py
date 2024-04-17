@@ -1298,6 +1298,13 @@ class RunnerConfig(TypedConfig):
     """If enabled, will automatically call the Trainer.runner_init() function from the Runner. Should be `True` most of the time."""
     save_output: RunnerOutputSaveConfig | None = None
     """Output saving configuration options, or ``None`` to disable output saving."""
+    dump_run_information: bool = True
+    """
+    If enabled, will dump different bits of run information to the output directory before starting the run.
+    This includes:
+        - Run config
+        - Full set of environment variables
+    """
 
 
 class BaseConfig(TypedConfig):
