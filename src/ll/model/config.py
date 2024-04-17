@@ -239,9 +239,6 @@ class EnvironmentConfig(TypedConfig):
 
 
 class BaseLoggerConfig(TypedConfig, ABC):
-    enabled: bool = True
-    """Enable logging for this logger."""
-
     priority: int = 0
     """Priority of the logger. Higher values are logged first."""
 
@@ -284,8 +281,11 @@ class WandbWatchConfig(TypedConfig):
 
 def _wandb_available():
     try:
-        import wandb  # noqa: F401
+        from lightning.pytorch.loggers.wandb import _WANDB_AVAILABLE
 
+        if not _WANDB_AVAILABLE:
+            log.warning("WandB not found. Disabling WandbLogger.")
+            return False
         return True
     except ImportError:
         return False
@@ -378,8 +378,16 @@ class CSVLoggerConfig(BaseLoggerConfig):
 
 def _tensorboard_available():
     try:
-        import tensorboard  # noqa: F401
+        from lightning.fabric.loggers.tensorboard import (
+            _TENSORBOARD_AVAILABLE,
+            _TENSORBOARDX_AVAILABLE,
+        )
 
+        if not _TENSORBOARD_AVAILABLE and not _TENSORBOARDX_AVAILABLE:
+            log.warning(
+                "TensorBoard/ TensorBoardX not found. Disabling TensorBoardLogger."
+            )
+            return False
         return True
     except ImportError:
         return False
@@ -443,9 +451,9 @@ class LoggingConfig(TypedConfig):
     """Enable experiment tracking."""
 
     loggers: Sequence[LoggerConfig] = [
-        WandbLoggerConfig(enabled=True),
-        CSVLoggerConfig(enabled=True),
-        TensorboardLoggerConfig(enabled=True),
+        WandbLoggerConfig(),
+        CSVLoggerConfig(),
+        TensorboardLoggerConfig(),
     ]
     """Loggers to use for experiment tracking."""
 
@@ -491,11 +499,16 @@ class LoggingConfig(TypedConfig):
             list[Logger]: A list of constructed loggers.
         """
         loggers: list[Logger] = []
+        if not self.enabled:
+            return loggers
+
         for logger_config in sorted(
             self.loggers,
             key=lambda x: x.priority,
             reverse=True,
         ):
+            if not logger_config.enabled:
+                continue
             if (logger := logger_config.construct_logger(root_config)) is None:
                 continue
             loggers.append(logger)
@@ -1251,9 +1264,7 @@ class TrainerConfig(TypedConfig):
         - If the `interval` is epoch, it makes sure that validation is called every `frequency` epochs.
     """
 
-    lightning_kwargs: LightningTrainerKwargs = LightningTrainerKwargs(
-        enable_checkpointing=False,
-    )
+    lightning_kwargs: LightningTrainerKwargs = LightningTrainerKwargs()
     """
     Additional keyword arguments to pass to the Lightning `pl.Trainer` constructor.
 
