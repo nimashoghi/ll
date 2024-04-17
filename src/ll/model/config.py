@@ -1101,6 +1101,25 @@ class TrainerConfig(TypedConfig):
     Default: ``False``.
     """
 
+    precision: (
+        Literal[
+            "64-true",
+            "32-true",
+            "fp16-mixed",
+            "bf16-mixed",
+            "16-mixed-auto",
+        ]
+        | None
+    ) = None
+    """
+    Training precision. Can be one of:
+        - "64-true": Double precision (64-bit).
+        - "32-true": Full precision (32-bit).
+        - "fp16-mixed": Float16 mixed precision.
+        - "bf16-mixed": BFloat16 mixed precision.
+        - "16-mixed-auto": Automatic 16-bit: Uses bfloat16 if available, otherwise float16.
+    """
+
     auto_wrap_trainer: bool = True
     """If enabled, will automatically wrap the `run` function with a `Trainer.context()` context manager. Should be `True` most of the time."""
     auto_set_default_root_dir: bool = True

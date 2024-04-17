@@ -8,6 +8,7 @@ from typing import Any, cast
 import torch
 from lightning.fabric.plugins.environments.lsf import LSFEnvironment
 from lightning.fabric.plugins.environments.slurm import SLURMEnvironment
+from lightning.fabric.plugins.precision.precision import _PRECISION_INPUT
 from lightning.pytorch import LightningDataModule, LightningModule
 from lightning.pytorch import Trainer as LightningTrainer
 from lightning.pytorch.callbacks import (
@@ -15,7 +16,7 @@ from lightning.pytorch.callbacks import (
 )
 from lightning.pytorch.profilers import Profiler
 from lightning.pytorch.utilities.types import _EVALUATE_OUTPUT, _PREDICT_OUTPUT
-from typing_extensions import Unpack, override
+from typing_extensions import Unpack, assert_never, override
 
 from ..model.config import (
     BaseConfig,
@@ -360,6 +361,38 @@ class Trainer(LightningTrainer):
             for key, value in update.items():
                 _update_key(key, value)
 
+        # Set `default_root_dir` if `auto_set_default_root_dir` is enabled.
+        if config.trainer.auto_set_default_root_dir:
+            if kwargs.get("default_root_dir"):
+                raise ValueError(
+                    "You have set `config.trainer.default_root_dir`. "
+                    "But we are trying to set it automatically. "
+                    "Please use `config.trainer.directory.base` rather than `config.trainer.default_root_dir`. "
+                    "If you want to set it manually, please set `config.trainer.auto_set_default_root_dir=False`."
+                )
+
+            _update_kwargs(
+                default_root_dir=config.trainer.directory.resolve_base_directory(
+                    config.id
+                )
+            )
+
+        if (precision := config.trainer.precision) is not None:
+            resolved_precision: _PRECISION_INPUT
+            match precision:
+                case "64-true" | "32-true" | "bf16-mixed":
+                    resolved_precision = precision
+                case "fp16-mixed":
+                    resolved_precision = "16-mixed"
+                case "16-mixed-auto":
+                    resolved_precision = (
+                        "bf16-mixed" if torch.cuda.is_bf16_supported() else "16-mixed"
+                    )
+                case _:
+                    assert_never(precision)
+
+            _update_kwargs(precision=resolved_precision)
+
         if (
             grad_clip_config := config.trainer.optimizer.gradient_clipping
         ) is not None and grad_clip_config.enabled:
@@ -406,22 +439,6 @@ class Trainer(LightningTrainer):
                 num_nodes = LSFEnvironment().world_size()
                 log.critical(f"LSF detected with {num_nodes=}.")
                 _update_kwargs(num_nodes=num_nodes)
-
-        # Set `default_root_dir` if `auto_set_default_root_dir` is enabled.
-        if config.trainer.auto_set_default_root_dir:
-            if kwargs.get("default_root_dir"):
-                raise ValueError(
-                    "You have set `config.trainer.default_root_dir`. "
-                    "But we are trying to set it automatically. "
-                    "Please use `config.trainer.directory.base` rather than `config.trainer.default_root_dir`. "
-                    "If you want to set it manually, please set `config.trainer.auto_set_default_root_dir=False`."
-                )
-
-            _update_kwargs(
-                default_root_dir=config.trainer.directory.resolve_base_directory(
-                    config.id
-                )
-            )
 
         # Update the kwargs with the additional trainer kwargs
         _update_kwargs(**cast(Any, config.trainer.additional_trainer_kwargs))
