@@ -2,6 +2,7 @@ import contextlib
 import hashlib
 import logging
 import os
+import uuid
 from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from typing import Any, cast
@@ -230,6 +231,10 @@ class Trainer(LightningTrainer):
                 dump_dir = (
                     config.directory.resolve_subdirectory(config.id, "stdio") / "dump"
                 )
+
+                # Create a different directory for each rank.
+                # Easy way for now: Add a random subdir.
+                dump_dir = dump_dir / f"rank_{str(uuid.uuid4())}"
                 dump_dir.mkdir(parents=True, exist_ok=True)
 
                 # First, dump the full config
