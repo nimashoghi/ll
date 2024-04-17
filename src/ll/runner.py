@@ -692,6 +692,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         *,
         snapshot: bool | SnapshotConfig = False,
         enable_conda: bool = True,
+        env: Mapping[str, str] | None = None,
         **job_kwargs: Unpack[lsf.LSFJobKwargs],
     ):
         """"""
@@ -719,6 +720,12 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
 
         job_kwargs["environment"] = {**self.env, **job_kwargs.get("environment", {})}
         job_kwargs["setup_commands"] = setup_commands
+
+        # Set the environment
+        environment = job_kwargs.get("environment", {})
+        if env:
+            environment.update(env)
+        job_kwargs["environment"] = environment
 
         base_path = local_data_path / "submit"
         base_path.mkdir(exist_ok=True, parents=True)
@@ -752,6 +759,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         snapshot: bool | SnapshotConfig = False,
         enable_conda: bool = True,
         lsf_kwargs: lsf.LSFJobKwargs = {},
+        env: Mapping[str, str] | None = None,
     ):
         kwargs: lsf.LSFJobKwargs = {
             "summit": True,
@@ -764,6 +772,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
             runs,
             snapshot=snapshot,
             enable_conda=enable_conda,
+            env=env,
             **kwargs,
         )
 

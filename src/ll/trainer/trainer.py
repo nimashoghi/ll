@@ -248,6 +248,7 @@ class Trainer(LightningTrainer):
                     yaml.dump(env_vars, file)
 
             if True:
+                # if config.trainer.apply_lsf_cluster_environment_hack:
                 # PyTorch Lightning expects all GPUs to be present to all resource sets (tasks), but this is not the case
                 #   when we use `jsrun -n6 -g1 -a1 -c7`.
                 # This hack will fix this by setting the `JSM_NAMESPACE_LOCAL_RANK` environment variable (which
@@ -489,10 +490,6 @@ class Trainer(LightningTrainer):
         kwargs = self._update_kwargs(config, kwargs)
         log.critical(f"LightningTrainer.__init__ with {kwargs=}.")
         super().__init__(**kwargs)
-
-        # LSF environment hack:
-        if config.trainer.apply_lsf_cluster_environment_hack:
-            self._apply_lsf_cluster_environment_hack()
 
         if config.trainer.auto_add_trainer_finalizer:
             type(self)._finalizers.append(self.finalize)
