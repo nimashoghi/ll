@@ -164,7 +164,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         self.validate_config_before_run = validate_config_before_run
         self.validate_strict = validate_strict
         self._init_kwargs = {
-            "savedir": savedir,
+            "savedir": self._base_path,
             "slurm_job_name": slurm_job_name,
             "validate_config_before_run": validate_config_before_run,
             "validate_strict": validate_strict,
