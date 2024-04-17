@@ -718,12 +718,10 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         script_path = lsf.to_array_batch_script(
             base_path, self._run_fn, map_array_args, **job_kwargs
         )
-        output = lsf.submit_job(script_path)
-
-        # jobs = executor.map_array(self._run_fn, *map_array_args)
-        for job, (config, _) in zip(output.job_ids, resolved_runs):
-            log.critical(f"[id={config.id}] Submitted job: {job}")
-        return output
+        command_args = ["bsub", str(script_path.absolute())]
+        print("Please run the following command to submit the jobs:")
+        print(" ".join(command_args))
+        print()
 
     @remove_lsf_environment_variables()
     @remove_slurm_environment_variables()
