@@ -715,7 +715,9 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
             zip(*[(c, *args) for c, args in resolved_runs])
         )
         log.critical(f"Submitting {len(resolved_runs)} jobs.")
-        script_path = lsf.to_array_batch_script(base_path, self._run_fn, map_array_args)
+        script_path = lsf.to_array_batch_script(
+            base_path, self._run_fn, map_array_args, **job_kwargs
+        )
         output = lsf.submit_job(script_path)
 
         # jobs = executor.map_array(self._run_fn, *map_array_args)
