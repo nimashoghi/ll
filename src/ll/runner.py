@@ -131,7 +131,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         self,
         run: RunProtocol[TConfig, TReturn, Unpack[TArguments]],
         *,
-        savedir: Path | None = None,
+        savedir: str | Path | os.PathLike | None = None,
         slurm_job_name: str = "ll",
         validate_config_before_run: bool = True,
         validate_strict: bool = True,
@@ -159,7 +159,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         super().__init__()
 
         self._run = run
-        self._base_path = savedir or Path.cwd() / ".lljobs"
+        self._base_path = Path.cwd() / ".lljobs" if savedir is None else Path(savedir)
         self.slurm_job_name = slurm_job_name
         self.validate_config_before_run = validate_config_before_run
         self.validate_strict = validate_strict
