@@ -3,29 +3,29 @@ import hashlib
 import logging
 from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
-from types import NoneType
-from typing import Any
+from typing import Any, cast
 
 import torch
+from lightning.fabric.plugins.environments.lsf import LSFEnvironment
+from lightning.fabric.plugins.environments.slurm import SLURMEnvironment
 from lightning.pytorch import LightningDataModule, LightningModule
 from lightning.pytorch import Trainer as LightningTrainer
 from lightning.pytorch.callbacks import (
     RichProgressBar,
 )
-from lightning.pytorch.plugins.environments import SLURMEnvironment
 from lightning.pytorch.profilers import Profiler
 from lightning.pytorch.utilities.types import _EVALUATE_OUTPUT, _PREDICT_OUTPUT
-from typing_extensions import override
+from typing_extensions import Unpack, override
 
 from ..model.config import (
     BaseConfig,
     BaseProfilerConfig,
     CheckpointLoadingConfig,
+    LightningTrainerKwargs,
     RunnerOutputSaveConfig,
 )
 from ..util import seed
 from ..util.environment import set_additional_env_vars
-from ..util.typing_utils import copy_method_with_param
 from .logging import finalize_loggers
 
 log = logging.getLogger(__name__)
@@ -200,20 +200,6 @@ class Trainer(LightningTrainer):
             if not config.runner.auto_call_trainer_init_from_runner:
                 stack.enter_context(cls.runner_init(config))
 
-            # Set the default root directory
-            if config.trainer.auto_set_default_root_dir:
-                if config.trainer.default_root_dir:
-                    raise ValueError(
-                        "You have set `config.trainer.default_root_dir`. "
-                        "But we are trying to set it automatically. "
-                        "Please use `config.trainer.directory.base` rather than `config.trainer.default_root_dir`. "
-                        "If you want to set it manually, please set `config.trainer.auto_set_default_root_dir=False`."
-                    )
-                config.trainer.default_root_dir = (
-                    config.trainer.directory.resolve_base_directory(config.id)
-                )
-                log.info(f"Setting {config.trainer.default_root_dir=}.")
-
             yield
 
     @classmethod
@@ -301,9 +287,16 @@ class Trainer(LightningTrainer):
                 )
 
     @classmethod
-    def _update_kwargs(cls, config: BaseConfig, kwargs_ctor: dict[str, Any]):
-        kwargs: dict[str, Any] = {
+    def _update_kwargs(
+        cls,
+        config: BaseConfig,
+        kwargs_ctor: LightningTrainerKwargs,
+    ):
+        kwargs: LightningTrainerKwargs = {
             "deterministic": config.trainer.reproducibility.deterministic,
+            "callbacks": [],
+            "plugins": [],
+            "logger": [],
             # Moved to `lightning_kwargs`:
             # "enable_checkpointing": config.trainer.enable_checkpointing,
             # "accelerator": config.trainer.accelerator,
@@ -340,11 +333,41 @@ class Trainer(LightningTrainer):
             # "reload_dataloaders_every_n_epochs": config.trainer.reload_dataloaders_every_n_epochs,
         }
 
+        def _update_key(key: str, new_value: Any):
+            # First, check to see if the key is already in the kwargs.
+            if key not in kwargs:
+                kwargs[key] = new_value
+                return
+
+            # If the key is already in the kwargs, then we check the type:
+            # - If the type is a sequence, then we extend the sequence.
+            # - Otherwise, we just update the value but warn the user.
+
+            match existing_value := kwargs[key]:
+                case Sequence() as existing_value:
+                    # Make sure value is a sequence too
+                    if not isinstance(new_value, Sequence):
+                        new_value = [new_value]
+                    kwargs[key] = [*existing_value, *new_value]
+                case _:
+                    log.warning(
+                        f"Trainer.__init__: Overwriting existing value {existing_value=} with {new_value=} for key {key=}."
+                    )
+                    kwargs[key] = new_value
+
+        def _update_kwargs(**update: Unpack[LightningTrainerKwargs]):
+            for key, value in update.items():
+                _update_key(key, value)
+
         if (
             grad_clip_config := config.trainer.optimizer.gradient_clipping
         ) is not None and grad_clip_config.enabled:
-            kwargs["gradient_clip_algorithm"] = grad_clip_config.algorithm
-            kwargs["gradient_clip_val"] = grad_clip_config.value
+            # kwargs["gradient_clip_algorithm"] = grad_clip_config.algorithm
+            # kwargs["gradient_clip_val"] = grad_clip_config.value
+            _update_kwargs(
+                gradient_clip_algorithm=grad_clip_config.algorithm,
+                gradient_clip_val=grad_clip_config.value,
+            )
 
         if profiler := config.trainer.profiler:
             # If the profiler is an ProfilerConfig instance, then we instantiate it.
@@ -356,82 +379,66 @@ class Trainer(LightningTrainer):
 
             # Otherwise, if the profiler is a string (e.g., "simpe", "advanced", "pytorch"),
             #   then we just pass it through.
-            kwargs["profiler"] = profiler
+            # kwargs["profiler"] = profiler
+            _update_kwargs(profiler=profiler)
 
-        kwargs.update(kwargs_ctor)
+        if plugin_configs := config.trainer.plugins:
+            _update_kwargs(
+                plugins=[
+                    plugin_config.construct_plugin() for plugin_config in plugin_configs
+                ]
+            )
 
-        kwargs["plugins"] = []
-        if config.trainer.plugins is not None:
-            kwargs["plugins"].extend(config.trainer.plugins)
-        if (plugins := kwargs_ctor.get("plugins")) is not None:
-            plugins = [plugins] if not isinstance(plugins, list) else plugins
-            kwargs["plugins"].extend(plugins)
+        if not config.trainer.logging.enabled:
+            log.critical(f"Disabling logger because {config.trainer.logging.enabled=}.")
+            _update_kwargs(logger=False)
+        else:
+            _update_kwargs(logger=config.trainer.logging.construct_loggers(config))
 
-        if config.trainer.logger is False:
-            log.critical(f"Disabling logger because {config.trainer.logger=}.")
-            kwargs["logger"] = False
-        elif kwargs.get("logger") is False:
-            log.critical(f"Disabling logger because {kwargs.get('logger')=}.")
-
-        if (
-            existing_loggers := kwargs.get("logger")
-        ) is not False and config.trainer.auto_set_loggers:
-            if int(config.trainer.fast_dev_run) > 0:
-                log.critical("Disabling loggers because fast_dev_run is enabled.")
-            else:
-                loggers = config.trainer.logging.construct_loggers(config)
-                if existing_loggers is not None and not isinstance(
-                    existing_loggers, bool
-                ):
-                    if not isinstance(existing_loggers, Sequence):
-                        existing_loggers = [existing_loggers]
-                    loggers.extend(existing_loggers)
-
-                kwargs["logger"] = loggers
-
-        if kwargs.get("num_nodes") == "auto":
-            # when num_nodes is auto, we need to detect the number of nodes
-            # when on slurm, this would be the number of SLURM nodes allocated
+        if config.trainer.auto_determine_num_nodes:
+            # When num_nodes is auto, we need to detect the number of nodes.
             if SLURMEnvironment.detect():
-                from ll.submitit import JobEnvironment
+                num_nodes = SLURMEnvironment().world_size()
+                log.critical(f"SLURM detected with {num_nodes=}.")
+                _update_kwargs(num_nodes=num_nodes)
+            elif LSFEnvironment.detect():
+                num_nodes = LSFEnvironment().world_size()
+                log.critical(f"LSF detected with {num_nodes=}.")
+                _update_kwargs(num_nodes=num_nodes)
 
-                job = JobEnvironment()
-                if not job.activated():
-                    raise ValueError(
-                        "SLURMEnvironment detected through PL but not submitit. This is a bug."
-                    )
-
-                kwargs["num_nodes"] = job.num_nodes
-                log.critical(
-                    f"Setting num_nodes to {job.num_nodes} (detected through submitit)."
+        # Set `default_root_dir` if `auto_set_default_root_dir` is enabled.
+        if config.trainer.auto_set_default_root_dir:
+            if kwargs.get("default_root_dir"):
+                raise ValueError(
+                    "You have set `config.trainer.default_root_dir`. "
+                    "But we are trying to set it automatically. "
+                    "Please use `config.trainer.directory.base` rather than `config.trainer.default_root_dir`. "
+                    "If you want to set it manually, please set `config.trainer.auto_set_default_root_dir=False`."
                 )
-            # otherweise, we assume 1 node
-            else:
-                kwargs["num_nodes"] = 1
-                log.critical("Setting num_nodes to 1 (no SLURM detected).")
 
-        if config.trainer.default_root_dir:
-            kwargs["default_root_dir"] = str(config.trainer.default_root_dir)
+            _update_kwargs(
+                default_root_dir=config.trainer.directory.resolve_base_directory(
+                    config.id
+                )
+            )
 
         # Update the kwargs with the additional trainer kwargs
-        kwargs.update(config.trainer._lightning_trainer_kwargs())
+        _update_kwargs(**cast(Any, config.trainer.additional_trainer_kwargs))
+        _update_kwargs(**config.trainer.lightning_kwargs)
+        _update_kwargs(**kwargs_ctor)
 
         # Set the callbacks
-        callbacks = kwargs.get("callbacks", [])
-        if not isinstance(callbacks, list):
-            callbacks = [callbacks]
-        callbacks.extend(cls.ll_default_callbacks(config))
-        kwargs["callbacks"] = callbacks
+        _update_kwargs(callbacks=[*cls.ll_default_callbacks(config)])
 
         return kwargs
 
     @override
-    @copy_method_with_param(
-        LightningTrainer.__init__,
-        param_type=BaseConfig,
-        return_type=NoneType,
-    )
-    def __init__(self, config: BaseConfig, *args, **kwargs):
+    def __init__(
+        self,
+        config: BaseConfig,
+        /,
+        **kwargs: Unpack[LightningTrainerKwargs],
+    ):
         self._ll_config = config
         kwargs = self._update_kwargs(config, kwargs)
         log.critical(f"LightningTrainer.__init__ with {args=} and {kwargs=}.")
