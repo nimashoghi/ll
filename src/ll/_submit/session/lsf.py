@@ -195,14 +195,14 @@ def _summit_command_prefix(num_nodes: int) -> str:
     # The r flag is the number of resource sets requested on each node.
     r = 6
 
-    # Regarding the -D CUDA_VISIBLE_DEVICES flag:
+    # Regarding the --env_no_propagate=CUDA_VISIBLE_DEVICES flag:
     # PyTorch Lightning expects all GPUs to be present to all resource sets (tasks), but this is not the case
     #   when we use `jsrun -n6 -g1 -a1 -c7`. This is because `jsrun` automatically sets the `CUDA_VISIBLE_DEVICES`
     #   environment variable to the local rank of the task. PyTorch Lightning does not expect this and will fail
     #   with an error message like `RuntimeError: CUDA error: invalid device ordinal`. This hack will fix this by
     #   unsetting the `CUDA_VISIBLE_DEVICES` environment variable, so that PyTorch Lightning can see all GPUs.
     #   This is a hack and should be removed once PyTorch Lightning supports this natively.
-    return f"jsrun -D CUDA_VISIBLE_DEVICES -n{n} -r{r} -c7 -g1 -a1 -brs"
+    return f"jsrun --env_no_propagate=CUDA_VISIBLE_DEVICES -n{n} -r{r} -c7 -g1 -a1 -brs"
 
 
 SUMMIT_DEFAULTS: LSFJobKwargs = {
