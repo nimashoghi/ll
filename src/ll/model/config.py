@@ -611,13 +611,6 @@ class CheckpointLoadingConfig(TypedConfig):
     - Any other string or Path will load the checkpoint from the specified path.
     """
 
-    load_on_init_only: bool = True
-    """
-    If enabled, will only load the checkpoint on the first call to the Trainer. For subsequent calls (e.g., when resuming training due to a pre-emption), the checkpoint will not be loaded.
-
-    This is the ideal behavior for most cases, as it allows the trainer to load the hpc checkpoint when resuming training after a pre-emption.
-    """
-
 
 class DirectoryConfig(TypedConfig):
     base: Path | None = None

@@ -552,36 +552,6 @@ class Trainer(LightningTrainer):
         # First, let's just try to get a non-None path.
         ckpt_path = self._resolve_ckpt_path_get_valid_path(ckpt_path, config)
 
-        # Now, let's do some resolutions.
-        # If the `load_on_init_only` is set, then we only load the checkpoint on initialization.
-        if config.load_on_init_only:
-            # Here, we should check to see if this checkpoint has already been loaded by a previous process.
-            # If it has, then we should just return `None`.
-            ckpt_path_value_str = str(ckpt_path)
-            ckpt_path_value_hash = hashlib.md5(ckpt_path_value_str.encode()).hexdigest()
-
-            # See if we have a file with the same hash in the log directory.
-            if (log_dir := self.log_dir) is None:
-                log.warning(
-                    "The `log_dir` is not set. Skipping `load_on_init_only` resolution."
-                )
-                return ckpt_path
-
-            marker_path = Path(log_dir) / f".loaded_ckpt_{ckpt_path_value_hash}"
-            if marker_path.exists():
-                log.critical(
-                    f"Checkpoint {ckpt_path_value_str} has already been loaded. Skipping `ckpt_path` argument."
-                )
-                return None
-
-            # Synchronize all processes to prevent a scenario where rank 0 makes the file and rank 1 reads it.
-            self.strategy.barrier()
-
-            # Otherwise, we create the file to indicate that the checkpoint has been loaded.
-            # However, we should only do this on the main process.
-            if self.global_rank == 0:
-                marker_path.touch(exist_ok=True)
-
         return ckpt_path
 
     @override
