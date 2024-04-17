@@ -749,13 +749,26 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         self,
         runs: Sequence[TConfig] | Sequence[tuple[TConfig, Unpack[TArguments]]],
         *,
-        snapshot: bool | SnapshotConfig = False,
+        project: str,
+        nodes: int = 1,
         queue: Literal["batch", "batch-hm", "killable", "debug"] = "batch",
+        snapshot: bool | SnapshotConfig = False,
+        enable_conda: bool = True,
         lsf_kwargs: lsf.LSFJobKwargs = {},
     ):
-        kwargs: lsf.LSFJobKwargs = {"summit": True, "queue": queue}
+        kwargs: lsf.LSFJobKwargs = {
+            "summit": True,
+            "queue": queue,
+            "project": project,
+            "nodes": nodes,
+        }
         kwargs.update(lsf_kwargs)
-        self.submit_lsf(runs, snapshot=snapshot, **kwargs)
+        self.submit_lsf(
+            runs,
+            snapshot=snapshot,
+            enable_conda=enable_conda,
+            **kwargs,
+        )
 
     @remove_slurm_environment_variables()
     @remove_wandb_environment_variables()
