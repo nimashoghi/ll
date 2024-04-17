@@ -2,6 +2,7 @@ import contextlib
 import hashlib
 import logging
 import os
+import subprocess
 import uuid
 from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
@@ -246,6 +247,16 @@ class Trainer(LightningTrainer):
                 env_vars = dict(os.environ)
                 with env_vars_path.open("w") as file:
                     yaml.dump(env_vars, file)
+
+                # Dump the output of `nvidia-smi` to a file (if available)
+                nvidia_smi_path = dump_dir / "nvidia_smi_output.log"
+                try:
+                    with nvidia_smi_path.open("w") as file:
+                        subprocess.run(
+                            ["nvidia-smi"], stdout=file, stderr=subprocess.PIPE
+                        )
+                except FileNotFoundError:
+                    log.warning("Failed to run `nvidia-smi`.")
 
             if config.trainer.apply_lsf_cluster_environment_hack:
                 # PyTorch Lightning expects all GPUs to be present to all resource sets (tasks), but this is not the case
