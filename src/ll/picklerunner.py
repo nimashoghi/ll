@@ -77,12 +77,14 @@ def serialize_many(
     destdir: _Path,
     fn: Callable,
     args_and_kwargs: Sequence[tuple[Sequence[Any], Mapping[str, Any]]],
+    start_idx: int = 0,
 ):
     serialized_list: list[SerializedFunction] = []
 
     destdir = Path(destdir)
     for i, (args, kwargs) in enumerate(args_and_kwargs):
-        serialized = serialize_single(destdir / f"{i}.pkl", fn, *args, **kwargs)
+        dest = destdir / f"{i+start_idx}.pkl"
+        serialized = serialize_single(dest, fn, *args, **kwargs)
         serialized_list.append(serialized)
 
     return SerializedMultiFunction(destdir, serialized_list)

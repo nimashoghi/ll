@@ -158,7 +158,7 @@ class LSFJobKwargs(TypedDict, total=False):
 
 
 SUMMIT_DEFAULTS: LSFJobKwargs = {
-    "command_prefix": "jsrun -n6 -c7 -g1 -a1 -dcyclic",
+    "command_prefix": "jsrun -n6 -c7 -g1 -a1",
 }
 
 
@@ -389,6 +389,7 @@ def to_array_batch_script(
             destdir,
             command_or_callable,
             [(args, {}) for args in args_list],
+            start_idx=1,  # LSF job indices are 1-based
         ).to_bash_command(job_index_variable)
     else:
         raise TypeError(f"Expected str or callable, got {type(command_or_callable)}")
