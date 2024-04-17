@@ -361,7 +361,7 @@ class LSFSubmissionOutput:
 
 def submit_job(script_path: Path) -> LSFSubmissionOutput:
     # Submit the job using bsub
-    output = subprocess.check_output(["bsub", "<", str(script_path)], text=True)
+    output = subprocess.check_output(["bsub", str(script_path)], text=True)
 
     # Extract the job IDs from the bsub output
     job_ids = re.findall(r"Job <(\d+)> is submitted", output)
