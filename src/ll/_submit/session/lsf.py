@@ -16,7 +16,7 @@ log = getLogger(__name__)
 
 DEFAULT_JOB_NAME = "ll"
 DEFAULT_NODES = 1
-DEFAULT_WALLTIME = timedelta(hours=3)
+DEFAULT_WALLTIME = timedelta(hours=2)
 DEFAULT_NTASKS_PER_NODE = 6
 
 TArgs = TypeVarTuple("TArgs")
