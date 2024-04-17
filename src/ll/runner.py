@@ -1,3 +1,4 @@
+import contextlib
 import copy
 import os
 import sys
@@ -11,7 +12,7 @@ from datetime import timedelta
 from functools import wraps
 from logging import getLogger
 from pathlib import Path
-from typing import Generic, Protocol, TypeAlias, TypedDict, cast, runtime_checkable
+from typing import Any, Generic, Protocol, TypeAlias, TypedDict, cast, runtime_checkable
 
 import cloudpickle as pickle
 from tqdm.auto import tqdm
@@ -19,9 +20,12 @@ from typing_extensions import TypeVar, TypeVarTuple, Unpack, override
 
 from ll.submitit import AutoExecutor
 
+from ._submit.session import lsf
 from .model.config import BaseConfig
+from .picklerunner import serialize_many
 from .trainer import Trainer
 from .util.environment import (
+    remove_lsf_environment_variables,
     remove_slurm_environment_variables,
     remove_wandb_environment_variables,
 )
@@ -53,6 +57,47 @@ SNAPSHOT_CONFIG_DEFAULT = SnapshotConfig(
 TConfig = TypeVar("TConfig", bound=BaseConfig, infer_variance=True)
 TReturn = TypeVar("TReturn", default=None, infer_variance=True)
 TArguments = TypeVarTuple("TArguments", default=Unpack[tuple[()]])
+
+
+def _resolve_run(
+    run: TConfig | tuple[TConfig, Unpack[TArguments]],
+    copy_config: bool = True,
+    reset_id: bool = False,
+) -> tuple[TConfig, tuple[Unpack[TArguments]]]:
+    if isinstance(run, tuple):
+        (config, *args) = run
+    else:
+        config = cast(TConfig, run)
+        args = ()
+    args = cast(tuple[Unpack[TArguments]], args)
+    if copy_config:
+        config = copy.deepcopy(config)
+    if reset_id:
+        config.id = BaseConfig.generate_id(ignore_rng=True)
+    return (config, args)
+
+
+def _resolve_runs(
+    runs: Sequence[TConfig] | Sequence[tuple[TConfig, Unpack[TArguments]]],
+    copy_config: bool = True,
+    reset_id: bool = False,
+):
+    resolved: list[tuple[TConfig, tuple[Unpack[TArguments]]]] = []
+    for run in runs:
+        resolved.append(_resolve_run(run, copy_config=copy_config, reset_id=reset_id))
+
+    return resolved
+
+
+def _validate_runs(runs: list[tuple[TConfig, tuple[Unpack[TArguments]]]]):
+    if not runs:
+        raise ValueError("No run configs provided.")
+
+    # Make sure there are no duplicate ids
+    id_counter = Counter(config.id for config, _ in runs if config.id is not None)
+    for id, count in id_counter.items():
+        if count > 1:
+            raise ValueError(f"Duplicate id {id=}")
 
 
 @runtime_checkable
@@ -152,37 +197,19 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
 
         return wrapped_run
 
-    @staticmethod
-    def _resolve_run(
-        run: TConfig | tuple[TConfig, Unpack[TArguments]],
-        copy_config: bool = True,
-        reset_id: bool = False,
-    ):
-        if isinstance(run, tuple):
-            (config, *args) = run
-        else:
-            config = cast(TConfig, run)
-            args = []
-        args = cast(tuple[Unpack[TArguments]], args)
-        if copy_config:
-            config = copy.deepcopy(config)
-        if reset_id:
-            config.id = BaseConfig.generate_id(ignore_rng=True)
-        return (config, args)
-
-    @staticmethod
-    def _resolve_runs(
-        runs: Sequence[TConfig] | Sequence[tuple[TConfig, Unpack[TArguments]]],
-        copy_config: bool = True,
-        reset_id: bool = False,
-    ):
-        resolved: list[tuple[TConfig, tuple[Unpack[TArguments]]]] = []
-        for run in runs:
-            resolved.append(
-                Runner._resolve_run(run, copy_config=copy_config, reset_id=reset_id)
-            )
-
-        return resolved
+    @contextlib.contextmanager
+    def _with_env(self, env: Mapping[str, str]):
+        env_old = {k: os.environ.get(k, None) for k in env}
+        os.environ.update(env)
+        try:
+            yield
+        finally:
+            for new_env_key in env.keys():
+                # If we didn't have the key before, remove it
+                if (old_value := env_old.get(new_env_key)) is None:
+                    _ = os.environ.pop(new_env_key, None)
+                else:
+                    os.environ[new_env_key] = old_value
 
     def local(
         self,
@@ -204,22 +231,13 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         """
         return_values: list[TReturn] = []
         for run in runs:
-            config, args = self._resolve_run(run)
+            config, args = _resolve_run(run)
             if reset_id:
                 config.id = BaseConfig.generate_id(ignore_rng=True)
 
-            env = {**self.env, **(env or {})}
-            env_old = {k: os.environ.get(k, None) for k in env}
-            os.environ.update(env)
-            try:
+            with self._with_env(env or {}):
                 return_value = self._run_fn(config, *args)
                 return_values.append(return_value)
-            finally:
-                for k, v in env_old.items():
-                    if v is None:
-                        _ = os.environ.pop(k, None)
-                    else:
-                        os.environ[k] = v
 
         return return_values
 
@@ -310,8 +328,8 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
             config_pickle_save_path = local_data_path / "sessions"
             config_pickle_save_path.mkdir(exist_ok=True)
 
-        resolved_runs = self._resolve_runs(runs, reset_id=reset_id)
-        self._validate_runs(resolved_runs)
+        resolved_runs = _resolve_runs(runs, reset_id=reset_id)
+        _validate_runs(resolved_runs)
 
         # Take a snapshot of the environment
         snapshot_path = self._snapshot(snapshot, resolved_runs, local_data_path)
@@ -556,8 +574,8 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         reset_memory_caches : bool, optional
             Whether to reset memory caches after each run.
         """
-        resolved_runs = self._resolve_runs(runs, copy_config=True)
-        self._validate_runs(resolved_runs)
+        resolved_runs = _resolve_runs(runs, copy_config=True)
+        _validate_runs(resolved_runs)
 
         return_values: list[TReturn] = []
         for config, args in tqdm(resolved_runs, desc="Fast dev run"):
@@ -591,17 +609,6 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         torch.cuda.reset_accumulated_memory_stats()
         torch.cuda.synchronize()
         gc.collect()
-
-    @staticmethod
-    def _validate_runs(runs: list[tuple[TConfig, tuple[Unpack[TArguments]]]]):
-        if not runs:
-            raise ValueError("No run configs provided.")
-
-        # Make sure there are no duplicate ids
-        id_counter = Counter(config.id for config, _ in runs if config.id is not None)
-        for id, count in id_counter.items():
-            if count > 1:
-                raise ValueError(f"Duplicate id {id=}")
 
     def _local_data_path(self, id: str):
         local_data_path = Path.cwd() / f"ll_{id}"
@@ -669,6 +676,52 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         snapshot_path = snapshot_modules(snapshot_dir, list(snapshot_modules_set))
         return snapshot_path.absolute()
 
+    @remove_lsf_environment_variables()
+    @remove_slurm_environment_variables()
+    @remove_wandb_environment_variables()
+    def submit_lsf(
+        self,
+        runs: Sequence[TConfig] | Sequence[tuple[TConfig, Unpack[TArguments]]],
+        *,
+        snapshot: bool | SnapshotConfig = False,
+        **job_kwargs: Unpack[lsf.LSFJobKwargs],
+    ):
+        """"""
+        id = str(uuid.uuid4())
+        local_data_path = self._local_data_path(id)
+
+        resolved_runs = _resolve_runs(runs)
+        _validate_runs(resolved_runs)
+
+        setup_commands = list(job_kwargs.get("setup_commands", []))
+
+        # Handle snapshot
+        snapshot_path = self._snapshot(snapshot, resolved_runs, local_data_path)
+        if snapshot_path:
+            snapshot_str = str(snapshot_path.resolve().absolute())
+            setup_commands.append(f"export {self.SNAPSHOT_ENV_NAME}={snapshot_str}")
+            setup_commands.append(f"export PYTHONPATH={snapshot_str}:$PYTHONPATH")
+
+        job_kwargs["environment"] = {**self.env, **job_kwargs.get("environment", {})}
+        job_kwargs["setup_commands"] = setup_commands
+
+        base_path = local_data_path / "submit_logs"
+        base_path.mkdir(exist_ok=True, parents=True)
+
+        # Serialize the runs
+        map_array_args: list[tuple[TConfig, Unpack[TArguments]]] = list(
+            zip(*[(c, *args) for c, args in resolved_runs])
+        )
+        log.critical(f"Submitting {len(resolved_runs)} jobs.")
+        script_path = lsf.to_array_batch_script(base_path, self._run_fn, map_array_args)
+        output = lsf.submit_job(script_path)
+
+        # jobs = executor.map_array(self._run_fn, *map_array_args)
+        for job, (config, _) in zip(output.job_ids, resolved_runs):
+            log.critical(f"[id={config.id}] Submitted job: {job}")
+        return output
+
+    @remove_lsf_environment_variables()
     @remove_slurm_environment_variables()
     @remove_wandb_environment_variables()
     def submit(
@@ -716,13 +769,13 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         email : str, optional
             The email to send notifications to.
         slurm_additional_parameters : Mapping[str, str], optional
-            Additional parameters to pass to the SLUR
+            Additional parameters to pass to the SLURM
         """
         id = str(uuid.uuid4())
         local_data_path = self._local_data_path(id)
 
-        resolved_runs = self._resolve_runs(runs)
-        self._validate_runs(resolved_runs)
+        resolved_runs = _resolve_runs(runs)
+        _validate_runs(resolved_runs)
 
         # Handle snapshot
         snapshot_path = self._snapshot(snapshot, resolved_runs, local_data_path)
@@ -773,3 +826,19 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         for job, (config, _) in zip(jobs, resolved_runs):
             log.critical(f"[id={config.id}] Submitted job: {job.job_id} to {partition}")
         return jobs
+
+
+# First, let's create the function that's going to be run on the cluster.
+def lsf_cluster_main_function(
+    run_fn: RunProtocol[TConfig, TReturn, Unpack[TArguments]],
+    runner_kwargs: Mapping[str, Any],
+    config: TConfig,
+    args: tuple[Unpack[TArguments]],
+):
+    # Create the runner
+    runner = Runner(run_fn, **runner_kwargs)
+
+    # Run the function and return the result
+    return_values = runner.local([(config, *args)])
+    assert len(return_values) == 1
+    return return_values[0]
