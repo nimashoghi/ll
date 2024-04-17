@@ -175,7 +175,7 @@ class LSFJobKwargs(TypedDict, total=False):
 def _summit_command_prefix(num_nodes: int) -> str:
     n = 6 * num_nodes
     r = 6
-    return f"jsrun -n{n} -r {r} -c7 -g1 -a1 -brs"
+    return f"jsrun -n{n} -r{r} -c7 -g1 -a1 -brs"
 
 
 SUMMIT_DEFAULTS: LSFJobKwargs = {
