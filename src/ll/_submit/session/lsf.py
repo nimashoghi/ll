@@ -5,9 +5,9 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import timedelta
 from pathlib import Path
-from typing import Any, TypeAlias, TypedDict, Unpack, overload
+from typing import Any, TypedDict, overload
 
-from typing_extensions import TypeVarTuple
+from typing_extensions import TypeAlias, TypeVarTuple, Unpack
 
 from ...picklerunner import serialize_many, serialize_single
 

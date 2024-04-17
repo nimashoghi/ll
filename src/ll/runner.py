@@ -22,7 +22,6 @@ from ll.submitit import AutoExecutor
 
 from ._submit.session import lsf
 from .model.config import BaseConfig
-from .picklerunner import serialize_many
 from .trainer import Trainer
 from .util.environment import (
     remove_lsf_environment_variables,
