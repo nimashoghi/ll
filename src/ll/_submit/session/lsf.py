@@ -178,7 +178,7 @@ def _summit_command_prefix(num_nodes: int) -> str:
     n = 6 * num_nodes
     # The r flag is the number of resource sets requested on each node.
     r = 6
-    return f"jsrun -n{n} -r{r} -c7 -g1 -a1 -brs"
+    return f"jsrun -D CUDA_VISIBLE_DEVICES -n{n} -r{r} -c7 -g1 -a1 -brs"
 
 
 SUMMIT_DEFAULTS: LSFJobKwargs = {
