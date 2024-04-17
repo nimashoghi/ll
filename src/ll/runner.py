@@ -223,7 +223,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         self,
         runs: Sequence[TConfig] | Sequence[tuple[TConfig, Unpack[TArguments]]],
         env: Mapping[str, str] | None = None,
-        reset_id: bool = True,
+        reset_id: bool = False,
     ):
         """
         Runs a list of configs locally.
@@ -239,10 +239,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         """
         return_values: list[TReturn] = []
         for run in runs:
-            config, args = _resolve_run(run)
-            if reset_id:
-                config.id = BaseConfig.generate_id(ignore_rng=True)
-
+            config, args = _resolve_run(run, reset_id=reset_id)
             with self._with_env(env or {}):
                 return_value = self._run_fn(config, *args)
                 return_values.append(return_value)
@@ -280,7 +277,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         sessions: int | list[Mapping[str, str]] | list[RunnerSession],
         name: str = "ll",
         config_pickle_save_path: Path | None = None,
-        reset_id: bool = True,
+        reset_id: bool = False,
         snapshot: bool | SnapshotConfig = False,
         delete_run_script_after_launch: bool = False,
         prologue: list[str] | None = None,
@@ -472,7 +469,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         gpus: Sequence[SessionGPUIndex] | Mapping[SessionGPUIndex, int] | None = None,
         num_jobs_per_gpu: int | None = None,
         config_pickle_save_path: Path | None = None,
-        reset_id: bool = True,
+        reset_id: bool = False,
         snapshot: bool | SnapshotConfig = False,
         prologue: list[str] | None = None,
         env: Mapping[str, str] | None = None,
@@ -691,6 +688,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         runs: Sequence[TConfig] | Sequence[tuple[TConfig, Unpack[TArguments]]],
         *,
         snapshot: bool | SnapshotConfig = False,
+        reset_id: bool = False,
         enable_conda: bool = True,
         env: Mapping[str, str] | None = None,
         **job_kwargs: Unpack[lsf.LSFJobKwargs],
@@ -699,7 +697,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         id = str(uuid.uuid4())
         local_data_path = self._local_data_path(id)
 
-        resolved_runs = _resolve_runs(runs)
+        resolved_runs = _resolve_runs(runs, reset_id=reset_id)
         _validate_runs(resolved_runs)
 
         setup_commands = list(job_kwargs.get("setup_commands", []))
@@ -755,6 +753,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         nodes: int = 1,
         queue: Literal["batch", "batch-hm", "killable", "debug"] = "batch",
         snapshot: bool | SnapshotConfig = False,
+        reset_id: bool = False,
         enable_conda: bool = True,
         lsf_kwargs: lsf.LSFJobKwargs = {},
         env: Mapping[str, str] | None = None,
@@ -769,6 +768,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         self.submit_lsf(
             runs,
             snapshot=snapshot,
+            reset_id=reset_id,
             enable_conda=enable_conda,
             env=env,
             **kwargs,
@@ -785,6 +785,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         partition: str,
         cpus_per_task: int,
         snapshot: bool | SnapshotConfig = False,
+        reset_id: bool = False,
         constraint: str | None = None,
         timeout: timedelta | None = None,
         memory: int | None = None,
@@ -826,7 +827,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         id = str(uuid.uuid4())
         local_data_path = self._local_data_path(id)
 
-        resolved_runs = _resolve_runs(runs)
+        resolved_runs = _resolve_runs(runs, reset_id=reset_id)
         _validate_runs(resolved_runs)
 
         # Handle snapshot
