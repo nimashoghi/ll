@@ -18,7 +18,7 @@ class TypedModuleList(nn.ModuleList, Generic[TModule]):
     def __getitem__(self, idx: slice) -> "TypedModuleList[TModule]": ...
 
     @override
-    def __getitem__(self, idx: int | slice) -> TModule | "TypedModuleList[TModule]":  # type: ignore
+    def __getitem__(self, idx: int | slice) -> TModule | "TypedModuleList[TModule]":
         return super().__getitem__(idx)  # type: ignore
 
     @override
