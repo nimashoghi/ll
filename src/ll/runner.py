@@ -20,7 +20,7 @@ from typing_extensions import TypedDict, TypeVar, TypeVarTuple, Unpack, override
 
 from ll.submitit import AutoExecutor
 
-from ._submit.session import lsf
+from ._submit.session import lsf, unified
 from .model.config import BaseConfig
 from .trainer import Trainer
 from .util.environment import (
@@ -721,6 +721,73 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         return snapshot_path.absolute()
 
     @remove_lsf_environment_variables()
+    @remove_slurm_environment_variables()
+    @remove_wandb_environment_variables()
+    def submit_generic(
+        self,
+        runs: Sequence[TConfig] | Sequence[tuple[TConfig, Unpack[TArguments]]],
+        resoruce_manager: unified.ResourceManager,
+        *,
+        snapshot: bool | SnapshotConfig = False,
+        reset_id: bool = False,
+        enable_conda: bool = True,
+        env: Mapping[str, str] | None = None,
+        **job_kwargs: Unpack[unified.GenericJobKwargs],
+    ):
+        """"""
+        id = str(uuid.uuid4())
+
+        resolved_runs = _resolve_runs(runs, reset_id=reset_id)
+        _validate_runs(resolved_runs)
+        local_data_path = self._local_data_path(id, resolved_runs)
+
+        setup_commands = list(job_kwargs.get("setup_commands", []))
+
+        # Handle snapshot
+        snapshot_path = self._snapshot(snapshot, resolved_runs, local_data_path)
+        if snapshot_path:
+            snapshot_str = str(snapshot_path.resolve().absolute())
+            setup_commands.append(f"export {self.SNAPSHOT_ENV_NAME}={snapshot_str}")
+            setup_commands.append(f"export PYTHONPATH={snapshot_str}:$PYTHONPATH")
+
+        # Conda environment
+        if enable_conda:
+            # Activate the conda environment
+            setup_commands.append('eval "$(conda shell.bash hook)"')
+            setup_commands.append(f"echo 'Activating conda environment {sys.prefix}'")
+            setup_commands.append(f"conda activate {sys.prefix}")
+
+        job_kwargs["environment"] = {
+            **self.env,
+            **job_kwargs.get("environment", {}),
+            **(env or {}),
+        }
+        job_kwargs["setup_commands"] = setup_commands
+
+        base_path = local_data_path / "submit"
+        base_path.mkdir(exist_ok=True, parents=True)
+
+        # Serialize the runs
+        map_array_args: list[
+            tuple[
+                RunProtocol[TConfig, TReturn, Unpack[TArguments]],
+                Mapping[str, Any],
+                TConfig,
+                tuple[Unpack[TArguments]],
+            ]
+        ] = [(self._run, self._init_kwargs, c, args) for c, args in resolved_runs]
+        submission = unified.to_array_batch_script(
+            resoruce_manager,
+            base_path,
+            _runner_main,
+            map_array_args,
+            **job_kwargs,
+        )
+        print("Please run the following command to submit the jobs:")
+        print(submission.submission_command_str)
+
+    @remove_lsf_environment_variables()
+    @remove_slurm_environment_variables()
     @remove_wandb_environment_variables()
     def submit_lsf(
         self,
