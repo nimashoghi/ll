@@ -1,6 +1,6 @@
 import copy
 import os
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from datetime import timedelta
 from logging import getLogger
 from pathlib import Path
@@ -123,21 +123,21 @@ class SlurmJobKwargs(TypedDict, total=False):
     This corresponds to the "--gres" option in sbatch.
     """
 
-    gpus: str
+    gpus: int | str
     """
     Specify the total number of GPUs required for the job. An optional GPU type specification can be supplied.
 
     This corresponds to the "-G" option in sbatch.
     """
 
-    gpus_per_node: str
+    gpus_per_node: int | str
     """
     Specify the number of GPUs required for the job on each node included in the job's resource allocation. An optional GPU type specification can be supplied.
 
     This corresponds to the "--gpus-per-node" option in sbatch.
     """
 
-    gpus_per_task: str
+    gpus_per_task: int | str
     """
     Specify the number of GPUs required for the job on each task to be spawned in the job's resource allocation. An optional GPU type specification can be supplied.
 
@@ -203,6 +203,20 @@ class SlurmJobKwargs(TypedDict, total=False):
     The job allocation can not share nodes with other running jobs.
 
     This corresponds to the "--exclusive" option in sbatch.
+    """
+
+    setup_commands: Sequence[str]
+    """
+    The setup commands to run before the job.
+
+    These commands will be executed prior to everything else in the job script.
+    """
+
+    environment: Mapping[str, str]
+    """
+    The environment variables to set for the job.
+
+    These variables will be set prior to executing any commands in the job script.
     """
 
     command_prefix: str
@@ -336,6 +350,11 @@ def _write_batch_script_to_file(
             if isinstance(constraint, str):
                 constraint = [constraint]
             f.write(f"#SBATCH --constraint={','.join(constraint)}\n")
+
+        f.write("\n")
+
+        for key, value in kwargs.get("environment", {}).items():
+            f.write(f"export {key}={value}\n")
 
         f.write("\n")
 
