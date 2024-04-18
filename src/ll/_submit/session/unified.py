@@ -1,6 +1,7 @@
 import os
 from collections.abc import Callable, Mapping, Sequence
 from datetime import timedelta
+from logging import getLogger
 from pathlib import Path
 from typing import Any, Literal, cast, overload
 
@@ -12,6 +13,8 @@ from ._output import SubmitOutput
 TArgs = TypeVarTuple("TArgs")
 _Path: TypeAlias = str | Path | os.PathLike
 
+log = getLogger(__name__)
+
 
 class GenericJobKwargs(TypedDict, total=False):
     name: str
@@ -21,7 +24,10 @@ class GenericJobKwargs(TypedDict, total=False):
     """The partition or queue to submit the job to."""
 
     account: str
-    """The account (or project) to charge the job to."""
+    """The account (or project) to charge the job to. Same as `project`."""
+
+    project: str
+    """The project (or account) to charge the job to. Same as `account`."""
 
     output_file: _Path
     """
@@ -84,7 +90,7 @@ class GenericJobKwargs(TypedDict, total=False):
 
     constraint: str
     """
-    The constraint to request for the job. For SLRUM, this corresponds to the `--constraint` option. For LSF, this corresponds to the `-m` option.
+    The constraint to request for the job. For SLRUM, this corresponds to the `--constraint` option. For LSF, this is unused.
     """
 
     slurm: slurm.SlurmJobKwargs
@@ -94,7 +100,7 @@ class GenericJobKwargs(TypedDict, total=False):
     """Additional keyword arguments for LSF jobs."""
 
 
-ResourceManager: TypeAlias = Literal["slurm", "lsf"]
+Scheduler: TypeAlias = Literal["slurm", "lsf"]
 
 
 def _to_slurm(kwargs: GenericJobKwargs) -> slurm.SlurmJobKwargs:
@@ -173,7 +179,7 @@ def _to_lsf(kwargs: GenericJobKwargs) -> lsf.LSFJobKwargs:
     if (gpus_per_task := kwargs.get("gpus_per_task")) is not None:
         lsf_kwargs["gpus_per_rs"] = gpus_per_task
     if (constraint := kwargs.get("constraint")) is not None:
-        lsf_kwargs["alloc_flags"] = constraint
+        log.warning(f'LSF does not support constraints, ignoring "{constraint=}".')
     if (email := kwargs.get("email")) is not None:
         lsf_kwargs["email"] = email
     if (notifications := kwargs.get("notifications")) is not None:
@@ -195,7 +201,7 @@ def _to_lsf(kwargs: GenericJobKwargs) -> lsf.LSFJobKwargs:
 
 @overload
 def to_batch_script(
-    resoruce_manager: ResourceManager,
+    scheduler: Scheduler,
     dest: Path,
     command: str,
     /,
@@ -205,7 +211,7 @@ def to_batch_script(
 
 @overload
 def to_batch_script(
-    resoruce_manager: ResourceManager,
+    scheduler: Scheduler,
     dest: Path,
     callable: Callable[[Unpack[TArgs]], Any],
     args: tuple[Unpack[TArgs]],
@@ -215,14 +221,14 @@ def to_batch_script(
 
 
 def to_batch_script(
-    resoruce_manager: ResourceManager,
+    scheduler: Scheduler,
     dest: Path,
     command_or_callable,
     args=None,
     /,
     **kwargs: Unpack[GenericJobKwargs],
 ):
-    match resoruce_manager:
+    match scheduler:
         case "slurm":
             slurm_kwargs = _to_slurm(kwargs)
             return slurm.to_batch_script(
@@ -237,7 +243,7 @@ def to_batch_script(
 
 @overload
 def to_array_batch_script(
-    resoruce_manager: ResourceManager,
+    scheduler: Scheduler,
     dest: Path,
     command: str,
     num_jobs: int,
@@ -248,7 +254,7 @@ def to_array_batch_script(
 
 @overload
 def to_array_batch_script(
-    resoruce_manager: ResourceManager,
+    scheduler: Scheduler,
     dest: Path,
     callable: Callable[[Unpack[TArgs]], Any],
     args_list: Sequence[tuple[Unpack[TArgs]]],
@@ -259,7 +265,7 @@ def to_array_batch_script(
 
 
 def to_array_batch_script(
-    resoruce_manager: ResourceManager,
+    scheduler: Scheduler,
     dest: Path,
     command_or_callable,
     args_list_or_num_jobs,
@@ -270,7 +276,7 @@ def to_array_batch_script(
     job_index_variable_kwargs = {}
     if job_index_variable is not None:
         job_index_variable_kwargs["job_index_variable"] = job_index_variable
-    match resoruce_manager:
+    match scheduler:
         case "slurm":
             slurm_kwargs = _to_slurm(kwargs)
             return slurm.to_array_batch_script(

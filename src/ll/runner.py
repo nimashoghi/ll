@@ -726,7 +726,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
     def submit_generic(
         self,
         runs: Sequence[TConfig] | Sequence[tuple[TConfig, Unpack[TArguments]]],
-        resoruce_manager: unified.ResourceManager,
+        scheduler: unified.Scheduler,
         *,
         snapshot: bool | SnapshotConfig = False,
         reset_id: bool = False,
@@ -777,7 +777,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
             ]
         ] = [(self._run, self._init_kwargs, c, args) for c, args in resolved_runs]
         submission = unified.to_array_batch_script(
-            resoruce_manager,
+            scheduler,
             base_path,
             _runner_main,
             map_array_args,
