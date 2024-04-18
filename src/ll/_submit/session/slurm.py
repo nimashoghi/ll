@@ -60,11 +60,11 @@ class SlurmJobKwargs(TypedDict, total=False):
     This corresponds to the "-e" option in sbatch. If not specified, the errors will be written to the default error file.
     """
 
-    walltime: timedelta
+    time: timedelta | Literal[0]
     """
-    The maximum walltime for the job.
+    The maximum time for the job.
 
-    This corresponds to the "-t" option in sbatch. The format is "HH:MM" or "MM". If not specified, the default walltime will be used.
+    This corresponds to the "-t" option in sbatch. A value of 0 means no time limit.
     """
 
     memory_mb: int
@@ -223,26 +223,41 @@ class SlurmJobKwargs(TypedDict, total=False):
     """
     A command to prefix the job command with.
 
-    This is used to add commands like `jsrun` to the job command.
+    This is used to add commands like `srun` to the job command.
     """
 
     # Our own custom options
     update_kwargs_fn: "Callable[[SlurmJobKwargs], SlurmJobKwargs]"
-    """
-    A function to update the kwargs with the defaults.
-
-    This is useful for setting the command prefix to be dependent on num nodes/gpus/etc.
-    """
+    """A function to update the kwargs."""
 
 
-def _append_job_index_to_path(path: Path) -> Path:
-    # If job array, append the job index to the output file
-    # E.g., if `output_file` is "output_%J.out", we want "output_%J_%I.out"
-    stem = path.stem
-    suffix = path.suffix
-    new_stem = f"{stem}_%a"
-    new_path = path.with_name(new_stem + suffix)
-    return new_path
+def _default_update_kwargs_fn(kwargs: SlurmJobKwargs) -> SlurmJobKwargs:
+    kwargs = copy.deepcopy(kwargs)
+
+    # Update the command_prefix to add srun:
+    command_parts: list[str] = ["srun", "--unbuffered"]
+    # Add the task id to the output filenames
+    if (f := kwargs.get("output_file")) is not None:
+        f = Path(f).absolute()
+        command_parts.extend(["--output", f"{f.stem}_%t{f.suffix}"])
+        kwargs["output_file"] = f.with_name(f"{f.stem}_0{f.suffix}")
+    if (f := kwargs.get("error_file")) is not None:
+        f = Path(f).absolute()
+        command_parts.extend(["--error", f"{f.stem}_%t{f.suffix}"])
+        kwargs["error_file"] = f.with_name(f"{f.stem}_0{f.suffix}")
+
+    # If there is already a command prefix, combine them.
+    if (existing_command_prefix := kwargs.get("command_prefix")) is not None:
+        command_parts.extend(existing_command_prefix.split())
+    # Add the command prefix to the kwargs.
+    kwargs["command_prefix"] = " ".join(command_parts)
+
+    return kwargs
+
+
+DEFAULT_KWARGS: SlurmJobKwargs = {
+    "update_kwargs_fn": _default_update_kwargs_fn,
+}
 
 
 def _write_batch_script_to_file(
@@ -255,10 +270,10 @@ def _write_batch_script_to_file(
     logs_base.mkdir(exist_ok=True)
 
     if kwargs.get("output_file") is None:
-        kwargs["output_file"] = logs_base / "output_%A_%a.out"
+        kwargs["output_file"] = logs_base / "output_%j.out"
 
     if kwargs.get("error_file") is None:
-        kwargs["error_file"] = logs_base / "error_%A_%a.err"
+        kwargs["error_file"] = logs_base / "error_%j.err"
 
     with path.open("w") as f:
         f.write("#!/bin/bash\n")
@@ -271,15 +286,20 @@ def _write_batch_script_to_file(
         if (account := kwargs.get("account")) is not None:
             f.write(f"#SBATCH --account={account}\n")
 
-        if (walltime := kwargs.get("walltime", DEFAULT_WALLTIME)) is not None:
-            # Convert the walltime to the format expected by LSF:
-            # -W [hour:]minute[/host_name | /host_model]
-            # E.g., 72 hours -> 72:00
-            total_minutes = walltime.total_seconds() // 60
-            hours = int(total_minutes // 60)
-            minutes = int(total_minutes % 60)
-            walltime = f"{hours:02d}:{minutes:02d}"
-            f.write(f"#SBATCH --time={walltime}\n")
+        if (time := kwargs.get("time", DEFAULT_WALLTIME)) is not None:
+            # A time limit of zero requests that no time limit be imposed. Acceptable time formats include "minutes", "minutes:seconds", "hours:minutes:seconds", "days-hours", "days-hours:minutes" and "days-hours:minutes:seconds".
+            if time == 0:
+                time_str = "0"
+            else:
+                total_seconds = time.total_seconds()
+                hours, remainder = divmod(total_seconds, 3600)
+                minutes, seconds = divmod(remainder, 60)
+                if hours > 24:
+                    days, hours = divmod(hours, 24)
+                    time_str = f"{int(days)}-{int(hours):02d}:{int(minutes):02d}"
+                else:
+                    time_str = f"{int(hours):02d}:{int(minutes):02d}:{int(seconds):02d}"
+            f.write(f"#SBATCH --time={time_str}\n")
 
         if (nodes := kwargs.get("nodes", DEFAULT_NODES)) is not None:
             f.write(f"#SBATCH --nodes={nodes}\n")
@@ -288,17 +308,11 @@ def _write_batch_script_to_file(
             f.write(f"#SBATCH --ntasks={ntasks}\n")
 
         if (output_file := kwargs.get("output_file")) is not None:
-            output_file = Path(output_file).absolute()
-            if job_array_n_jobs is not None:
-                output_file = _append_job_index_to_path(output_file)
-            output_file = str(output_file)
+            output_file = str(Path(output_file).absolute())
             f.write(f"#SBATCH --output={output_file}\n")
 
         if (error_file := kwargs.get("error_file")) is not None:
-            error_file = Path(error_file).absolute()
-            if job_array_n_jobs is not None:
-                error_file = _append_job_index_to_path(error_file)
-            error_file = str(error_file)
+            error_file = str(Path(error_file).absolute())
             f.write(f"#SBATCH --error={error_file}\n")
 
         if (partition := kwargs.get("partition")) is not None:
@@ -379,6 +393,7 @@ def _write_batch_script_to_file(
 def _update_kwargs(kwargs: SlurmJobKwargs):
     # Update the kwargs with the default values
     kwargs = copy.deepcopy(kwargs)
+    kwargs = {**DEFAULT_KWARGS, **kwargs}
 
     if (update_kwargs_fn := kwargs.get("update_kwargs_fn")) is not None:
         kwargs = copy.deepcopy(update_kwargs_fn(kwargs))
