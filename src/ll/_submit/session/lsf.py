@@ -1,9 +1,10 @@
+import copy
 import os
 from collections.abc import Callable, Mapping, Sequence
 from datetime import timedelta
 from logging import getLogger
 from pathlib import Path
-from typing import Any, Protocol, overload
+from typing import Any, overload
 
 from typing_extensions import TypeAlias, TypedDict, TypeVarTuple, Unpack
 
@@ -19,10 +20,6 @@ DEFAULT_SUMMIT = False
 TArgs = TypeVarTuple("TArgs")
 
 _Path: TypeAlias = str | Path | os.PathLike
-
-
-class CommandPrefixFnProtocol(Protocol):
-    def __call__(self, num_nodes: int) -> str: ...
 
 
 class LSFJobKwargs(TypedDict, total=False):
@@ -146,7 +143,7 @@ class LSFJobKwargs(TypedDict, total=False):
     This corresponds to the "-alloc_flags" option in bsub. If specified, the job will be allocated using these flags.
     """
 
-    command_prefix: str | CommandPrefixFnProtocol
+    command_prefix: str
     """
     A command to prefix the job command with.
 
@@ -154,6 +151,13 @@ class LSFJobKwargs(TypedDict, total=False):
     """
 
     # Our own custom options
+    update_kwargs_fn: "Callable[[LSFJobKwargs], LSFJobKwargs]"
+    """
+    A function to update the kwargs with the defaults.
+
+    This is useful for setting the command prefix to be dependent on num nodes/gpus/etc.
+    """
+
     summit: bool
     """
     Whether the job is being submitted to Summit.
@@ -202,8 +206,18 @@ def _summit_command_prefix(num_nodes: int) -> str:
     return f"jsrun --env_no_propagate=CUDA_VISIBLE_DEVICES -n{n} -r{r} -c7 -g1 -a1 -brs"
 
 
+def _summit_update_kwargs_fn(kwargs: LSFJobKwargs) -> LSFJobKwargs:
+    kwargs = copy.deepcopy(kwargs)
+
+    kwargs["command_prefix"] = _summit_command_prefix(
+        num_nodes=kwargs.get("nodes", DEFAULT_NODES)
+    )
+
+    return kwargs
+
+
 SUMMIT_DEFAULTS: LSFJobKwargs = {
-    "command_prefix": _summit_command_prefix,
+    "update_kwargs_fn": _summit_update_kwargs_fn,
     "load_job_step_viewer": True,
     "unset_cuda_visible_devices": True,
 }
@@ -319,9 +333,6 @@ def _write_batch_script_to_file(
         f.write("\n")
 
         if (command_prefix := kwargs.get("command_prefix")) is not None:
-            if callable(command_prefix):
-                command_prefix = command_prefix(nodes)
-
             command = " ".join(
                 x_stripped
                 for x in (command_prefix, command)
@@ -334,11 +345,14 @@ def _write_batch_script_to_file(
 
 def _update_kwargs(kwargs: LSFJobKwargs):
     # Update the kwargs with the default values
-    kwargs = {**kwargs}
+    kwargs = copy.deepcopy(kwargs)
 
     # If the job is being submitted to Summit, update the kwargs with the Summit defaults
     if kwargs.get("summit", DEFAULT_SUMMIT):
-        kwargs = {**SUMMIT_DEFAULTS, **kwargs}
+        kwargs.update(SUMMIT_DEFAULTS)
+
+    if (update_kwargs_fn := kwargs.get("update_kwargs_fn")) is not None:
+        kwargs = copy.deepcopy(update_kwargs_fn(kwargs))
 
     return kwargs
 
