@@ -1,8 +1,5 @@
 import os
-import re
-import subprocess
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass
 from datetime import timedelta
 from logging import getLogger
 from pathlib import Path
@@ -472,42 +469,3 @@ def to_array_batch_script(
         command,
         job_array_n_jobs=num_jobs,
     )
-
-
-@dataclass(frozen=True)
-class LSFSubmissionOutput:
-    script_path: Path
-    """
-    The path to the batch script that was generated.
-    """
-
-    job_ids: Sequence[str]
-    """
-    The job IDs of the submitted jobs.
-
-    The list size is 1 if the job was submitted as a single job, and the list size is the number of jobs if the job was submitted as an array job.
-    """
-
-
-def submit_job(script_path: Path) -> LSFSubmissionOutput:
-    # Submit the job using bsub
-    command_args = ["bsub", str(script_path)]
-    log.critical(f"Submitting job using bsub: {script_path}. Command: {command_args}")
-    output = subprocess.check_output(command_args, text=True)
-
-    # Extract the job IDs from the bsub output
-    job_ids = re.findall(r"Job <(\d+)> is submitted", output)
-
-    # Check if it's a job array
-    job_array_match = re.search(r"Job <(\d+)\[\d+-\d+\]> is submitted", output)
-    if job_array_match:
-        # Extract the job array ID
-        job_array_id = job_array_match.group(1)
-
-        # Get the individual job IDs in the array
-        output = subprocess.check_output(
-            ["bjobs", "-A", "-o", "jobid", job_array_id], text=True
-        )
-        job_ids = output.strip().split("\n")[1:]  # Skip the header line
-
-    return LSFSubmissionOutput(script_path=script_path, job_ids=job_ids)

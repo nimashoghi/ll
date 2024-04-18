@@ -147,7 +147,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         savedir : Path, optional
             The `savedir` parameter is a string that represents the directory where the program will save its execution files and logs.
             This is used when submitting the program to a SLURM/LSF cluster or when using the `local_sessions` method.
-            If `None`, this will default to the current working directory / `lljobs`.
+            If `None`, this will default to the current working directory / `llrunner`.
         slurm_job_name : str, optional
             The `slurm_job_name` parameter is a string that represents the name of the job when submitting it to a SLURM cluster.
         validate_config_before_run : bool, optional
@@ -158,10 +158,8 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
 
         super().__init__()
 
-        savedir = Path.cwd() if savedir is None else Path(savedir)
-
         self._run = run
-        self._base_path = savedir / "lljobs"
+        self._savedir = savedir
         self.slurm_job_name = slurm_job_name
         self.validate_config_before_run = validate_config_before_run
         self.validate_strict = validate_strict
@@ -176,7 +174,27 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
             **(env or {}),
         }
 
-        self._base_path.mkdir(parents=True, exist_ok=True)
+    def _get_base_path(
+        self,
+        runs: list[tuple[TConfig, tuple[Unpack[TArguments]]]] | None,
+    ):
+        # If the user has provided a `savedir`, use that as the base path.
+        if self._savedir is not None:
+            base_path = Path(self._savedir)
+            base_path.mkdir(exist_ok=True, parents=True)
+            return base_path
+
+        # If all configs have the same base path config, use that instead.
+        base_paths = set(str(config.rootdir.absolute()) for config, _ in (runs or []))
+        if base_paths and len(base_paths) == 1:
+            base_path = Path(base_paths.pop())
+        else:
+            base_path = Path.cwd()
+
+        base_path = base_path / "llrunner"
+        base_path.mkdir(exist_ok=True, parents=True)
+
+        return base_path
 
     @property
     def _run_fn(self) -> RunProtocol[TConfig, TReturn, Unpack[TArguments]]:
@@ -319,7 +337,6 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         # We'll use this ID for snapshotting, as well as for
         #   defining the name of the shell script that will launch the sessions.
         id = str(uuid.uuid4())
-        local_data_path = self._local_data_path(id)
 
         # If `env` is set, just add it to the prologues
         if env:
@@ -331,17 +348,18 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         if isinstance(sessions, int):
             sessions = [{} for _ in range(sessions)]
 
-        if config_pickle_save_path is None:
-            config_pickle_save_path = local_data_path / "sessions"
-            config_pickle_save_path.mkdir(exist_ok=True)
-
         resolved_runs = _resolve_runs(runs, reset_id=reset_id)
         _validate_runs(resolved_runs)
+        local_data_path = self._local_data_path(id, resolved_runs)
 
         # Take a snapshot of the environment
         snapshot_path = self._snapshot(snapshot, resolved_runs, local_data_path)
 
         # Save all configs to pickle files
+        if config_pickle_save_path is None:
+            config_pickle_save_path = local_data_path / "sessions"
+            config_pickle_save_path.mkdir(exist_ok=True)
+
         config_paths: list[Path] = []
         for i, config in enumerate(resolved_runs):
             config_path = config_pickle_save_path / f"ll_{i:03d}.pkl"
@@ -617,13 +635,23 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         torch.cuda.synchronize()
         gc.collect()
 
-    def _local_data_path(self, id: str):
-        local_data_path = self._base_path / id
+    def _local_data_path(
+        self,
+        id: str,
+        runs: list[tuple[TConfig, tuple[Unpack[TArguments]]]] | None = None,
+    ) -> Path:
+        # First, resolve the base path.
+        path = self._get_base_path(runs)
+
+        path.mkdir(parents=True, exist_ok=True)
+
+        local_data_path = path / id
         local_data_path.mkdir(exist_ok=True)
 
         # Add a gitignore file to the directory so that the entire directory is ignored by git
-        with (local_data_path / ".gitignore").open("w") as f:
-            f.write("*\n")
+        gitignore_path = local_data_path / ".gitignore"
+        if not gitignore_path.exists():
+            gitignore_path.write_text("*\n")
 
         return local_data_path
 
@@ -697,10 +725,10 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
     ):
         """"""
         id = str(uuid.uuid4())
-        local_data_path = self._local_data_path(id)
 
         resolved_runs = _resolve_runs(runs, reset_id=reset_id)
         _validate_runs(resolved_runs)
+        local_data_path = self._local_data_path(id, resolved_runs)
 
         setup_commands = list(job_kwargs.get("setup_commands", []))
 
@@ -827,10 +855,10 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
             Additional parameters to pass to the SLURM
         """
         id = str(uuid.uuid4())
-        local_data_path = self._local_data_path(id)
 
         resolved_runs = _resolve_runs(runs, reset_id=reset_id)
         _validate_runs(resolved_runs)
+        local_data_path = self._local_data_path(id, resolved_runs)
 
         # Handle snapshot
         snapshot_path = self._snapshot(snapshot, resolved_runs, local_data_path)

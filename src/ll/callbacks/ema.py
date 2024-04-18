@@ -350,6 +350,7 @@ class EMAOptimizer(torch.optim.Optimizer):
         self.every_n_steps = state_dict["every_n_steps"]
         self.rebuild_ema_params = False
 
+    @override
     def add_param_group(self, param_group):
         self.optimizer.add_param_group(param_group)
         self.rebuild_ema_params = True

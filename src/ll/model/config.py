@@ -1315,6 +1315,12 @@ class BaseConfig(TypedConfig):
     """Tags for the run."""
     notes: list[str] = []
     """Human readable notes for the run."""
+    rootdir: DirectoryPath = Field(default_factory=lambda: Path.cwd())
+    """
+    Root directory for this project.
+
+    This isn't specific to the run; it is the parent directory of all runs.
+    """
 
     debug: bool = False
     """Whether to run in debug mode. This will enable debug logging and enable debug code paths."""

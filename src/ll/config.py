@@ -290,4 +290,5 @@ __all__ = [
     "PrivateAttr",
     "AllowMissing",
     "MissingField",
+    "MISSING",
 ]
