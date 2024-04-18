@@ -404,7 +404,7 @@ class Trainer(LightningTrainer):
                 )
 
             _update_kwargs(
-                default_root_dir=config.directory.resolve_base_directory(config.id)
+                default_root_dir=config.directory.resolve_run_root_directory(config.id)
             )
 
         if (precision := config.trainer.precision) is not None:

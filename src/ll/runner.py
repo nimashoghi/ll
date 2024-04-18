@@ -48,7 +48,7 @@ class SnapshotConfig(TypedDict, total=False):
 
 
 SNAPSHOT_CONFIG_DEFAULT = SnapshotConfig(
-    snapshot_ll=True,
+    snapshot_ll=False,
     snapshot_config_cls_module=True,
 )
 
@@ -184,14 +184,23 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
             base_path.mkdir(exist_ok=True, parents=True)
             return base_path
 
-        # If all configs have the same base path config, use that instead.
-        base_paths = set(str(config.rootdir.absolute()) for config, _ in (runs or []))
-        if base_paths and len(base_paths) == 1:
-            base_path = Path(base_paths.pop())
+        # If all configs have the same `project_root` config, use that instead.
+        project_root_paths = set(
+            str(project_root.absolute())
+            if (project_root := config.directory.project_root) is not None
+            else None
+            for config, _ in (runs or [])
+        )
+        if (
+            project_root_paths
+            and len(project_root_paths) == 1
+            and (project_root_path := project_root_paths.pop()) is not None
+        ):
+            project_root_path = Path(project_root_path)
         else:
-            base_path = Path.cwd()
+            project_root_path = Path.cwd()
 
-        base_path = base_path / "llrunner"
+        base_path = project_root_path / "llrunner"
         base_path.mkdir(exist_ok=True, parents=True)
 
         return base_path
@@ -641,17 +650,17 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         runs: list[tuple[TConfig, tuple[Unpack[TArguments]]]] | None = None,
     ) -> Path:
         # First, resolve the base path.
-        path = self._get_base_path(runs)
-
-        path.mkdir(parents=True, exist_ok=True)
-
-        local_data_path = path / id
-        local_data_path.mkdir(exist_ok=True)
+        base_path = self._get_base_path(runs)
+        base_path.mkdir(parents=True, exist_ok=True)
 
         # Add a gitignore file to the directory so that the entire directory is ignored by git
-        gitignore_path = local_data_path / ".gitignore"
+        gitignore_path = base_path / ".gitignore"
         if not gitignore_path.exists():
+            gitignore_path.touch()
             gitignore_path.write_text("*\n")
+
+        local_data_path = base_path / id
+        local_data_path.mkdir(exist_ok=True)
 
         return local_data_path
 

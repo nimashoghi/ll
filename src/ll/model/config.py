@@ -613,34 +613,38 @@ class CheckpointLoadingConfig(TypedConfig):
 
 
 class DirectoryConfig(TypedConfig):
-    base: Path | None = None
-    """Base directory to use for the trainer. If None, will use {current working directory}/llruns/{run_id}/."""
+    project_root: Path | None = None
+    """
+    Root directory for this project.
+
+    This isn't specific to the run; it is the parent directory of all runs.
+    """
 
     log: Path | None = None
-    """Base directory for all experiment tracking (e.g., WandB, Tensorboard, etc.) files. If None, will use llruns/{id}/experiments/."""
+    """Base directory for all experiment tracking (e.g., WandB, Tensorboard, etc.) files. If None, will use lltrainer/{id}/log/."""
 
     stdio: Path | None = None
-    """stdout/stderr log directory to use for the trainer. If None, will use llruns/{id}/log/."""
+    """stdout/stderr log directory to use for the trainer. If None, will use lltrainer/{id}/stdio/."""
 
     checkpoint: Path | None = None
-    """Checkpoint directory to use for the trainer. If None, will use llruns/{id}/checkpoint/."""
+    """Checkpoint directory to use for the trainer. If None, will use lltrainer/{id}/checkpoint/."""
 
-    def resolve_base_directory(self, run_id: str) -> Path:
-        if (base := self.base) is None:
-            base = Path.cwd()
+    def resolve_run_root_directory(self, run_id: str) -> Path:
+        if (project_root_dir := self.project_root) is None:
+            project_root_dir = Path.cwd()
 
-        # The default base dir is $CWD/llruns/{id}/
-        llruns_dir = base / "llruns"
-        llruns_dir.mkdir(exist_ok=True)
+        # The default base dir is $CWD/lltrainer/{id}/
+        base_dir = project_root_dir / "lltrainer"
+        base_dir.mkdir(exist_ok=True)
 
-        # Add a .gitignore file to the llruns directory
+        # Add a .gitignore file to the lltrainer directory
         #   which will ignore all files except for the .gitignore file itself
-        gitignore_path = llruns_dir / ".gitignore"
+        gitignore_path = base_dir / ".gitignore"
         if not gitignore_path.exists():
             gitignore_path.touch()
             gitignore_path.write_text("*\n")
 
-        base_dir = llruns_dir / run_id
+        base_dir = base_dir / run_id
         base_dir.mkdir(exist_ok=True)
 
         return base_dir
@@ -650,14 +654,14 @@ class DirectoryConfig(TypedConfig):
         run_id: str,
         subdirectory: Literal["log", "stdio", "checkpoint"],
     ) -> Path:
-        # The subdir will be $CWD/llruns/{id}/{experiment,checkpoint,log}
+        # The subdir will be $CWD/lltrainer/{id}/{experiment,checkpoint,log}
         if (subdir := getattr(self, subdirectory)) is not None:
             assert isinstance(
                 subdir, Path
             ), f"Expected a Path for {subdirectory}, got {type(subdir)}"
             return subdir
 
-        dir = self.resolve_base_directory(run_id)
+        dir = self.resolve_run_root_directory(run_id)
         dir = dir / subdirectory
         dir.mkdir(exist_ok=True)
         return dir
@@ -670,7 +674,7 @@ class DirectoryConfig(TypedConfig):
         if (log_dir := logger.log_dir) is not None:
             return log_dir
 
-        # Save to llruns/{id}/log/{logger kind}/{id}/
+        # Save to lltrainer/{id}/log/{logger kind}/{id}/
         log_dir = self.resolve_subdirectory(run_id, "log")
         log_dir = log_dir / logger.kind
 
@@ -1315,12 +1319,6 @@ class BaseConfig(TypedConfig):
     """Tags for the run."""
     notes: list[str] = []
     """Human readable notes for the run."""
-    rootdir: DirectoryPath = Field(default_factory=lambda: Path.cwd())
-    """
-    Root directory for this project.
-
-    This isn't specific to the run; it is the parent directory of all runs.
-    """
 
     debug: bool = False
     """Whether to run in debug mode. This will enable debug logging and enable debug code paths."""
@@ -1347,17 +1345,17 @@ class BaseConfig(TypedConfig):
         return c
 
     # region Helper methods
-    def with_base_dir_(self, base_dir: str | Path | os.PathLike) -> Self:
+    def with_project_root_(self, project_root: str | Path | os.PathLike) -> Self:
         """
-        Set the base directory for the trainer.
+        Set the project root directory for the trainer.
 
         Args:
-            base_dir (Path): The base directory to use.
+            project_root (Path): The base directory to use.
 
         Returns:
             self: The current instance of the class.
         """
-        self.directory.base = Path(base_dir)
+        self.directory.project_root = Path(project_root)
         return self
 
     def debug_and_disable_logging_(self):
