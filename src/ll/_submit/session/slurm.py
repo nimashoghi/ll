@@ -19,6 +19,21 @@ DEFAULT_WALLTIME = timedelta(hours=2)
 TArgs = TypeVarTuple("TArgs")
 
 _Path: TypeAlias = str | Path | os.PathLike
+MailType: TypeAlias = Literal[
+    "NONE",
+    "BEGIN",
+    "END",
+    "FAIL",
+    "REQUEUE",
+    "ALL",
+    "INVALID_DEPEND",
+    "STAGE_OUT",
+    "TIME_LIMIT",
+    "TIME_LIMIT_90",
+    "TIME_LIMIT_80",
+    "TIME_LIMIT_50",
+    "ARRAY_TASKS",
+]
 
 
 class SlurmJobKwargs(TypedDict, total=False):
@@ -191,40 +206,7 @@ class SlurmJobKwargs(TypedDict, total=False):
     This corresponds to the "--mail-user" option in sbatch.
     """
 
-    mail_type: (
-        Literal[
-            "NONE",
-            "BEGIN",
-            "END",
-            "FAIL",
-            "REQUEUE",
-            "ALL",
-            "INVALID_DEPEND",
-            "STAGE_OUT",
-            "TIME_LIMIT",
-            "TIME_LIMIT_90",
-            "TIME_LIMIT_80",
-            "TIME_LIMIT_50",
-            "ARRAY_TASKS",
-        ]
-        | Sequence[
-            Literal[
-                "NONE",
-                "BEGIN",
-                "END",
-                "FAIL",
-                "REQUEUE",
-                "ALL",
-                "INVALID_DEPEND",
-                "STAGE_OUT",
-                "TIME_LIMIT",
-                "TIME_LIMIT_90",
-                "TIME_LIMIT_80",
-                "TIME_LIMIT_50",
-                "ARRAY_TASKS",
-            ]
-        ]
-    )
+    mail_type: MailType | Sequence[MailType]
     """
     Notify user by email when certain event types occur.
 
