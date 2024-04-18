@@ -9,6 +9,7 @@ from typing import Any, overload
 from typing_extensions import TypeAlias, TypedDict, TypeVarTuple, Unpack
 
 from ...picklerunner import serialize_many, serialize_single
+from ._output import SubmitOutput
 
 log = getLogger(__name__)
 
@@ -414,7 +415,7 @@ def _update_kwargs(kwargs_in: LSFJobKwargs):
 @overload
 def to_batch_script(
     dest: Path, command: str, /, **kwargs: Unpack[LSFJobKwargs]
-) -> Path: ...
+) -> SubmitOutput: ...
 
 
 @overload
@@ -424,7 +425,7 @@ def to_batch_script(
     args: tuple[Unpack[TArgs]],
     /,
     **kwargs: Unpack[LSFJobKwargs],
-) -> Path: ...
+) -> SubmitOutput: ...
 
 
 def to_batch_script(
@@ -460,7 +461,12 @@ def to_batch_script(
     else:
         raise TypeError(f"Expected str or callable, got {type(command_or_callable)}")
 
-    return _write_batch_script_to_file(dest, kwargs, command)
+    script_path = _write_batch_script_to_file(dest, kwargs, command)
+    script_path = script_path.resolve().absolute()
+    return SubmitOutput(
+        submission_command=["bsub", str(script_path)],
+        submission_script_path=script_path,
+    )
 
 
 @overload
@@ -470,7 +476,7 @@ def to_array_batch_script(
     num_jobs: int,
     /,
     **kwargs: Unpack[LSFJobKwargs],
-) -> Path: ...
+) -> SubmitOutput: ...
 
 
 @overload
@@ -481,7 +487,7 @@ def to_array_batch_script(
     /,
     job_index_variable: str = "LSB_JOBINDEX",
     **kwargs: Unpack[LSFJobKwargs],
-) -> Path: ...
+) -> SubmitOutput: ...
 
 
 def to_array_batch_script(
@@ -531,9 +537,14 @@ def to_array_batch_script(
     else:
         raise TypeError(f"Expected str or callable, got {type(command_or_callable)}")
 
-    return _write_batch_script_to_file(
+    script_path = _write_batch_script_to_file(
         dest / "launch.sh",
         kwargs,
         command,
         job_array_n_jobs=num_jobs,
+    )
+    script_path = script_path.resolve().absolute()
+    return SubmitOutput(
+        submission_command=["bsub", str(script_path)],
+        submission_script_path=script_path,
     )

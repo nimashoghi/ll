@@ -9,6 +9,7 @@ from typing import Any, Literal, overload
 from typing_extensions import TypeAlias, TypedDict, TypeVarTuple, Unpack
 
 from ...picklerunner import serialize_many, serialize_single
+from ._output import SubmitOutput
 
 log = getLogger(__name__)
 
@@ -444,7 +445,7 @@ def _update_kwargs(kwargs: SlurmJobKwargs):
 @overload
 def to_batch_script(
     dest: Path, command: str, /, **kwargs: Unpack[SlurmJobKwargs]
-) -> Path: ...
+) -> SubmitOutput: ...
 
 
 @overload
@@ -454,7 +455,7 @@ def to_batch_script(
     args: tuple[Unpack[TArgs]],
     /,
     **kwargs: Unpack[SlurmJobKwargs],
-) -> Path: ...
+) -> SubmitOutput: ...
 
 
 def to_batch_script(
@@ -485,7 +486,9 @@ def to_batch_script(
     else:
         raise TypeError(f"Expected str or callable, got {type(command_or_callable)}")
 
-    return _write_batch_script_to_file(dest, kwargs, command)
+    script_path = _write_batch_script_to_file(dest, kwargs, command)
+    script_path = script_path.resolve().absolute()
+    return SubmitOutput(["sbatch", f"{script_path}"], script_path)
 
 
 @overload
@@ -495,7 +498,7 @@ def to_array_batch_script(
     num_jobs: int,
     /,
     **kwargs: Unpack[SlurmJobKwargs],
-) -> Path: ...
+) -> SubmitOutput: ...
 
 
 @overload
@@ -506,7 +509,7 @@ def to_array_batch_script(
     /,
     job_index_variable: str = "SLURM_ARRAY_TASK_ID",
     **kwargs: Unpack[SlurmJobKwargs],
-) -> Path: ...
+) -> SubmitOutput: ...
 
 
 def to_array_batch_script(
@@ -551,9 +554,11 @@ def to_array_batch_script(
     else:
         raise TypeError(f"Expected str or callable, got {type(command_or_callable)}")
 
-    return _write_batch_script_to_file(
+    script_path = _write_batch_script_to_file(
         dest / "launch.sh",
         kwargs,
         command,
         job_array_n_jobs=num_jobs,
     )
+    script_path = script_path.resolve().absolute()
+    return SubmitOutput(["sbatch", f"{script_path}"], script_path)

@@ -7,6 +7,7 @@ from typing import Any, Literal, cast, overload
 from typing_extensions import TypeAlias, TypedDict, TypeVarTuple, Unpack
 
 from . import lsf, slurm
+from ._output import SubmitOutput
 
 TArgs = TypeVarTuple("TArgs")
 _Path: TypeAlias = str | Path | os.PathLike
@@ -199,7 +200,7 @@ def to_batch_script(
     command: str,
     /,
     **kwargs: Unpack[GenericJobKwargs],
-) -> Path: ...
+) -> SubmitOutput: ...
 
 
 @overload
@@ -210,7 +211,7 @@ def to_batch_script(
     args: tuple[Unpack[TArgs]],
     /,
     **kwargs: Unpack[GenericJobKwargs],
-) -> Path: ...
+) -> SubmitOutput: ...
 
 
 def to_batch_script(
@@ -242,7 +243,7 @@ def to_array_batch_script(
     num_jobs: int,
     /,
     **kwargs: Unpack[GenericJobKwargs],
-) -> Path: ...
+) -> SubmitOutput: ...
 
 
 @overload
@@ -254,7 +255,7 @@ def to_array_batch_script(
     /,
     job_index_variable: str | None = None,
     **kwargs: Unpack[GenericJobKwargs],
-) -> Path: ...
+) -> SubmitOutput: ...
 
 
 def to_array_batch_script(

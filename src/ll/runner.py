@@ -774,15 +774,14 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
                 tuple[Unpack[TArguments]],
             ]
         ] = [(self._run, self._init_kwargs, c, args) for c, args in resolved_runs]
-        script_path = lsf.to_array_batch_script(
+        lsf_submission = lsf.to_array_batch_script(
             base_path,
             _runner_main,
             map_array_args,
             **job_kwargs,
         )
-        command_args = ["bsub", str(script_path.absolute())]
         print("Please run the following command to submit the jobs:")
-        print(" ".join(command_args))
+        print(lsf_submission.submission_command_str)
 
     def submit_summit(
         self,
