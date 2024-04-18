@@ -14,9 +14,7 @@ log = getLogger(__name__)
 
 DEFAULT_JOB_NAME = "ll"
 DEFAULT_NODES = 1
-DEFAULT_TASKS = 1
 DEFAULT_WALLTIME = timedelta(hours=2)
-DEFAULT_SUMMIT = False
 
 TArgs = TypeVarTuple("TArgs")
 
@@ -95,6 +93,13 @@ class SlurmJobKwargs(TypedDict, total=False):
     This corresponds to the "-c" option in sbatch.
     """
 
+    cpus_per_gpu: int
+    """
+    Specify the number of CPUs required for the job on each GPU to be allocated.
+
+    This corresponds to the "--cpus-per-gpu" option in sbatch.
+    """
+
     nodes: int
     """
     The number of nodes to use for the job.
@@ -107,6 +112,34 @@ class SlurmJobKwargs(TypedDict, total=False):
     The number of tasks to use for the job.
 
     This corresponds to the "-n" option in sbatch. The default is 1 task.
+    """
+
+    ntasks_per_core: int
+    """
+    The number of tasks for each core.
+
+    This corresponds to the "--ntasks-per-core" option in sbatch.
+    """
+
+    ntasks_per_gpu: int
+    """
+    The number of tasks for each GPU.
+
+    This corresponds to the "--ntasks-per-gpu" option in sbatch.
+    """
+
+    ntasks_per_node: int
+    """
+    The number of tasks for each node.
+
+    This corresponds to the "--ntasks-per-node" option in sbatch.
+    """
+
+    ntasks_per_socket: int
+    """
+    The number of tasks for each socket.
+
+    This corresponds to the "--ntasks-per-socket" option in sbatch.
     """
 
     constraint: str | Sequence[str]
@@ -135,6 +168,13 @@ class SlurmJobKwargs(TypedDict, total=False):
     Specify the number of GPUs required for the job on each node included in the job's resource allocation. An optional GPU type specification can be supplied.
 
     This corresponds to the "--gpus-per-node" option in sbatch.
+    """
+
+    gpus_per_socket: int | str
+    """
+    Specify the number of GPUs required for the job on each socket to be spawned in the job's resource allocation. An optional GPU type specification can be supplied.
+
+    This corresponds to the "--gpus-per-socket" option in sbatch.
     """
 
     gpus_per_task: int | str
@@ -304,8 +344,20 @@ def _write_batch_script_to_file(
         if (nodes := kwargs.get("nodes", DEFAULT_NODES)) is not None:
             f.write(f"#SBATCH --nodes={nodes}\n")
 
-        if (ntasks := kwargs.get("ntasks", DEFAULT_TASKS)) is not None:
+        if (ntasks := kwargs.get("ntasks")) is not None:
             f.write(f"#SBATCH --ntasks={ntasks}\n")
+
+        if (ntasks_per_core := kwargs.get("ntasks_per_core")) is not None:
+            f.write(f"#SBATCH --ntasks-per-core={ntasks_per_core}\n")
+
+        if (ntasks_per_gpu := kwargs.get("ntasks_per_gpu")) is not None:
+            f.write(f"#SBATCH --ntasks-per-gpu={ntasks_per_gpu}\n")
+
+        if (ntasks_per_node := kwargs.get("ntasks_per_node")) is not None:
+            f.write(f"#SBATCH --ntasks-per-node={ntasks_per_node}\n")
+
+        if (ntasks_per_socket := kwargs.get("ntasks_per_socket")) is not None:
+            f.write(f"#SBATCH --ntasks-per-socket={ntasks_per_socket}\n")
 
         if (output_file := kwargs.get("output_file")) is not None:
             output_file = str(Path(output_file).absolute())
@@ -332,6 +384,9 @@ def _write_batch_script_to_file(
         if (cpus_per_task := kwargs.get("cpus_per_task")) is not None:
             f.write(f"#SBATCH --cpus-per-task={cpus_per_task}\n")
 
+        if (cpus_per_gpu := kwargs.get("cpus_per_gpu")) is not None:
+            f.write(f"#SBATCH --cpus-per-gpu={cpus_per_gpu}\n")
+
         if (gres := kwargs.get("gres")) is not None:
             if isinstance(gres, str):
                 gres = [gres]
@@ -342,6 +397,9 @@ def _write_batch_script_to_file(
 
         if (gpus_per_node := kwargs.get("gpus_per_node")) is not None:
             f.write(f"#SBATCH --gpus-per-node={gpus_per_node}\n")
+
+        if (gpus_per_socket := kwargs.get("gpus_per_socket")) is not None:
+            f.write(f"#SBATCH --gpus-per-socket={gpus_per_socket}\n")
 
         if (gpus_per_task := kwargs.get("gpus_per_task")) is not None:
             f.write(f"#SBATCH --gpus-per-task={gpus_per_task}\n")
