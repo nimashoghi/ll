@@ -93,10 +93,10 @@ class GenericJobKwargs(TypedDict, total=False):
     The constraint to request for the job. For SLRUM, this corresponds to the `--constraint` option. For LSF, this is unused.
     """
 
-    slurm: slurm.SlurmJobKwargs
+    additional_slurm_options: slurm.SlurmJobKwargs
     """Additional keyword arguments for Slurm jobs."""
 
-    lsf: lsf.LSFJobKwargs
+    additional_lsf_options: lsf.LSFJobKwargs
     """Additional keyword arguments for LSF jobs."""
 
 
@@ -148,7 +148,7 @@ def _to_slurm(kwargs: GenericJobKwargs) -> slurm.SlurmJobKwargs:
         slurm_kwargs["environment"] = environment
     if (command_prefix := kwargs.get("command_prefix")) is not None:
         slurm_kwargs["command_prefix"] = command_prefix
-    if (additional_kwargs := kwargs.get("slurm")) is not None:
+    if (additional_kwargs := kwargs.get("additional_slurm_options")) is not None:
         slurm_kwargs.update(additional_kwargs)
 
     return slurm_kwargs
@@ -193,7 +193,7 @@ def _to_lsf(kwargs: GenericJobKwargs) -> lsf.LSFJobKwargs:
         lsf_kwargs["environment"] = environment
     if (command_prefix := kwargs.get("command_prefix")) is not None:
         lsf_kwargs["command_prefix"] = command_prefix
-    if (additional_kwargs := kwargs.get("lsf")) is not None:
+    if (additional_kwargs := kwargs.get("additional_lsf_options")) is not None:
         lsf_kwargs.update(additional_kwargs)
 
     return lsf_kwargs
