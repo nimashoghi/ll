@@ -12,6 +12,7 @@ from .config import CheckpointCallbackBaseConfig as CheckpointCallbackBaseConfig
 from .config import CheckpointLoadingConfig as CheckpointLoadingConfig
 from .config import CheckpointSavingConfig as CheckpointSavingConfig
 from .config import DirectoryConfig as DirectoryConfig
+from .config import EarlyStoppingConfig as EarlyStoppingConfig
 from .config import (
     EnvironmentClassInformationConfig as EnvironmentClassInformationConfig,
 )
@@ -24,7 +25,14 @@ from .config import (
 )
 from .config import GradientClippingConfig as GradientClippingConfig
 from .config import GradientSkippingConfig as GradientSkippingConfig
+from .config import (
+    LatestEpochCheckpointCallbackConfig as LatestEpochCheckpointCallbackConfig,
+)
 from .config import LoggingConfig as LoggingConfig
+from .config import ModelCheckpointCallbackConfig as ModelCheckpointCallbackConfig
+from .config import (
+    OnExceptionCheckpointCallbackConfig as OnExceptionCheckpointCallbackConfig,
+)
 from .config import OptimizationConfig as OptimizationConfig
 from .config import PythonLogging as PythonLogging
 from .config import ReproducibilityConfig as ReproducibilityConfig
