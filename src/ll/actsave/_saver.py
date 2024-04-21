@@ -1,3 +1,4 @@
+import concurrent.futures
 import contextlib
 import fnmatch
 import tempfile
@@ -9,12 +10,12 @@ from dataclasses import dataclass
 from functools import wraps
 from logging import getLogger
 from pathlib import Path
-from typing import Generic, TypeAlias, cast, overload
+from typing import Generic, Literal, TypeAlias, cast, overload
 
 import numpy as np
 import torch
 from lightning_utilities.core.apply_func import apply_to_collection
-from typing_extensions import ParamSpec, TypeVar, override
+from typing_extensions import ParamSpec, TypedDict, TypeVar, override
 
 log = getLogger(__name__)
 
@@ -241,8 +242,54 @@ class _SyncNumpySaver(_SaverBase):
         return fpath
 
 
+class _AsyncNumpySaver(_SaverBase):
+    """
+    Very similar to _SyncNumpySaver, but saves activations asynchronously
+    (i.e., in a separate thread)
+    """
+
+    @override
+    def __init__(
+        self,
+        save_dir: Path,
+        prefixes_fn: Callable[[], list[str]],
+        *,
+        filters: list[str] | None = None,
+        transforms: list[tuple[str, Transform]] | None = None,
+        # Additional arguments for the async saver
+        max_workers: int,
+    ):
+        super().__init__(save_dir, prefixes_fn, filters=filters, transforms=transforms)
+
+        self._executor = concurrent.futures.ThreadPoolExecutor(max_workers=max_workers)
+
+    @override
+    def save_to_file(
+        self,
+        activation: Activation,
+        save_dir: Path,
+    ) -> Path:
+        # Get the next id and save the activation
+        id = len(list(save_dir.glob("*.npy")))
+        fpath = save_dir / f"{id:04d}.npy"
+        assert not fpath.exists(), f"File {fpath} already exists"
+
+        # Save the activation to a file
+        # We save the activation asynchronously
+        self._executor.submit(np.save, fpath, activation())
+        return fpath
+
+
+class _SyncKwargs(TypedDict):
+    pass
+
+
+class _AsyncKwargs(TypedDict):
+    max_workers: int
+
+
 class ActSaveProvider:
-    _saver: _SyncNumpySaver | None = None
+    _saver: _SaverBase | None = None
     _prefixes: list[str] = []
 
     def initialize(
@@ -251,17 +298,35 @@ class ActSaveProvider:
         *,
         filters: list[str] | None = None,
         transforms: list[tuple[str, Transform]] | None = None,
+        saver: tuple[Literal["sync"], _SyncKwargs]
+        | tuple[Literal["async"], _AsyncKwargs]
+        | None = None,
     ):
         if self._saver is None:
             if save_dir is None:
                 save_dir = Path(tempfile.gettempdir()) / f"actsave-{uuid.uuid4()}"
                 log.critical(f"No save_dir specified, using {save_dir=}")
-            self._saver = _SyncNumpySaver(
-                save_dir,
-                lambda: self._prefixes,
-                filters=filters,
-                transforms=transforms,
-            )
+
+            saver_type, kwargs = saver or ("sync", {})
+            match saver or ("sync", {}):
+                case ("sync", kwargs):
+                    self._saver = _SyncNumpySaver(
+                        save_dir,
+                        lambda: self._prefixes,
+                        filters=filters,
+                        transforms=transforms,
+                        **kwargs,
+                    )
+                case ("async", kwargs):
+                    self._saver = _AsyncNumpySaver(
+                        save_dir,
+                        lambda: self._prefixes,
+                        filters=filters,
+                        transforms=transforms,
+                        **kwargs,
+                    )
+                case _:
+                    raise ValueError(f"Invalid saver type: {saver_type}")
 
     @contextlib.contextmanager
     def enabled(
@@ -270,9 +335,12 @@ class ActSaveProvider:
         *,
         filters: list[str] | None = None,
         transforms: list[tuple[str, Transform]] | None = None,
+        saver: tuple[Literal["sync"], _SyncKwargs]
+        | tuple[Literal["async"], _AsyncKwargs]
+        | None = None,
     ):
         prev = self._saver
-        self.initialize(save_dir, filters=filters, transforms=transforms)
+        self.initialize(save_dir, filters=filters, transforms=transforms, saver=saver)
         try:
             yield
         finally:

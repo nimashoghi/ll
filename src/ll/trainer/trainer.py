@@ -536,10 +536,12 @@ class Trainer(LightningTrainer):
             transforms = [
                 (transform.filter, transform.transform) for transform in transforms
             ]
+
         with ActSave.enabled(
             save_dir=actsave_dir,
             filters=actsave_config.filters,
             transforms=transforms,
+            saver=actsave_config.saver._to_saver_arg(),
         ):
             yield
 
