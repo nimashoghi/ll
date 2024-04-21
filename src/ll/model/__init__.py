@@ -34,6 +34,7 @@ from .config import (
     OnExceptionCheckpointCallbackConfig as OnExceptionCheckpointCallbackConfig,
 )
 from .config import OptimizationConfig as OptimizationConfig
+from .config import PrimaryMetricConfig as PrimaryMetricConfig
 from .config import PythonLogging as PythonLogging
 from .config import ReproducibilityConfig as ReproducibilityConfig
 from .config import RunnerConfig as RunnerConfig
