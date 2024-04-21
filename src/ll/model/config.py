@@ -1274,6 +1274,7 @@ class TrainerConfig(TypedConfig):
 
     inference_mode: bool | None = None
     """Whether to use :func:`torch.inference_mode` (if `True`) or :func:`torch.no_grad` (if `False`) during evaluation (``validate``/``test``/``predict``).
+    Default: ``False``.
     """
 
     use_distributed_sampler: bool | None = None
@@ -1284,6 +1285,7 @@ class TrainerConfig(TypedConfig):
     ``False`` and add your own distributed sampler in the dataloader hooks. If ``True`` and a distributed
     sampler was already added, Lightning will not replace the existing one. For iterable-style datasets,
     we don't do this automatically.
+    Default: ``True``.
     """
 
     strategy: StrategyConfigProtocol | StrategyLiteral | None = None
