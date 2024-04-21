@@ -227,11 +227,7 @@ class _SaverBase(ABC):
 
 class _SyncNumpySaver(_SaverBase):
     @override
-    def save_to_file(
-        self,
-        activation: Activation,
-        save_dir: Path,
-    ) -> Path:
+    def save_to_file(self, activation: Activation, save_dir: Path) -> Path:
         # Get the next id and save the activation
         id = len(list(save_dir.glob("*.npy")))
         fpath = save_dir / f"{id:04d}.npy"
@@ -264,11 +260,7 @@ class _AsyncNumpySaver(_SaverBase):
         self._executor = concurrent.futures.ThreadPoolExecutor(max_workers=max_workers)
 
     @override
-    def save_to_file(
-        self,
-        activation: Activation,
-        save_dir: Path,
-    ) -> Path:
+    def save_to_file(self, activation: Activation, save_dir: Path) -> Path:
         # Get the next id and save the activation
         id = len(list(save_dir.glob("*.npy")))
         fpath = save_dir / f"{id:04d}.npy"
