@@ -241,6 +241,9 @@ class EnvironmentConfig(TypedConfig):
 
 
 class BaseLoggerConfig(TypedConfig, ABC):
+    enabled: bool = True
+    """Enable this logger."""
+
     priority: int = 0
     """Priority of the logger. Higher values are logged first."""
 
@@ -249,6 +252,10 @@ class BaseLoggerConfig(TypedConfig, ABC):
 
     @abstractmethod
     def construct_logger(self, root_config: "BaseConfig") -> Logger | None: ...
+
+    def disable_(self):
+        self.enabled = False
+        return self
 
 
 def _project_name(
@@ -1331,9 +1338,9 @@ class TrainerConfig(TypedConfig):
     Default: ``2``.
     """
 
-    inference_mode: bool | None = None
+    inference_mode: bool = True
     """Whether to use :func:`torch.inference_mode` (if `True`) or :func:`torch.no_grad` (if `False`) during evaluation (``validate``/``test``/``predict``).
-    Default: ``False``.
+    Default: ``True``.
     """
 
     use_distributed_sampler: bool | None = None
@@ -1350,6 +1357,11 @@ class TrainerConfig(TypedConfig):
     strategy: StrategyConfigProtocol | StrategyLiteral | None = None
     """Supports different training strategies with aliases as well custom strategies.
     Default: ``"auto"``.
+    """
+
+    devices: Sequence[int] | Literal["auto", "all"] | None = None
+    """The devices to use. Can be set to a sequence of device indices, "all" to indicate all available devices should be used, or ``"auto"`` for
+    automatic selection based on the chosen accelerator. Default: ``"auto"``.
     """
 
     auto_wrap_trainer: bool = True

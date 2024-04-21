@@ -356,6 +356,7 @@ class Trainer(LightningTrainer):
             "val_check_interval": config.trainer.val_check_interval,
             "check_val_every_n_epoch": config.trainer.check_val_every_n_epoch,
             "num_sanity_val_steps": config.trainer.num_sanity_val_steps,
+            "inference_mode": config.trainer.inference_mode,
             "callbacks": [],
             "plugins": [],
             "logger": [],
@@ -363,7 +364,6 @@ class Trainer(LightningTrainer):
             # "enable_checkpointing": config.trainer.enable_checkpointing,
             # "accelerator": config.trainer.accelerator,
             # "strategy": config.trainer.strategy,
-            # "devices": config.trainer.devices,
             # "num_nodes": config.trainer.num_nodes,
             # "precision": config.trainer.precision,
             # "logger": config.trainer.logging.enabled,
@@ -372,7 +372,6 @@ class Trainer(LightningTrainer):
             # "enable_model_summary": config.trainer.enable_model_summary,
             # "accumulate_grad_batches": config.trainer.accumulate_grad_batches,
             # "benchmark": config.trainer.benchmark,
-            # "inference_mode": config.trainer.inference_mode,
             # "use_distributed_sampler": config.trainer.use_distributed_sampler,
             # "detect_anomaly": config.trainer.detect_anomaly,
             # "barebones": config.trainer.barebones,
@@ -420,6 +419,19 @@ class Trainer(LightningTrainer):
             _update_kwargs(
                 default_root_dir=config.directory.resolve_run_root_directory(config.id)
             )
+
+        if (devices_input := config.trainer.devices) is not None:
+            match devices_input:
+                case "all":
+                    devices = -1
+                case "auto":
+                    devices = "auto"
+                case Sequence():
+                    devices = list(devices_input)
+                case _:
+                    raise ValueError(f"Invalid value for devices={devices_input}.")
+
+            _update_kwargs(devices=devices)
 
         if (
             use_distributed_sampler := config.trainer.use_distributed_sampler

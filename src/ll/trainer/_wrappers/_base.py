@@ -57,6 +57,7 @@ class LightningModuleWrapper(ABC):
             return self.wrapped_step(
                 module,
                 old_step_fn,
+                fn_name,
                 batch,
                 batch_idx,
                 *args,
