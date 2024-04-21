@@ -3,6 +3,7 @@ from . import model as model
 from . import nn as nn
 from . import typecheck as tc
 from . import typecheck as typecheck
+from .actsave import ActLoad as ActLoad
 from .actsave import ActSave as ActSave
 from .config import MISSING as MISSING
 from .config import AllowMissing as AllowMissing
