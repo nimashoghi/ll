@@ -1,4 +1,5 @@
 from .bad_gradients import PrintBadGradientsCallback as PrintBadGradientsCallback
+from .early_stopping import EarlyStopping as EarlyStopping
 from .ema import EMA as EMA
 from .interval import EpochIntervalCallback as EpochIntervalCallback
 from .interval import IntervalCallback as IntervalCallback

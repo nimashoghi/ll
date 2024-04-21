@@ -284,6 +284,9 @@ class Trainer(LightningTrainer):
         Yields:
             Callback: The default callbacks for the LL trainer.
         """
+        if config.trainer.early_stopping is not None:
+            yield config.trainer.early_stopping.construct_callback(config)
+
         if config.trainer.checkpoint_saving.enabled:
             yield from config.trainer.checkpoint_saving.construct_callbacks(config)
 
