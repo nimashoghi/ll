@@ -863,7 +863,7 @@ class OnExceptionCheckpointCallbackConfig(CheckpointCallbackBaseConfig):
 
     @override
     def construct_callback(self, root_config):
-        from ..trainer.on_exception_checkpoint import OnExceptionCheckpoint
+        from ..callbacks.on_exception_checkpoint import OnExceptionCheckpoint
 
         dirpath = self.dirpath or root_config.directory.resolve_subdirectory(
             root_config.id, "checkpoint"

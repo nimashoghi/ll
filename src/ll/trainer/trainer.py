@@ -5,7 +5,7 @@ import subprocess
 import uuid
 from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
-from typing import Any, cast
+from typing import Any, Protocol, cast, runtime_checkable
 
 import torch
 import yaml
@@ -15,10 +15,12 @@ from lightning.fabric.plugins.precision.precision import _PRECISION_INPUT
 from lightning.pytorch import LightningDataModule, LightningModule
 from lightning.pytorch import Trainer as LightningTrainer
 from lightning.pytorch.callbacks import RichProgressBar
+from lightning.pytorch.loggers import Logger
 from lightning.pytorch.profilers import Profiler
 from lightning.pytorch.utilities.types import _EVALUATE_OUTPUT, _PREDICT_OUTPUT
 from typing_extensions import Unpack, assert_never, override
 
+from ..actsave import ActSave
 from ..model.config import (
     BaseConfig,
     BaseProfilerConfig,
@@ -29,10 +31,20 @@ from ..model.config import (
 )
 from ..util import seed
 from ..util.environment import set_additional_env_vars
-from .actsave import ActSave
-from .logging import finalize_loggers
 
 log = logging.getLogger(__name__)
+
+
+@runtime_checkable
+class _FinalizableLogger(Protocol):
+    def finish(self) -> Any: ...
+
+
+def _finalize_loggers(loggers: Sequence[Logger]):
+    for logger in loggers:
+        if not isinstance(logger, _FinalizableLogger):
+            continue
+        logger.finish()
 
 
 def _stdio_log_dir(
@@ -91,7 +103,7 @@ class Trainer(LightningTrainer):
         """
         Call this method to clean up after training.
         """
-        finalize_loggers(self.loggers)
+        _finalize_loggers(self.loggers)
 
     @classmethod
     def setup_python_logging(cls, root_config: BaseConfig):

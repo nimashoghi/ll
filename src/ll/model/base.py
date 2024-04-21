@@ -18,9 +18,9 @@ from lightning.pytorch.callbacks import Callback
 from lightning.pytorch.utilities.types import STEP_OUTPUT
 from typing_extensions import Self, TypeVar, override
 
-from ..trainer.actsave import ActSaveWrapper
-from ..trainer.log_batch_info import LogBatchInfoWrapper
-from ..trainer.skip_batch import SkipBatchWrapper
+from ..trainer._wrappers.actsave import ActSaveWrapper
+from ..trainer._wrappers.log_batch_info import LogBatchInfoWrapper
+from ..trainer._wrappers.skip_batch import SkipBatchWrapper
 from .config import (
     BaseConfig,
     EnvironmentClassInformationConfig,

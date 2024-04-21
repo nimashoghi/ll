@@ -5,13 +5,9 @@ from typing import Any, cast
 from lightning.pytorch import LightningModule
 from typing_extensions import override
 
-from ..actsave import ActSave
-from ..model.config import BaseConfig
-from ..util.lightning_module_wrapper import (
-    LightningModuleWrapper,
-    MethodName,
-    StepFunction,
-)
+from ...actsave import ActSave
+from ...model.config import BaseConfig
+from ._base import LightningModuleWrapper, MethodName, StepFunction
 
 log = getLogger(__name__)
 
