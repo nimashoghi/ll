@@ -202,10 +202,8 @@ class ActivationSaver:
                         continue
 
                     # Apply the transform
-                    transform_out = transform(activation)
-
                     # If the transform returns empty, we skip it
-                    if not transform_out:
+                    if not (transform_out := transform(activation)):
                         continue
 
                     # Otherwise, add the transform to the activations
