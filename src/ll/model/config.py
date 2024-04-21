@@ -859,6 +859,33 @@ class ModelCheckpointCallbackConfig(CheckpointCallbackBaseConfig):
         )
 
 
+class LatestEpochCheckpointCallbackConfig(CheckpointCallbackBaseConfig):
+    kind: Literal["latest_epoch_checkpoint"] = "latest_epoch_checkpoint"
+
+    dirpath: str | Path | None = None
+    """Directory path to save the checkpoint file."""
+
+    filename: str | None = None
+    """Checkpoint filename. This must not include the extension. If `None`, `latest_epoch_{id}_{timestamp}` is used."""
+
+    save_weights_only: bool = False
+    """Whether to save only the model's weights or the entire model object."""
+
+    @override
+    def construct_callback(self, root_config):
+        from ..callbacks.latest_epoch_checkpoint import LatestEpochCheckpoint
+
+        dirpath = self.dirpath or root_config.directory.resolve_subdirectory(
+            root_config.id, "checkpoint"
+        )
+
+        return LatestEpochCheckpoint(
+            dirpath=dirpath,
+            filename=self.filename,
+            save_weights_only=self.save_weights_only,
+        )
+
+
 class OnExceptionCheckpointCallbackConfig(CheckpointCallbackBaseConfig):
     kind: Literal["on_exception_checkpoint"] = "on_exception_checkpoint"
 
@@ -882,7 +909,9 @@ class OnExceptionCheckpointCallbackConfig(CheckpointCallbackBaseConfig):
 
 
 CheckpointCallbackConfig: TypeAlias = Annotated[
-    ModelCheckpointCallbackConfig | OnExceptionCheckpointCallbackConfig,
+    ModelCheckpointCallbackConfig
+    | LatestEpochCheckpointCallbackConfig
+    | OnExceptionCheckpointCallbackConfig,
     Field(discriminator="kind"),
 ]
 
@@ -893,6 +922,7 @@ class CheckpointSavingConfig(TypedConfig):
 
     checkpoint_callbacks: Sequence[CheckpointCallbackConfig] = [
         ModelCheckpointCallbackConfig(enabled=True),
+        LatestEpochCheckpointCallbackConfig(enabled=True),
         OnExceptionCheckpointCallbackConfig(enabled=True),
     ]
     """Checkpoint callback configurations."""
