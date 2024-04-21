@@ -1369,10 +1369,10 @@ class TrainerConfig(TypedConfig):
     """If enabled, will log the batch info (e.g. batch index, batch object, etc.) when an exception is thrown during training."""
     reduce_lr_on_plateau_sanity_checks: Literal["disable", "error", "warn"] = "error"
     """
-    Valid values are: "disable", "warn", "error"
     If enabled, will do some sanity checks if the `ReduceLROnPlateau` scheduler is used:
         - If the `interval` is step, it makes sure that validation is called every `frequency` steps.
         - If the `interval` is epoch, it makes sure that validation is called every `frequency` epochs.
+    Valid values are: "disable", "warn", "error".
     """
 
     lightning_kwargs: LightningTrainerKwargs = LightningTrainerKwargs()

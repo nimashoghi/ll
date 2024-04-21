@@ -1,8 +1,14 @@
+from collections.abc import Mapping
 from logging import getLogger
 from typing import cast
 
+import torch
 from lightning.pytorch import LightningModule, Trainer
-from typing_extensions import override
+from lightning.pytorch.utilities.types import (
+    LRSchedulerConfigType,
+    LRSchedulerTypeUnion,
+)
+from typing_extensions import Protocol, override, runtime_checkable
 
 from ...util.typing_utils import mixin_base_type
 from ..config import BaseConfig
@@ -117,6 +123,11 @@ def _on_train_start_callback(trainer: Trainer, pl_module: LightningModule):
             pass
 
 
+@runtime_checkable
+class CustomRLPImplementation(Protocol):
+    __reduce_lr_on_plateau__: bool
+
+
 class RLPSanityCheckModuleMixin(mixin_base_type(CallbackModuleMixin)):
     @override
     def __init__(self, *args, **kwargs):
@@ -125,21 +136,63 @@ class RLPSanityCheckModuleMixin(mixin_base_type(CallbackModuleMixin)):
         global _on_train_start_callback
         self.register_callback(on_train_start=_on_train_start_callback)
 
-    def determine_reduce_lr_on_plateau_interval_frequency(self):
+    def reduce_lr_on_plateau_config(
+        self,
+        lr_scheduler: LRSchedulerTypeUnion | LRSchedulerConfigType,
+    ) -> LRSchedulerConfigType:
         if (trainer := self._trainer) is None:
             raise RuntimeError(
                 "Could not determine the frequency of ReduceLRPlateau scheduler "
                 "because `self.trainer` is None."
             )
 
-        # if trainer.check_val_every_n_epoch is an integer, then we run val at epoch intervals
-        if trainer.check_val_every_n_epoch is not None:
-            return "epoch", trainer.check_val_every_n_epoch
+        # First, resolve the LR scheduler from the provided config.
+        lr_scheduler_config: LRSchedulerConfigType
+        match lr_scheduler:
+            case Mapping():
+                lr_scheduler_config = cast(LRSchedulerConfigType, lr_scheduler)
+            case _:
+                lr_scheduler_config = {"scheduler": lr_scheduler}
 
-        # otherwise, we run val at step intervals
+        # Make sure the scheduler is a ReduceLRPlateau scheduler. Otherwise, warn the user.
+        if (
+            not isinstance(
+                lr_scheduler_config["scheduler"],
+                torch.optim.lr_scheduler.ReduceLROnPlateau,
+            )
+        ) and (
+            not isinstance(lr_scheduler_config["scheduler"], CustomRLPImplementation)
+            or not lr_scheduler_config["scheduler"].__reduce_lr_on_plateau__
+        ):
+            log.warning(
+                "`reduce_lr_on_plateau_config` should only be used with a ReduceLRPlateau scheduler. "
+                f"The provided scheduler, {lr_scheduler_config['scheduler']}, does not subclass "
+                "`torch.optim.lr_scheduler.ReduceLROnPlateau`. "
+                "Please ensure that the scheduler is a ReduceLRPlateau scheduler. "
+                "If you are using a custom ReduceLRPlateau scheduler implementation, "
+                "please either (1) make sure that it subclasses `torch.optim.lr_scheduler.ReduceLROnPlateau`, "
+                "or (2) set the scheduler's `__reduce_lr_on_plateau__` attribute to `True`."
+            )
+
+        # If trainer.check_val_every_n_epoch is an integer, then we run val at epoch intervals.
+        if trainer.check_val_every_n_epoch is not None:
+            return {
+                "reduce_on_plateau": True,
+                "interval": "epoch",
+                "frequency": trainer.check_val_every_n_epoch,
+                **lr_scheduler_config,
+            }
+
+        # Otherwise, we run val at step intervals.
         if not isinstance(trainer.val_check_batch, int):
             raise ValueError(
                 "Could not determine the frequency of ReduceLRPlateau scheduler "
                 f"because {trainer.val_check_batch=} is not an integer."
             )
-        return "step", trainer.val_check_batch
+
+        return {
+            "reduce_on_plateau": True,
+            "interval": "step",
+            "frequency": trainer.val_check_batch,
+            **lr_scheduler_config,
+        }
