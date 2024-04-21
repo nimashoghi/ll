@@ -841,15 +841,25 @@ class ModelCheckpointCallbackConfig(CheckpointCallbackBaseConfig):
             root_config.id, "checkpoint"
         )
 
+        # If `monitor` is not provided, we can use `config.primary_metric` if it is set.
+        monitor = self.monitor
+        mode = self.mode
+        if (
+            monitor is None
+            and (primary_metric := root_config.primary_metric) is not None
+        ):
+            monitor = primary_metric.validation_monitor
+            mode = primary_metric.mode
+
         return ModelCheckpoint(
             dirpath=dirpath,
             filename=self.filename,
-            monitor=self.monitor,
+            monitor=monitor,
+            mode=mode,
             verbose=self.verbose,
             save_last=self.save_last,
             save_top_k=self.save_top_k,
             save_weights_only=self.save_weights_only,
-            mode=self.mode,
             auto_insert_metric_name=self.auto_insert_metric_name,
             every_n_train_steps=self.every_n_train_steps,
             train_time_interval=self.train_time_interval,
@@ -926,6 +936,36 @@ class CheckpointSavingConfig(TypedConfig):
         OnExceptionCheckpointCallbackConfig(enabled=True),
     ]
     """Checkpoint callback configurations."""
+
+    @property
+    def model_checkpoint(self) -> ModelCheckpointCallbackConfig | None:
+        return next(
+            (
+                callback
+                for callback in self.checkpoint_callbacks
+                if isinstance(callback, ModelCheckpointCallbackConfig)
+            ),
+        )
+
+    @property
+    def latest_epoch_checkpoint(self) -> LatestEpochCheckpointCallbackConfig | None:
+        return next(
+            (
+                callback
+                for callback in self.checkpoint_callbacks
+                if isinstance(callback, LatestEpochCheckpointCallbackConfig)
+            ),
+        )
+
+    @property
+    def on_exception_checkpoint(self) -> OnExceptionCheckpointCallbackConfig | None:
+        return next(
+            (
+                callback
+                for callback in self.checkpoint_callbacks
+                if isinstance(callback, OnExceptionCheckpointCallbackConfig)
+            ),
+        )
 
     def construct_callbacks(self, root_config):
         callbacks: list[Checkpoint] = []
@@ -1467,6 +1507,35 @@ class RunnerConfig(TypedConfig):
     """
 
 
+class PrimaryMetricConfig(TypedConfig):
+    name: str
+    """The name of the primary metric."""
+
+    mode: Literal["min", "max"]
+    """
+    The mode of the primary metric:
+    - "min" for metrics that should be minimized (e.g., loss)
+    - "max" for metrics that should be maximized (e.g., accuracy)
+    """
+
+    @property
+    def validation_monitor(self) -> str:
+        return f"val/{self.name}"
+
+    def __post_init__(self):
+        for split in ("train", "val", "test", "predict"):
+            if self.name.startswith(f"{split}/"):
+                raise ValueError(
+                    f"Primary metric name should not start with '{split}/'. "
+                    f"Just use '{self.name[len(split) + 1:]}' instead. "
+                    "The split name is automatically added depending on the context."
+                )
+
+    @classmethod
+    def loss(cls, mode: Literal["min", "max"] = "min"):
+        return cls(name="loss", mode=mode)
+
+
 class BaseConfig(TypedConfig):
     id: str = Field(default_factory=lambda: BaseConfig.generate_id())
     """ID of the run."""
@@ -1493,6 +1562,13 @@ class BaseConfig(TypedConfig):
     """PyTorch Lightning trainer configuration options. Check Lightning's `Trainer` documentation for more information."""
     runner: RunnerConfig = RunnerConfig()
     """`ll.Runner` configuration options."""
+
+    primary_metric: PrimaryMetricConfig | None = None
+    """Primary metric configuration options. This is used in the following ways:
+    - To determine the best model checkpoint to save with the ModelCheckpoint callback.
+    - To monitor the primary metric during training and stop training based on the `early_stopping` configuration.
+    - For the ReduceLROnPlateau scheduler.
+    """
 
     meta: dict[str, Any] = {}
     """Additional metadata for this run. This can be used to store arbitrary data that is not part of the config schema."""
