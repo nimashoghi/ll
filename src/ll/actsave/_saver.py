@@ -3,6 +3,7 @@ import fnmatch
 import tempfile
 import uuid
 import weakref
+from abc import ABC, abstractmethod
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from functools import wraps
@@ -136,7 +137,7 @@ def _ignore_if_scripting(fn: Callable[P, None]) -> Callable[P, None]:
     return wrapper
 
 
-class _Saver:
+class _SaverBase(ABC):
     def __init__(
         self,
         save_dir: Path,
@@ -162,15 +163,21 @@ class _Saver:
         self._filters = filters
         self._transforms = transforms
 
-    def _save_activation(self, activation: Activation):
-        # Save the activation to self._save_dir / name / {id}.npz, where id is an auto-incrementing integer
-        file_name = ".".join(self._prefixes_fn() + [activation.name])
-        path = self._save_dir / file_name
-        path.mkdir(exist_ok=True, parents=True)
+    @abstractmethod
+    def save_to_file(
+        self,
+        activation: Activation,
+        save_dir: Path,
+    ) -> Path: ...
 
-        # Get the next id and save the activation
-        id = len(list(path.glob("*.npy")))
-        np.save(path / f"{id:04d}.npy", activation())
+    def _save_activation(self, activation: Activation):
+        # Save the activation to self._save_dir / {name} /
+        file_name = ".".join(self._prefixes_fn() + [activation.name])
+        save_dir = self._save_dir / file_name
+        save_dir.mkdir(exist_ok=True, parents=True)
+
+        # Save the activation to a file
+        self.save_to_file(activation, save_dir)
 
     @_ignore_if_scripting
     def save(
@@ -217,8 +224,25 @@ class _Saver:
         del transformed_activations
 
 
+class _SyncNumpySaver(_SaverBase):
+    @override
+    def save_to_file(
+        self,
+        activation: Activation,
+        save_dir: Path,
+    ) -> Path:
+        # Get the next id and save the activation
+        id = len(list(save_dir.glob("*.npy")))
+        fpath = save_dir / f"{id:04d}.npy"
+        assert not fpath.exists(), f"File {fpath} already exists"
+
+        # Save the activation to a file
+        np.save(fpath, activation())
+        return fpath
+
+
 class ActSaveProvider:
-    _saver: _Saver | None = None
+    _saver: _SyncNumpySaver | None = None
     _prefixes: list[str] = []
 
     def initialize(
@@ -232,7 +256,7 @@ class ActSaveProvider:
             if save_dir is None:
                 save_dir = Path(tempfile.gettempdir()) / f"actsave-{uuid.uuid4()}"
                 log.critical(f"No save_dir specified, using {save_dir=}")
-            self._saver = _Saver(
+            self._saver = _SyncNumpySaver(
                 save_dir,
                 lambda: self._prefixes,
                 filters=filters,
