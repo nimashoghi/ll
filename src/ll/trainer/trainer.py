@@ -25,6 +25,7 @@ from ..model.config import (
     CheckpointLoadingConfig,
     LightningTrainerKwargs,
     RunnerOutputSaveConfig,
+    StrategyConfigProtocol,
 )
 from ..util import seed
 from ..util.environment import set_additional_env_vars
@@ -406,6 +407,16 @@ class Trainer(LightningTrainer):
             _update_kwargs(
                 default_root_dir=config.directory.resolve_run_root_directory(config.id)
             )
+
+        if (
+            use_distributed_sampler := config.trainer.use_distributed_sampler
+        ) is not None:
+            _update_kwargs(use_distributed_sampler=use_distributed_sampler)
+
+        if (strategy := config.trainer.strategy) is not None:
+            if isinstance(strategy, StrategyConfigProtocol):
+                strategy = strategy.construct_strategy()
+            _update_kwargs(strategy=strategy)
 
         if (precision := config.trainer.precision) is not None:
             resolved_precision: _PRECISION_INPUT

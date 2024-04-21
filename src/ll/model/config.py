@@ -600,6 +600,41 @@ class PluginConfigProtocol(Protocol[TPlugin]):
     def construct_plugin(self) -> TPlugin: ...
 
 
+@runtime_checkable
+class StrategyConfigProtocol(Protocol):
+    def construct_strategy(self) -> Strategy: ...
+
+
+StrategyLiteral: TypeAlias = Literal[
+    "auto",
+    "ddp",
+    "ddp_find_unused_parameters_false",
+    "ddp_find_unused_parameters_true",
+    "ddp_spawn",
+    "ddp_spawn_find_unused_parameters_false",
+    "ddp_spawn_find_unused_parameters_true",
+    "ddp_fork",
+    "ddp_fork_find_unused_parameters_false",
+    "ddp_fork_find_unused_parameters_true",
+    "ddp_notebook",
+    "dp",
+    "deepspeed",
+    "deepspeed_stage_1",
+    "deepspeed_stage_1_offload",
+    "deepspeed_stage_2",
+    "deepspeed_stage_2_offload",
+    "deepspeed_stage_3",
+    "deepspeed_stage_3_offload",
+    "deepspeed_stage_3_offload_nvme",
+    "fsdp",
+    "fsdp_cpu_offload",
+    "single_xla",
+    "xla_fsdp",
+    "xla",
+    "single_tpu",
+]
+
+
 class CheckpointLoadingConfig(TypedConfig):
     path: Literal["best", "last", "hpc"] | str | Path | None = None
     """
@@ -1237,8 +1272,23 @@ class TrainerConfig(TypedConfig):
     Default: ``2``.
     """
 
-    inference_mode: bool = True
+    inference_mode: bool | None = None
     """Whether to use :func:`torch.inference_mode` (if `True`) or :func:`torch.no_grad` (if `False`) during evaluation (``validate``/``test``/``predict``).
+    """
+
+    use_distributed_sampler: bool | None = None
+    """Whether to wrap the DataLoader's sampler with
+    :class:`torch.utils.data.DistributedSampler`. If not specified this is toggled automatically for
+    strategies that require it. By default, it will add ``shuffle=True`` for the train sampler and
+    ``shuffle=False`` for validation/test/predict samplers. If you want to disable this logic, you can pass
+    ``False`` and add your own distributed sampler in the dataloader hooks. If ``True`` and a distributed
+    sampler was already added, Lightning will not replace the existing one. For iterable-style datasets,
+    we don't do this automatically.
+    """
+
+    strategy: StrategyConfigProtocol | StrategyLiteral | None = None
+    """Supports different training strategies with aliases as well custom strategies.
+    Default: ``"auto"``.
     """
 
     auto_wrap_trainer: bool = True
