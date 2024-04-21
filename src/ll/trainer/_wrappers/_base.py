@@ -50,10 +50,10 @@ class LightningModuleWrapper(ABC):
     ) -> Any: ...
 
     def _wrap(self, module: LightningModule, fn_name: MethodName):
-        def new_step(module: LightningModule, batch, batch_idx, *args, **kwargs):
-            old_step_fn = getattr(module, fn_name)
+        old_step_fn = getattr(module, fn_name)
 
-            nonlocal self
+        def new_step(module: LightningModule, batch, batch_idx, *args, **kwargs):
+            nonlocal self, old_step_fn, fn_name
             return self.wrapped_step(
                 module,
                 old_step_fn,

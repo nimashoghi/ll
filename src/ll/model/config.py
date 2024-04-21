@@ -1180,8 +1180,11 @@ ActSaveSaverConfig: TypeAlias = Annotated[
 
 
 class ActSaveConfig(TypedConfig):
-    enabled: bool = False
+    enabled: bool = True
     """Enable activation saving."""
+
+    auto_save_logged_metrics: bool = False
+    """If enabled, will automatically save logged metrics (using `LightningModule.log`) as activations."""
 
     save_dir: Path | None = None
     """Directory to save activations to. If None, will use the activation directory set in `config.directory`."""
@@ -1194,6 +1197,9 @@ class ActSaveConfig(TypedConfig):
 
     transforms: list[ActSaveTransformConfig] | None = None
     """List of transforms to apply to the activations."""
+
+    def __bool__(self):
+        return self.enabled
 
 
 class TrainerConfig(TypedConfig):
@@ -1215,7 +1221,7 @@ class TrainerConfig(TypedConfig):
     reproducibility: ReproducibilityConfig = ReproducibilityConfig()
     """Reproducibility configuration options."""
 
-    actsave: ActSaveConfig | None = ActSaveConfig()
+    actsave: ActSaveConfig | None = ActSaveConfig(enabled=False)
     """Activation saving configuration options."""
 
     profiler: ProfilerConfig | None = None
@@ -1359,7 +1365,7 @@ class TrainerConfig(TypedConfig):
     Default: ``"auto"``.
     """
 
-    devices: Sequence[int] | Literal["auto", "all"] | None = None
+    devices: tuple[int, ...] | Sequence[int] | Literal["auto", "all"] | None = None
     """The devices to use. Can be set to a sequence of device indices, "all" to indicate all available devices should be used, or ``"auto"`` for
     automatic selection based on the chosen accelerator. Default: ``"auto"``.
     """

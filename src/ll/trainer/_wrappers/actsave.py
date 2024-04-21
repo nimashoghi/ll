@@ -31,9 +31,7 @@ class ActSaveWrapper(LightningModuleWrapper):
         with contextlib.ExitStack() as stack:
             # Ensure this is enabled in the `trainer` config
             hparams = cast(BaseConfig, module.hparams)
-            if (
-                actsave_config := hparams.trainer.actsave
-            ) is not None and actsave_config.enabled:
+            if hparams.trainer.actsave:
                 stack.enter_context(ActSave.context(fn_name))
 
             return fn(batch, batch_idx, *args, **kwargs)

@@ -2,7 +2,7 @@ from collections import deque
 from collections.abc import Callable, Generator
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 import torchmetrics
 from lightning.pytorch import LightningModule
@@ -12,6 +12,7 @@ from typing_extensions import override
 
 from ...actsave import ActSave
 from ...util.typing_utils import mixin_base_type
+from ..config import BaseConfig
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -119,6 +120,13 @@ class LoggerModuleMixin(mixin_base_type(LightningModule)):
             return super().log(name, value, **fn_kwargs)
 
     def _logger_actsave(self, name: str, value: _METRIC) -> None:
+        hparams = cast(BaseConfig, self.hparams)
+        if (
+            not hparams.trainer.actsave
+            or not hparams.trainer.actsave.auto_save_logged_metrics
+        ):
+            return
+
         ActSave.save(
             {
                 f"logger::{name}": lambda: value.compute()
