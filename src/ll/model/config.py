@@ -33,6 +33,7 @@ from lightning.pytorch.strategies.strategy import Strategy
 from pydantic import DirectoryPath
 from typing_extensions import Self, TypedDict, TypeVar, override
 
+from ..actsave import Transform
 from ..config import Field, TypedConfig
 
 log = getLogger(__name__)
@@ -664,6 +665,9 @@ class DirectoryConfig(TypedConfig):
     checkpoint: Path | None = None
     """Checkpoint directory to use for the trainer. If None, will use lltrainer/{id}/checkpoint/."""
 
+    activation: Path | None = None
+    """Activation directory to use for the trainer. If None, will use lltrainer/{id}/activation/."""
+
     def resolve_run_root_directory(self, run_id: str) -> Path:
         if (project_root_dir := self.project_root) is None:
             project_root_dir = Path.cwd()
@@ -687,9 +691,9 @@ class DirectoryConfig(TypedConfig):
     def resolve_subdirectory(
         self,
         run_id: str,
-        subdirectory: Literal["log", "stdio", "checkpoint"],
+        subdirectory: Literal["log", "stdio", "checkpoint", "activation"],
     ) -> Path:
-        # The subdir will be $CWD/lltrainer/{id}/{experiment,checkpoint,log}
+        # The subdir will be $CWD/lltrainer/{id}/{log, stdio, checkpoint, activation}/
         if (subdir := getattr(self, subdirectory)) is not None:
             assert isinstance(
                 subdir, Path
@@ -1133,6 +1137,28 @@ class LightningTrainerKwargs(TypedDict, total=False):
     """
 
 
+class ActSaveTransformConfig(TypedConfig):
+    filter: str
+    """Filter to use for selecting activations to apply this transform to."""
+
+    transform: Transform
+    """Transform to apply to the activations."""
+
+
+class ActSaveConfig(TypedConfig):
+    enabled: bool = False
+    """Enable activation saving."""
+
+    save_dir: Path | None = None
+    """Directory to save activations to. If None, will use the activation directory set in `config.directory`."""
+
+    filters: list[str] | None = None
+    """List of filters (matched using `fnmatch`) to use for filtering activations to save."""
+
+    transforms: list[ActSaveTransformConfig] | None = None
+    """List of transforms to apply to the activations."""
+
+
 class TrainerConfig(TypedConfig):
     checkpoint_loading: CheckpointLoadingConfig = CheckpointLoadingConfig()
     """Checkpoint loading configuration options."""
@@ -1151,6 +1177,9 @@ class TrainerConfig(TypedConfig):
 
     reproducibility: ReproducibilityConfig = ReproducibilityConfig()
     """Reproducibility configuration options."""
+
+    actsave: ActSaveConfig | None = ActSaveConfig()
+    """Activation saving configuration options."""
 
     profiler: ProfilerConfig | None = None
     """

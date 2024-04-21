@@ -18,8 +18,9 @@ from lightning.pytorch.callbacks import Callback
 from lightning.pytorch.utilities.types import STEP_OUTPUT
 from typing_extensions import Self, TypeVar, override
 
-from .. import actsave
-from ..util import log_batch_info, skip_batch
+from ..trainer.actsave import ActSaveWrapper
+from ..trainer.log_batch_info import LogBatchInfoWrapper
+from ..trainer.skip_batch import SkipBatchWrapper
 from .config import (
     BaseConfig,
     EnvironmentClassInformationConfig,
@@ -317,13 +318,9 @@ class LightningModuleBase(  # pyright: ignore[reportIncompatibleMethodOverride]
 
         self.register_callback(lambda: DebugFlagCallback())
 
-        actsave.wrap_lightning_module(self)
-
-        if self.config.trainer.log_batch_info_on_error:
-            log_batch_info.wrap_lightning_module(self)
-
-        if self.config.trainer.supports_skip_batch_exception:
-            skip_batch.wrap_lightning_module(self)
+        ActSaveWrapper.wrap_lightning_module(self)
+        LogBatchInfoWrapper.wrap_lightning_module(self)
+        SkipBatchWrapper.wrap_lightning_module(self)
 
     def zero_loss(self):
         """
@@ -334,7 +331,7 @@ class LightningModuleBase(  # pyright: ignore[reportIncompatibleMethodOverride]
         loss = cast(torch.Tensor, loss)
         return loss
 
-    def skip_batch_training_step(self, *args: Any, **kwargs: Any):
+    def skipped_training_step(self, batch: Any, batch_idx: int):
         """
         This function gets called when a `SkipBatch` exception is raised during any point in training.
         If `automatic_optimization` is enabled, it should return a loss tensor that will be used for the backward pass. By default, it returns a zero loss tensor.
@@ -342,7 +339,7 @@ class LightningModuleBase(  # pyright: ignore[reportIncompatibleMethodOverride]
         """
         if not self.automatic_optimization:
             raise NotImplementedError(
-                "To use `SkipBatch` with manual optimization, you must implement `skip_batch_training_step`."
+                "To use `SkipBatch` with manual optimization, you must implement `skipped_training_step`."
             )
 
         loss = self.zero_loss()

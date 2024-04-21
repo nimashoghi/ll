@@ -12,7 +12,6 @@ from typing import Generic, TypeAlias, cast, overload
 
 import numpy as np
 import torch
-from lightning.pytorch import LightningModule
 from lightning_utilities.core.apply_func import apply_to_collection
 from typing_extensions import ParamSpec, TypeVar, override
 
@@ -432,28 +431,3 @@ class ActivationLoader:
 
 
 ActSave = ActSaveProvider()
-
-
-def _wrap_fn(module: LightningModule, fn_name: str):
-    old_step = getattr(module, fn_name).__func__
-
-    @wraps(old_step)
-    def new_step(module: LightningModule, batch, batch_idx, *args, **kwargs):
-        with ActSave.context(fn_name):
-            return old_step(module, batch, batch_idx, *args, **kwargs)
-
-    setattr(module, fn_name, new_step.__get__(module))
-    log.info(f"Wrapped {fn_name} for actsave")
-
-
-def wrap_lightning_module(module: LightningModule):
-    log.info(
-        "Wrapping training_step/validation_step/test_step/predict_step for actsave"
-    )
-
-    _wrap_fn(module, "training_step")
-    _wrap_fn(module, "validation_step")
-    _wrap_fn(module, "test_step")
-    _wrap_fn(module, "predict_step")
-
-    log.info("Wrapped training_step/validation_step/test_step/predict_step for actsave")

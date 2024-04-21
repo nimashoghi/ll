@@ -29,6 +29,7 @@ from ..model.config import (
 )
 from ..util import seed
 from ..util.environment import set_additional_env_vars
+from .actsave import ActSave
 from .logging import finalize_loggers
 
 log = logging.getLogger(__name__)
@@ -511,15 +512,50 @@ class Trainer(LightningTrainer):
             log_dir = str(Path(log_dir).resolve())
         log.critical(f"LightningTrainer log directory: {self.log_dir}.")
 
+    @contextlib.contextmanager
+    def _actsave_context(self, model: LightningModule):
+        hparams = cast(BaseConfig, model.hparams)
+        if (
+            actsave_config := hparams.trainer.actsave
+        ) is None or not actsave_config.enabled:
+            yield
+            return
+
+        # Resolve the actsave directory
+        if (actsave_dir := actsave_config.save_dir) is None:
+            actsave_dir = hparams.directory.resolve_subdirectory(
+                hparams.id, "activation"
+            )
+        actsave_dir = Path(actsave_dir).resolve()
+
+        # Create the actsave directory
+        actsave_dir.mkdir(parents=True, exist_ok=True)
+
+        # Enter actsave enabled context
+        if (transforms := actsave_config.transforms) is not None:
+            transforms = [
+                (transform.filter, transform.transform) for transform in transforms
+            ]
+        with ActSave.enabled(
+            save_dir=actsave_dir,
+            filters=actsave_config.filters,
+            transforms=transforms,
+        ):
+            yield
+
     @override
     def _run(
         self, model: LightningModule, ckpt_path: str | Path | None = None
     ) -> _EVALUATE_OUTPUT | _PREDICT_OUTPUT | None:
         """
-        Lightning doesn't support gradient clipping with manual optimization.
-        We patch the `Trainer._run` method to throw if gradient clipping is enabled
-        and `model.automatic_optimization` is False.
+        Two things done here:
+            1. Lightning doesn't support gradient clipping with manual optimization.
+            We patch the `Trainer._run` method to throw if gradient clipping is enabled
+            and `model.automatic_optimization` is False.
+
+            2. We actually set up actsave here.
         """
+
         if not model.automatic_optimization and (
             self.gradient_clip_val is not None
             or self.gradient_clip_algorithm is not None
@@ -533,7 +569,8 @@ class Trainer(LightningTrainer):
                 "use the values in `config.trainer.gradient_clip_val` and `config.trainer.gradient_clip_algorithm`."
             )
 
-        return super()._run(model, ckpt_path)
+        with self._actsave_context(model):
+            return super()._run(model, ckpt_path)
 
     def _resolve_ckpt_path_get_valid_path(
         self,
