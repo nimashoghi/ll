@@ -5,8 +5,8 @@ import tempfile
 import uuid
 import weakref
 from abc import ABC, abstractmethod
-from collections.abc import Callable, Mapping
-from dataclasses import dataclass
+from collections.abc import Callable, Mapping, Sequence
+from dataclasses import dataclass, field
 from functools import wraps
 from logging import getLogger
 from pathlib import Path
@@ -138,11 +138,20 @@ def _ignore_if_scripting(fn: Callable[P, None]) -> Callable[P, None]:
     return wrapper
 
 
+@dataclass(frozen=True)
+class ActSaveContextInfo:
+    label: str
+    _unique_id: str = field(
+        init=False,
+        default_factory=lambda: str(uuid.uuid4()),
+    )
+
+
 class _SaverBase(ABC):
     def __init__(
         self,
         save_dir: Path,
-        prefixes_fn: Callable[[], list[str]],
+        prefixes_fn: Callable[[], Sequence[ActSaveContextInfo]],
         *,
         filters: list[str] | None = None,
         transforms: list[tuple[str, Transform]] | None = None,
@@ -173,7 +182,8 @@ class _SaverBase(ABC):
 
     def _save_activation(self, activation: Activation):
         # Save the activation to self._save_dir / {name} /
-        file_name = ".".join(self._prefixes_fn() + [activation.name])
+        prefixes = [prefix.label for prefix in self._prefixes_fn()]
+        file_name = ".".join(prefixes + [activation.name])
         save_dir = self._save_dir / file_name
         save_dir.mkdir(exist_ok=True, parents=True)
 
@@ -248,7 +258,7 @@ class _AsyncNumpySaver(_SaverBase):
     def __init__(
         self,
         save_dir: Path,
-        prefixes_fn: Callable[[], list[str]],
+        prefixes_fn: Callable[[], Sequence[ActSaveContextInfo]],
         *,
         filters: list[str] | None = None,
         transforms: list[tuple[str, Transform]] | None = None,
@@ -282,7 +292,7 @@ class _AsyncKwargs(TypedDict):
 
 class ActSaveProvider:
     _saver: _SaverBase | None = None
-    _prefixes: list[str] = []
+    _contexts: list[ActSaveContextInfo] = []
 
     def initialize(
         self,
@@ -304,7 +314,7 @@ class ActSaveProvider:
                 case ("sync", kwargs):
                     self._saver = _SyncNumpySaver(
                         save_dir,
-                        lambda: self._prefixes,
+                        lambda: self._contexts,
                         filters=filters,
                         transforms=transforms,
                         **kwargs,
@@ -312,7 +322,7 @@ class ActSaveProvider:
                 case ("async", kwargs):
                     self._saver = _AsyncNumpySaver(
                         save_dir,
-                        lambda: self._prefixes,
+                        lambda: self._contexts,
                         filters=filters,
                         transforms=transforms,
                         **kwargs,
@@ -343,7 +353,7 @@ class ActSaveProvider:
         super().__init__()
 
         self._saver = None
-        self._prefixes = []
+        self._contexts = []
 
     @contextlib.contextmanager
     def context(self, label: str):
@@ -357,12 +367,16 @@ class ActSaveProvider:
 
         _ensure_supported()
 
-        log.debug(f"Entering ActSave context {label}")
-        self._prefixes.append(label)
+        context = ActSaveContextInfo(label)
+        log.debug(f"Entering ActSave context {context}")
+        self._contexts.append(context)
         try:
             yield
         finally:
-            _ = self._prefixes.pop()
+            # Pop until we find our context
+            while self._contexts:
+                if self._contexts.pop() == context:
+                    break
 
     prefix = context
 
@@ -396,6 +410,9 @@ class ActSaveProvider:
         self._saver.save(acts, **kwargs)
 
     save = __call__
+
+    def _start_stage(self, stage: str):
+        raise NotImplementedError
 
 
 ActSave = ActSaveProvider()

@@ -20,7 +20,7 @@ from lightning.pytorch.profilers import Profiler
 from lightning.pytorch.utilities.types import _EVALUATE_OUTPUT, _PREDICT_OUTPUT
 from typing_extensions import Unpack, assert_never, override
 
-from ..actsave import ActSave
+from ..actsave import ActSave, ActSaveCallback
 from ..model.config import (
     BaseConfig,
     BaseProfilerConfig,
@@ -284,6 +284,9 @@ class Trainer(LightningTrainer):
         Yields:
             Callback: The default callbacks for the LL trainer.
         """
+        if config.trainer.actsave:
+            yield ActSaveCallback()
+
         if config.trainer.early_stopping is not None:
             yield config.trainer.early_stopping.construct_callback(config)
 
