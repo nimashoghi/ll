@@ -153,7 +153,7 @@ T = TypeVar("T", infer_variance=True)
 
 
 def _one_of(*fns: Callable[[], T | None]) -> T | None:
-    values = [fn() for fn in fns]
+    values = [value for fn in fns if (value := fn()) is not None]
 
     # Only one (or zero) value should be set. If not, raise an error.
     if len(set(values)) > 1:
