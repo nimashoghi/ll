@@ -1,5 +1,6 @@
 import copy
 import os
+import signal
 from collections.abc import Callable, Mapping, Sequence
 from datetime import timedelta
 from logging import getLogger
@@ -228,6 +229,13 @@ class SlurmJobKwargs(TypedDict, total=False):
     This corresponds to the "--exclusive" option in sbatch.
     """
 
+    signal: signal.Signals
+    """
+    The signal to send to the job when the job is being terminated.
+
+    This corresponds to the "--signal" option in sbatch.
+    """
+
     setup_commands: Sequence[str]
     """
     The setup commands to run before the job.
@@ -279,6 +287,7 @@ def _default_update_kwargs_fn(kwargs: SlurmJobKwargs) -> SlurmJobKwargs:
 
 
 DEFAULT_KWARGS: SlurmJobKwargs = {
+    "signal": signal.SIGUSR1,
     "update_kwargs_fn": _default_update_kwargs_fn,
 }
 
@@ -405,6 +414,9 @@ def _write_batch_script_to_file(
             if isinstance(constraint, str):
                 constraint = [constraint]
             f.write(f"#SBATCH --constraint={','.join(constraint)}\n")
+
+        if (signal := kwargs.get("signal")) is not None:
+            f.write(f"#SBATCH --signal={signal.name}\n")
 
         f.write("\n")
 

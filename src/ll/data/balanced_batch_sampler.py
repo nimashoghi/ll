@@ -44,8 +44,7 @@ def _balanced_partition(sizes: np.ndarray, num_parts: int):
 
 @runtime_checkable
 class DatasetWithSizes(Protocol):
-    def data_sizes(self, indices: list[int]) -> np.ndarray:
-        ...
+    def data_sizes(self, indices: list[int]) -> np.ndarray: ...
 
 
 class BalancedBatchSampler(BatchSampler):

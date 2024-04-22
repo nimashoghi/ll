@@ -1,12 +1,16 @@
+import copy
 import os
-from collections.abc import Callable, Mapping, Sequence
+import signal
+import subprocess
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from datetime import timedelta
 from logging import getLogger
 from pathlib import Path
 from typing import Any, Literal, cast, overload
 
-from typing_extensions import TypeAlias, TypedDict, TypeVarTuple, Unpack
+from typing_extensions import TypeAlias, TypedDict, TypeVar, TypeVarTuple, Unpack
 
+from ...model.config import BaseConfig
 from . import lsf, slurm
 from ._output import SubmitOutput
 
@@ -93,11 +97,50 @@ class GenericJobKwargs(TypedDict, total=False):
     The constraint to request for the job. For SLRUM, this corresponds to the `--constraint` option. For LSF, this is unused.
     """
 
+    signal: signal.Signals
+    """The signal that will be sent to the job when it is time to stop it."""
+
     additional_slurm_options: slurm.SlurmJobKwargs
     """Additional keyword arguments for Slurm jobs."""
 
     additional_lsf_options: lsf.LSFJobKwargs
     """Additional keyword arguments for LSF jobs."""
+
+
+TConfig = TypeVar("TConfig", infer_variance=True)
+TValue = TypeVar("TValue", infer_variance=True)
+
+
+def _get_value(
+    iterable: Iterable[TConfig], fn: Callable[[TConfig], TValue | None]
+) -> TValue | None:
+    value_set = set(value for config in iterable if (value := fn(config)) is not None)
+    # If there is a single value, return it
+    if len(value_set) == 1:
+        return value_set.pop()
+
+    # Otherwise, return None
+    return None
+
+
+def update_kwargs_from_configs(
+    kwargs: GenericJobKwargs,
+    configs: Iterable[BaseConfig],
+):
+    kwargs = copy.deepcopy(kwargs)
+    if (
+        preempt_signal := _get_value(
+            configs,
+            lambda config: (
+                submit_config.preempt_signal
+                if (submit_config := config.runner.submit) is not None
+                else None
+            ),
+        )
+    ) is not None:
+        kwargs["signal"] = preempt_signal
+
+    return kwargs
 
 
 Scheduler: TypeAlias = Literal["slurm", "lsf"]
@@ -129,6 +172,8 @@ def _to_slurm(kwargs: GenericJobKwargs) -> slurm.SlurmJobKwargs:
         slurm_kwargs["gpus_per_task"] = gpus_per_task
     if (constraint := kwargs.get("constraint")) is not None:
         slurm_kwargs["constraint"] = constraint
+    if (signal := kwargs.get("signal")) is not None:
+        slurm_kwargs["signal"] = signal
     if (email := kwargs.get("email")) is not None:
         slurm_kwargs["mail_user"] = email
     if (notifications := kwargs.get("notifications")) is not None:
@@ -295,3 +340,21 @@ def to_array_batch_script(
                 **job_index_variable_kwargs,
                 **lsf_kwargs,
             )
+
+
+def infer_current_scheduler() -> Scheduler:
+    # First, we check for `bsub` as it's much less common than `sbatch`.
+    try:
+        subprocess.run(["bsub", "-V"], check=True)
+        return "lsf"
+    except FileNotFoundError:
+        pass
+
+    # Next, we check for `sbatch` as it's the most common scheduler.
+    try:
+        subprocess.run(["sbatch", "--version"], check=True)
+        return "slurm"
+    except FileNotFoundError:
+        pass
+
+    raise RuntimeError("Could not determine the current scheduler.")

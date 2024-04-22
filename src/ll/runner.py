@@ -726,8 +726,8 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
     def submit_generic(
         self,
         runs: Sequence[TConfig] | Sequence[tuple[TConfig, Unpack[TArguments]]],
-        scheduler: unified.Scheduler,
         *,
+        scheduler: unified.Scheduler | Literal["auto"] = "auto",
         snapshot: bool | SnapshotConfig = False,
         reset_id: bool = False,
         enable_conda: bool = True,
@@ -735,6 +735,10 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         **job_kwargs: Unpack[unified.GenericJobKwargs],
     ):
         """"""
+        if scheduler == "auto":
+            scheduler = unified.infer_current_scheduler()
+            log.critical(f"Inferred current scheduler as {scheduler}")
+
         id = str(uuid.uuid4())
 
         resolved_runs = _resolve_runs(runs, reset_id=reset_id)
@@ -766,6 +770,11 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
 
         base_path = local_data_path / "submit"
         base_path.mkdir(exist_ok=True, parents=True)
+
+        # Update submission kwargs based on the configs
+        job_kwargs = unified.update_kwargs_from_configs(
+            job_kwargs, [config for config, _ in resolved_runs]
+        )
 
         # Serialize the runs
         map_array_args: list[
