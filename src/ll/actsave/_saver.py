@@ -1,21 +1,22 @@
 import concurrent.futures
 import contextlib
 import fnmatch
-import tempfile
 import uuid
 import weakref
 from abc import ABC, abstractmethod
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
-from functools import wraps
+from functools import partial, wraps
 from logging import getLogger
 from pathlib import Path
-from typing import Generic, Literal, TypeAlias, cast, overload
+from typing import Generic, TypeAlias, cast, overload
 
 import numpy as np
 import torch
 from lightning_utilities.core.apply_func import apply_to_collection
-from typing_extensions import ParamSpec, TypedDict, TypeVar, override
+from typing_extensions import ParamSpec, TypeVar, assert_never, override
+
+from ._config import ActSaveAsyncSaverConfig, ActSaveConfig, ActSaveSyncSaverConfig
 
 log = getLogger(__name__)
 
@@ -66,7 +67,7 @@ class WeakRef(Generic[T]):
 
 
 @dataclass
-class Activation:
+class _Activation:
     name: str
     ref: WeakRef[ValueOrLambda] | None
     transformed: np.ndarray | None = None
@@ -110,7 +111,7 @@ class Activation:
         return [cls.from_value_or_lambda(k, v) for k, v in d.items()]
 
 
-Transform = Callable[[Activation], Mapping[str, ValueOrLambda]]
+Transform = Callable[[_Activation], Mapping[str, ValueOrLambda]]
 
 
 def _ensure_supported():
@@ -150,12 +151,15 @@ class ActSaveContextInfo:
 class _SaverBase(ABC):
     def __init__(
         self,
+        actsave_config: ActSaveConfig,
         save_dir: Path,
         prefixes_fn: Callable[[], Sequence[ActSaveContextInfo]],
         *,
         filters: list[str] | None = None,
         transforms: list[tuple[str, Transform]] | None = None,
     ):
+        self.actsave_config = actsave_config
+
         # Create a directory under `save_dir` by autoincrementing
         # (i.e., every activation save context, we create a new directory)
         # The id = the number of activation subdirectories
@@ -176,11 +180,11 @@ class _SaverBase(ABC):
     @abstractmethod
     def save_to_file(
         self,
-        activation: Activation,
+        activation: _Activation,
         save_dir: Path,
     ) -> Path: ...
 
-    def _save_activation(self, activation: Activation):
+    def _save_activation(self, activation: _Activation):
         # Save the activation to self._save_dir / {name} /
         prefixes = [prefix.label for prefix in self._prefixes_fn()]
         file_name = ".".join(prefixes + [activation.name])
@@ -200,9 +204,9 @@ class _SaverBase(ABC):
         kwargs.update(acts or {})
 
         # Build activations
-        activations = Activation.from_dict(kwargs)
+        activations = _Activation.from_dict(kwargs)
 
-        transformed_activations: list[Activation] = []
+        transformed_activations: list[_Activation] = []
 
         for activation in activations:
             # Make sure name matches at least one filter if filters are specified
@@ -225,19 +229,44 @@ class _SaverBase(ABC):
                         continue
 
                     # Otherwise, add the transform to the activations
-                    transformed_activations.extend(Activation.from_dict(transform_out))
+                    transformed_activations.extend(_Activation.from_dict(transform_out))
 
-        # Now, we save the transformed activations
-        for transformed_activation in transformed_activations:
-            self._save_activation(transformed_activation)
-
-        del activations
-        del transformed_activations
+        # Now, we save the transformed activations.
+        # We condition on the write mode
+        match self.actsave_config.write_mode:
+            case "implicit":
+                # This mode automatically saves all logged activations immediately after they are logged using `ActSave({...})`.
+                for transformed_activation in transformed_activations:
+                    self._save_activation(transformed_activation)
+            case "explicit":
+                raise NotImplementedError("Explicit mode is not yet implemented")
+            case _:
+                assert_never(self.actsave_config.write_mode)
 
 
 class _SyncNumpySaver(_SaverBase):
+    def __init__(
+        self,
+        actsave_config: ActSaveConfig,
+        config: ActSaveSyncSaverConfig,
+        save_dir: Path,
+        prefixes_fn: Callable[[], Sequence[ActSaveContextInfo]],
+        *,
+        filters: list[str] | None = None,
+        transforms: list[tuple[str, Transform]] | None = None,
+    ):
+        super().__init__(
+            actsave_config,
+            save_dir,
+            prefixes_fn,
+            filters=filters,
+            transforms=transforms,
+        )
+
+        self.config = config
+
     @override
-    def save_to_file(self, activation: Activation, save_dir: Path) -> Path:
+    def save_to_file(self, activation: _Activation, save_dir: Path) -> Path:
         # Get the next id and save the activation
         id = len(list(save_dir.glob("*.npy")))
         fpath = save_dir / f"{id:04d}.npy"
@@ -257,20 +286,29 @@ class _AsyncNumpySaver(_SaverBase):
     @override
     def __init__(
         self,
+        actsave_config: ActSaveConfig,
+        config: ActSaveAsyncSaverConfig,
         save_dir: Path,
         prefixes_fn: Callable[[], Sequence[ActSaveContextInfo]],
         *,
         filters: list[str] | None = None,
         transforms: list[tuple[str, Transform]] | None = None,
-        # Additional arguments for the async saver
-        max_workers: int,
     ):
-        super().__init__(save_dir, prefixes_fn, filters=filters, transforms=transforms)
+        super().__init__(
+            actsave_config,
+            save_dir,
+            prefixes_fn,
+            filters=filters,
+            transforms=transforms,
+        )
 
-        self._executor = concurrent.futures.ThreadPoolExecutor(max_workers=max_workers)
+        self.config = config
+        self._executor = concurrent.futures.ThreadPoolExecutor(
+            max_workers=self.config.max_workers
+        )
 
     @override
-    def save_to_file(self, activation: Activation, save_dir: Path) -> Path:
+    def save_to_file(self, activation: _Activation, save_dir: Path) -> Path:
         # Get the next id and save the activation
         id = len(list(save_dir.glob("*.npy")))
         fpath = save_dir / f"{id:04d}.npy"
@@ -282,67 +320,40 @@ class _AsyncNumpySaver(_SaverBase):
         return fpath
 
 
-class _SyncKwargs(TypedDict):
-    pass
-
-
-class _AsyncKwargs(TypedDict):
-    max_workers: int
-
-
 class ActSaveProvider:
     _saver: _SaverBase | None = None
     _contexts: list[ActSaveContextInfo] = []
 
-    def initialize(
-        self,
-        save_dir: Path | None = None,
-        *,
-        filters: list[str] | None = None,
-        transforms: list[tuple[str, Transform]] | None = None,
-        saver: tuple[Literal["sync"], _SyncKwargs]
-        | tuple[Literal["async"], _AsyncKwargs]
-        | None = None,
-    ):
+    def initialize(self, config: ActSaveConfig, save_dir: Path):
         if self._saver is None:
-            if save_dir is None:
-                save_dir = Path(tempfile.gettempdir()) / f"actsave-{uuid.uuid4()}"
-                log.critical(f"No save_dir specified, using {save_dir=}")
+            # Create the actsave directory
+            save_dir.mkdir(parents=True, exist_ok=True)
 
-            saver_type, kwargs = saver or ("sync", {})
-            match saver or ("sync", {}):
-                case ("sync", kwargs):
-                    self._saver = _SyncNumpySaver(
-                        save_dir,
-                        lambda: self._contexts,
-                        filters=filters,
-                        transforms=transforms,
-                        **kwargs,
-                    )
-                case ("async", kwargs):
-                    self._saver = _AsyncNumpySaver(
-                        save_dir,
-                        lambda: self._contexts,
-                        filters=filters,
-                        transforms=transforms,
-                        **kwargs,
-                    )
+            # Resolve the transforms
+            if (transforms := config.transforms) is not None:
+                transforms = [
+                    (transform.filter, transform.transform) for transform in transforms
+                ]
+
+            match config.saver:
+                case ActSaveSyncSaverConfig():
+                    saver_cls = partial(_SyncNumpySaver, config, config.saver)
+                case ActSaveAsyncSaverConfig():
+                    saver_cls = partial(_AsyncNumpySaver, config, config.saver)
                 case _:
-                    raise ValueError(f"Invalid saver type: {saver_type}")
+                    assert_never(config.saver)
+
+            self._saver = saver_cls(
+                save_dir,
+                lambda: self._contexts,
+                filters=config.filters,
+                transforms=transforms,
+            )
 
     @contextlib.contextmanager
-    def enabled(
-        self,
-        save_dir: Path | None = None,
-        *,
-        filters: list[str] | None = None,
-        transforms: list[tuple[str, Transform]] | None = None,
-        saver: tuple[Literal["sync"], _SyncKwargs]
-        | tuple[Literal["async"], _AsyncKwargs]
-        | None = None,
-    ):
+    def enabled(self, config: ActSaveConfig, save_dir: Path):
         prev = self._saver
-        self.initialize(save_dir, filters=filters, transforms=transforms, saver=saver)
+        self.initialize(config, save_dir)
         try:
             yield
         finally:

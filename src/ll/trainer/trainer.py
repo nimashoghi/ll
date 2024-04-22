@@ -545,33 +545,14 @@ class Trainer(LightningTrainer):
     @contextlib.contextmanager
     def _actsave_context(self, model: LightningModule):
         hparams = cast(BaseConfig, model.hparams)
-        if (
-            actsave_config := hparams.trainer.actsave
-        ) is None or not actsave_config.enabled:
+        if not (actsave_config := hparams.trainer.actsave):
             yield
             return
 
-        # Resolve the actsave directory
-        if (actsave_dir := actsave_config.save_dir) is None:
-            actsave_dir = hparams.directory.resolve_subdirectory(
-                hparams.id, "activation"
-            )
-        actsave_dir = Path(actsave_dir).resolve()
-
-        # Create the actsave directory
-        actsave_dir.mkdir(parents=True, exist_ok=True)
-
-        # Enter actsave enabled context
-        if (transforms := actsave_config.transforms) is not None:
-            transforms = [
-                (transform.filter, transform.transform) for transform in transforms
-            ]
-
+        # Enter actsave context
         with ActSave.enabled(
-            save_dir=actsave_dir,
-            filters=actsave_config.filters,
-            transforms=transforms,
-            saver=actsave_config.saver._to_saver_arg(),
+            actsave_config,
+            actsave_config.resolve_save_dir(hparams),
         ):
             yield
 
