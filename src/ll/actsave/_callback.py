@@ -1,13 +1,15 @@
 import contextlib
-from typing import Any, Literal, cast
+from typing import TYPE_CHECKING, Any, Literal, cast
 
 from lightning.pytorch import LightningModule, Trainer
 from lightning.pytorch.callbacks.callback import Callback
 from lightning.pytorch.utilities.types import STEP_OUTPUT
 from typing_extensions import TypeAlias, override
 
-from ..model.config import BaseConfig
 from ._saver import ActSave
+
+if TYPE_CHECKING:
+    from ..model.config import BaseConfig
 
 Stage: TypeAlias = Literal["train", "validation", "test", "predict"]
 
@@ -24,7 +26,7 @@ class ActSaveCallback(Callback):
         trainer: Trainer,
         pl_module: LightningModule,
     ):
-        hparams = cast(BaseConfig, pl_module.hparams)
+        hparams = cast("BaseConfig", pl_module.hparams)
         if not hparams.trainer.actsave:
             return
 
@@ -44,7 +46,7 @@ class ActSaveCallback(Callback):
         trainer: Trainer,
         pl_module: LightningModule,
     ):
-        hparams = cast(BaseConfig, pl_module.hparams)
+        hparams = cast("BaseConfig", pl_module.hparams)
         if not hparams.trainer.actsave:
             return
 
