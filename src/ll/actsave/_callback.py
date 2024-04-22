@@ -33,7 +33,7 @@ class ActSaveCallback(Callback):
             active_contexts.__exit__(None, None, None)
 
         # Signal to ActSave that we're starting a new stage
-        ActSave._start_stage(stage)
+        ActSave._start_stage()
 
         # Enter a new context manager for this stage
         self._active_contexts[stage] = ActSave.context(stage)

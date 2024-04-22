@@ -1,6 +1,7 @@
 import concurrent.futures
 import contextlib
 import fnmatch
+import io
 import uuid
 import weakref
 from abc import ABC, abstractmethod
@@ -102,6 +103,13 @@ class _Activation:
 
         return self.transformed
 
+    def to_bytes(self):
+        np_self = self()
+
+        with io.BytesIO() as f:
+            np.save(f, np_self)
+            return f.getvalue()
+
     @classmethod
     def from_value_or_lambda(cls, name: str, value_or_lambda: ValueOrLambda):
         return cls(name, WeakRef(value_or_lambda))
@@ -177,12 +185,26 @@ class _SaverBase(ABC):
         self._filters = filters
         self._transforms = transforms
 
+        self._acts_to_save: list[tuple[bytes, Path]] = []
+
     @abstractmethod
     def save_to_file(
         self,
-        activation: _Activation,
+        activation_bytes: bytes,
         save_dir: Path,
     ) -> Path: ...
+
+    def on_new_step(self):
+        if self.actsave_config.write_mode != "explicit":
+            return
+
+        try:
+            # Write all activations to disk
+            for activation_bytes, save_dir in self._acts_to_save:
+                self.save_to_file(activation_bytes, save_dir)
+        finally:
+            # Clear the activations
+            self._acts_to_save.clear()
 
     def _save_activation(self, activation: _Activation):
         # Save the activation to self._save_dir / {name} /
@@ -191,8 +213,21 @@ class _SaverBase(ABC):
         save_dir = self._save_dir / file_name
         save_dir.mkdir(exist_ok=True, parents=True)
 
-        # Save the activation to a file
-        self.save_to_file(activation, save_dir)
+        # We condition on the write mode
+        match self.actsave_config.write_mode:
+            case "implicit":
+                # This mode automatically saves all logged activations immediately after they are logged using `ActSave({...})`.
+                # Save the activation to a file
+                self.save_to_file(activation.to_bytes(), save_dir)
+            case "explicit":
+                # This mode stores activations in memory until they are explicitly saved using `ActSave.write()`.
+                # If the activations are not explicitly saved by the beginning of the next step, they are discarded. They can
+                # also be discarded explicitly using `ActSave.discard()`. This mode is useful for saving activations only when,
+                # e.g. when the training loss ends up being too high or the gradient explodes. This mode is the recommended
+                # mode for saving activations.
+                self._acts_to_save.append((activation.to_bytes(), save_dir))
+            case _:
+                assert_never(self.actsave_config.write_mode)
 
     @_ignore_if_scripting
     def save(
@@ -232,16 +267,8 @@ class _SaverBase(ABC):
                     transformed_activations.extend(_Activation.from_dict(transform_out))
 
         # Now, we save the transformed activations.
-        # We condition on the write mode
-        match self.actsave_config.write_mode:
-            case "implicit":
-                # This mode automatically saves all logged activations immediately after they are logged using `ActSave({...})`.
-                for transformed_activation in transformed_activations:
-                    self._save_activation(transformed_activation)
-            case "explicit":
-                raise NotImplementedError("Explicit mode is not yet implemented")
-            case _:
-                assert_never(self.actsave_config.write_mode)
+        for transformed_activation in transformed_activations:
+            self._save_activation(transformed_activation)
 
 
 class _SyncNumpySaver(_SaverBase):
@@ -266,14 +293,14 @@ class _SyncNumpySaver(_SaverBase):
         self.config = config
 
     @override
-    def save_to_file(self, activation: _Activation, save_dir: Path) -> Path:
+    def save_to_file(self, activation_bytes: bytes, save_dir: Path) -> Path:
         # Get the next id and save the activation
         id = len(list(save_dir.glob("*.npy")))
         fpath = save_dir / f"{id:04d}.npy"
         assert not fpath.exists(), f"File {fpath} already exists"
 
         # Save the activation to a file
-        np.save(fpath, activation())
+        fpath.write_bytes(activation_bytes)
         return fpath
 
 
@@ -307,8 +334,12 @@ class _AsyncNumpySaver(_SaverBase):
             max_workers=self.config.max_workers
         )
 
+    @staticmethod
+    def _write_fn(fpath: Path, activation_bytes: bytes):
+        fpath.write_bytes(activation_bytes)
+
     @override
-    def save_to_file(self, activation: _Activation, save_dir: Path) -> Path:
+    def save_to_file(self, activation_bytes: bytes, save_dir: Path) -> Path:
         # Get the next id and save the activation
         id = len(list(save_dir.glob("*.npy")))
         fpath = save_dir / f"{id:04d}.npy"
@@ -316,7 +347,7 @@ class _AsyncNumpySaver(_SaverBase):
 
         # Save the activation to a file
         # We save the activation asynchronously
-        self._executor.submit(np.save, fpath, activation())
+        self._executor.submit(self._write_fn, fpath, activation_bytes)
         return fpath
 
 
@@ -422,8 +453,12 @@ class ActSaveProvider:
 
     save = __call__
 
-    def _start_stage(self, stage: str):
-        raise NotImplementedError
+    def _start_stage(self):
+        # If we have a saver, we should alert it that we're starting a new stage.
+        if (saver := self._saver) is None:
+            return
+
+        saver.on_new_step()
 
 
 ActSave = ActSaveProvider()
