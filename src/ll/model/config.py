@@ -1,5 +1,6 @@
 import copy
 import os
+import re
 import string
 import time
 import warnings
@@ -833,6 +834,25 @@ class ModelCheckpointCallbackConfig(CheckpointCallbackBaseConfig):
     enable_version_counter: bool = True
     """Whether to append a version to the existing file name."""
 
+    auto_append_metric: bool = True
+    """If enabled, this will automatically add "-{monitor}" to the filename."""
+
+    @staticmethod
+    def _convert_string(input_string):
+        # Find all variables enclosed in curly braces
+        variables = re.findall(r"\{(.*?)\}", input_string)
+
+        # Replace each variable with its corresponding key-value pair
+        output_string = input_string
+        for variable in variables:
+            # Replace '/' with '_' in the key name
+            key_name = variable.replace("/", "_")
+            output_string = output_string.replace(
+                f"{{{variable}}}", f"{key_name}={{{variable}}}"
+            )
+
+        return output_string
+
     @override
     def construct_callback(self, root_config):
         from lightning.pytorch.callbacks.model_checkpoint import ModelCheckpoint
@@ -851,16 +871,29 @@ class ModelCheckpointCallbackConfig(CheckpointCallbackBaseConfig):
             monitor = primary_metric.validation_monitor
             mode = primary_metric.mode
 
+        filename = self.filename
+        if self.auto_append_metric:
+            if not filename:
+                filename = "{epoch}-{step}"
+            filename = f"{filename}-{{{monitor}}}"
+
+        if self.auto_insert_metric_name and filename:
+            new_filename = self._convert_string(filename)
+            log.critical(
+                f"Updated ModelCheckpoint filename: {filename} -> {new_filename}"
+            )
+            filename = new_filename
+
         return ModelCheckpoint(
             dirpath=dirpath,
-            filename=self.filename,
+            filename=filename,
             monitor=monitor,
             mode=mode,
             verbose=self.verbose,
             save_last=self.save_last,
             save_top_k=self.save_top_k,
             save_weights_only=self.save_weights_only,
-            auto_insert_metric_name=self.auto_insert_metric_name,
+            auto_insert_metric_name=False,
             every_n_train_steps=self.every_n_train_steps,
             train_time_interval=self.train_time_interval,
             every_n_epochs=self.every_n_epochs,
