@@ -3,7 +3,6 @@ from typing import TYPE_CHECKING, Annotated, Literal
 
 from typing_extensions import TypeAlias
 
-from ..actsave._saver import Transform
 from ..config import Field, TypedConfig
 
 if TYPE_CHECKING:
@@ -13,9 +12,6 @@ if TYPE_CHECKING:
 class ActSaveTransformConfig(TypedConfig):
     filter: str
     """Filter to use for selecting activations to apply this transform to."""
-
-    transform: Transform
-    """Transform to apply to the activations."""
 
 
 class ActSaveSaverConfigBase(TypedConfig):
