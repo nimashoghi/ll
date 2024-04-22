@@ -352,12 +352,6 @@ class ActSaveProvider:
             # Create the actsave directory
             save_dir.mkdir(parents=True, exist_ok=True)
 
-            # Resolve the transforms
-            if (transforms := config.transforms) is not None:
-                transforms = [
-                    (transform.filter, transform.transform) for transform in transforms
-                ]
-
             match config.saver:
                 case ActSaveSyncSaverConfig():
                     saver_cls = partial(_SyncNumpySaver, config, config.saver)
@@ -367,10 +361,7 @@ class ActSaveProvider:
                     assert_never(config.saver)
 
             self._saver = saver_cls(
-                save_dir,
-                lambda: self._contexts,
-                filters=config.filters,
-                transforms=transforms,
+                save_dir, lambda: self._contexts, filters=config.filters
             )
 
     @contextlib.contextmanager
