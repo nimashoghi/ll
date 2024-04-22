@@ -64,6 +64,3 @@ def transform_with_index(
             return data
 
     return cast(TDataset, _TransformedWithIndexDataset(dataset))
-
-
-__all__ = ["transform"]
