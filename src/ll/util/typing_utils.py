@@ -1,47 +1,6 @@
-from collections.abc import Callable
-from typing import TYPE_CHECKING, Any, Concatenate, cast
+from typing import TYPE_CHECKING
 
-from typing_extensions import ParamSpec, TypeVar
-
-P = ParamSpec("P")
-TSelf = TypeVar("TSelf", infer_variance=True)
-TParam = TypeVar("TParam", infer_variance=True)
-TReturn = TypeVar("TReturn", infer_variance=True)
-
-
-def copy_args(
-    kwargs_call: Callable[P, Any],
-    *,
-    return_type: type[TReturn],
-) -> Callable[[Callable[..., TReturn]], Callable[P, TReturn]]:
-    """
-    Copies the type annotations from one function to another.
-    """
-
-    def return_func(func: Callable[..., TReturn]):
-        return cast(Callable[P, TReturn], func)
-
-    return return_func
-
-
-def copy_method_with_param(
-    kwargs_call: Callable[Concatenate[TSelf, P], Any],
-    *,
-    param_type: type[TParam],
-    return_type: type[TReturn],
-) -> Callable[
-    [Callable[..., TReturn]], Callable[Concatenate[TSelf, TParam, P], TReturn]
-]:
-    """
-    Copies the type annotations from one method to another,
-    but adds a new parameter to the beginning.
-    """
-
-    def return_func(func: Callable[..., TReturn]):
-        return cast(Callable[Concatenate[TSelf, TParam, P], TReturn], func)
-
-    return return_func
-
+from typing_extensions import TypeVar
 
 TBase = TypeVar("TBase")
 
