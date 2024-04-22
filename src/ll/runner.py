@@ -129,7 +129,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         run: RunProtocol[TConfig, TReturn, Unpack[TArguments]],
         *,
         savedir: str | Path | os.PathLike | None = None,
-        slurm_job_name: str = "ll",
+        job_name: str = "ll",
         validate_config_before_run: bool = True,
         validate_strict: bool = True,
         env: Mapping[str, str] | None = None,
@@ -145,8 +145,8 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
             The `savedir` parameter is a string that represents the directory where the program will save its execution files and logs.
             This is used when submitting the program to a SLURM/LSF cluster or when using the `local_sessions` method.
             If `None`, this will default to the current working directory / `llrunner`.
-        slurm_job_name : str, optional
-            The `slurm_job_name` parameter is a string that represents the name of the job when submitting it to a SLURM cluster.
+        job_name : str, optional
+            The `job_name` parameter is a string that represents the name of the job when submitting it to a cluster.
         validate_config_before_run : bool, optional
             The `validate_config_before_run` parameter is a boolean that represents whether or not to validate the configuration before running the program.
         validate_strict: bool, optional
@@ -157,12 +157,12 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
 
         self._run = run
         self._savedir = savedir
-        self.slurm_job_name = slurm_job_name
+        self.job_name = job_name
         self.validate_config_before_run = validate_config_before_run
         self.validate_strict = validate_strict
         self._init_kwargs = {
             "savedir": savedir,
-            "slurm_job_name": slurm_job_name,
+            "job_name": job_name,
             "validate_config_before_run": validate_config_before_run,
             "validate_strict": validate_strict,
         }
