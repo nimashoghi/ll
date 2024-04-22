@@ -1,6 +1,7 @@
 import copy
 import os
 import re
+import socket
 import string
 import time
 import warnings
@@ -36,6 +37,7 @@ from typing_extensions import Self, TypedDict, TypeVar, override
 
 from ..actsave._saver import Transform
 from ..config import Field, TypedConfig
+from ..util.slurm import parse_slurm_node_list
 
 log = getLogger(__name__)
 
@@ -193,9 +195,53 @@ class EnvironmentSLURMInformationConfig(TypedConfig):
     array_task_id: str | None
     num_tasks: int
     num_nodes: int
-    node: int
+    node: str | int | None
     global_rank: int
     local_rank: int
+
+    @classmethod
+    def from_current_environment(cls):
+        try:
+            from lightning.fabric.plugins.environments.slurm import SLURMEnvironment
+
+            if not SLURMEnvironment.detect():
+                return None
+
+            hostname = socket.gethostname()
+            hostnames = [hostname]
+            if node_list := os.environ.get("SLURM_JOB_NODELIST", ""):
+                hostnames = parse_slurm_node_list(node_list)
+
+            raw_job_id = os.environ["SLURM_JOB_ID"]
+            job_id = raw_job_id
+            array_job_id = os.environ.get("SLURM_ARRAY_JOB_ID")
+            array_task_id = os.environ.get("SLURM_ARRAY_TASK_ID")
+            if array_job_id and array_task_id:
+                job_id = f"{array_job_id}_{array_task_id}"
+
+            num_tasks = int(os.environ["SLURM_NTASKS"])
+            num_nodes = int(os.environ["SLURM_JOB_NUM_NODES"])
+
+            node_id = os.environ.get("SLURM_NODEID")
+
+            global_rank = int(os.environ["SLURM_PROCID"])
+            local_rank = int(os.environ["SLURM_LOCALID"])
+
+            return cls(
+                hostname=hostname,
+                hostnames=hostnames,
+                job_id=job_id,
+                raw_job_id=raw_job_id,
+                array_job_id=array_job_id,
+                array_task_id=array_task_id,
+                num_tasks=num_tasks,
+                num_nodes=num_nodes,
+                node=node_id,
+                global_rank=global_rank,
+                local_rank=local_rank,
+            )
+        except (ImportError, RuntimeError, ValueError, KeyError):
+            return None
 
 
 class EnvironmentLinuxEnvironmentConfig(TypedConfig):

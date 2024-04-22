@@ -111,44 +111,6 @@ class DebugFlagCallback(Callback):
         hparams.debug = self._debug
 
 
-def _slurm_session_info():
-    try:
-        from ll.submitit import JobEnvironment
-
-        job = JobEnvironment()
-        if not job.activated():
-            return None
-
-        # return {
-        #     "hostname": job.hostname,
-        #     "hostnames": job.hostnames,
-        #     "job_id": job.job_id,
-        #     "raw_job_id": job.raw_job_id,
-        #     "array_job_id": job.array_job_id,
-        #     "array_task_id": job.array_task_id,
-        #     "num_tasks": job.num_tasks,
-        #     "num_nodes": job.num_nodes,
-        #     "node": job.node,
-        #     "global_rank": job.global_rank,
-        #     "local_rank": job.local_rank,
-        # }
-        return EnvironmentSLURMInformationConfig(
-            hostname=job.hostname,
-            hostnames=list(job.hostnames),
-            job_id=job.job_id,
-            raw_job_id=job.raw_job_id,
-            array_job_id=job.array_job_id,
-            array_task_id=job.array_task_id,
-            num_tasks=job.num_tasks,
-            num_nodes=job.num_nodes,
-            node=job.node,
-            global_rank=job.global_rank,
-            local_rank=job.local_rank,
-        )
-    except (ImportError, RuntimeError):
-        return None
-
-
 def _cls_info(cls: type):
     name = cls.__name__
     module = cls.__module__
@@ -251,7 +213,9 @@ class LightningModuleBase(  # pyright: ignore[reportIncompatibleMethodOverride]
         hparams.environment.python_version = sys.version
         hparams.environment.config = _cls_info(cls.config_cls())
         hparams.environment.model = _cls_info(cls)
-        hparams.environment.slurm = _slurm_session_info()
+        hparams.environment.slurm = (
+            EnvironmentSLURMInformationConfig.from_current_environment()
+        )
         hparams.environment.base_dir = hparams.directory.resolve_run_root_directory(
             hparams.id
         )
