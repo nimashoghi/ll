@@ -885,15 +885,21 @@ class ModelCheckpointCallbackConfig(CheckpointCallbackBaseConfig):
     """If enabled, this will automatically add "-{monitor}" to the filename."""
 
     @staticmethod
-    def _convert_string(input_string):
+    def _convert_string(input_string: str):
         # Find all variables enclosed in curly braces
         variables = re.findall(r"\{(.*?)\}", input_string)
 
         # Replace each variable with its corresponding key-value pair
         output_string = input_string
         for variable in variables:
+            # If the name is something like {variable:format}, we shouldn't process the format.
+            key_name = variable
+            if ":" in variable:
+                key_name, _ = variable.split(":", 1)
+                continue
+
             # Replace '/' with '_' in the key name
-            key_name = variable.replace("/", "_")
+            key_name = key_name.replace("/", "_")
             output_string = output_string.replace(
                 f"{{{variable}}}", f"{key_name}={{{variable}}}"
             )
