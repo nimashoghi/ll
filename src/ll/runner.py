@@ -8,7 +8,6 @@ from collections import Counter
 from collections.abc import Mapping, Sequence
 from contextlib import ExitStack
 from dataclasses import dataclass
-from datetime import timedelta
 from functools import wraps
 from logging import getLogger
 from pathlib import Path
@@ -18,9 +17,7 @@ import cloudpickle as pickle
 from tqdm.auto import tqdm
 from typing_extensions import TypedDict, TypeVar, TypeVarTuple, Unpack, override
 
-from ll.submitit import AutoExecutor
-
-from ._submit.session import lsf, unified
+from ._submit.session import unified
 from .model.config import BaseConfig
 from .trainer import Trainer
 from .util.environment import (
@@ -723,18 +720,37 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
     @remove_lsf_environment_variables()
     @remove_slurm_environment_variables()
     @remove_wandb_environment_variables()
-    def submit_generic(
+    def submit(
         self,
         runs: Sequence[TConfig] | Sequence[tuple[TConfig, Unpack[TArguments]]],
         *,
         scheduler: unified.Scheduler | Literal["auto"] = "auto",
         snapshot: bool | SnapshotConfig = False,
         reset_id: bool = False,
-        enable_conda: bool = True,
+        activate_conda: bool = True,
         env: Mapping[str, str] | None = None,
         **job_kwargs: Unpack[unified.GenericJobKwargs],
     ):
-        """"""
+        """
+        Submits a list of runs to a cluster (SLURM or LSF).
+
+        Parameters
+        ----------
+        runs : Sequence[TConfig] | Sequence[tuple[TConfig, Unpack[TArguments]]]
+            A sequence of runs to submit.
+        scheduler : str, optional
+            The scheduler to use. If `auto`, the scheduler will be inferred.
+        snapshot : bool | Path
+            The base path to save snapshots to. If `True`, a default path will be used.
+        reset_id : bool, optional
+            Whether to reset the id of the runs before launching them.
+        activate_conda : bool, optional
+            Whether to activate the conda environment before running the jobs.
+        env : Mapping[str, str], optional
+            Additional environment variables to set.
+        job_kwargs : dict
+            Additional keyword arguments to pass to the job submission script.
+        """
         if scheduler == "auto":
             scheduler = unified.infer_current_scheduler()
             log.critical(f"Inferred current scheduler as {scheduler}")
@@ -755,7 +771,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
             setup_commands.append(f"export PYTHONPATH={snapshot_str}:$PYTHONPATH")
 
         # Conda environment
-        if enable_conda:
+        if activate_conda:
             # Activate the conda environment
             setup_commands.append('eval "$(conda shell.bash hook)"')
             setup_commands.append(f"echo 'Activating conda environment {sys.prefix}'")
@@ -794,207 +810,6 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         )
         print("Please run the following command to submit the jobs:")
         print(submission.submission_command_str)
-
-    @remove_lsf_environment_variables()
-    @remove_slurm_environment_variables()
-    @remove_wandb_environment_variables()
-    def submit_lsf(
-        self,
-        runs: Sequence[TConfig] | Sequence[tuple[TConfig, Unpack[TArguments]]],
-        *,
-        snapshot: bool | SnapshotConfig = False,
-        reset_id: bool = False,
-        enable_conda: bool = True,
-        env: Mapping[str, str] | None = None,
-        **job_kwargs: Unpack[lsf.LSFJobKwargs],
-    ):
-        """"""
-        id = str(uuid.uuid4())
-
-        resolved_runs = _resolve_runs(runs, reset_id=reset_id)
-        _validate_runs(resolved_runs)
-        local_data_path = self._local_data_path(id, resolved_runs)
-
-        setup_commands = list(job_kwargs.get("setup_commands", []))
-
-        # Handle snapshot
-        snapshot_path = self._snapshot(snapshot, resolved_runs, local_data_path)
-        if snapshot_path:
-            snapshot_str = str(snapshot_path.resolve().absolute())
-            setup_commands.append(f"export {self.SNAPSHOT_ENV_NAME}={snapshot_str}")
-            setup_commands.append(f"export PYTHONPATH={snapshot_str}:$PYTHONPATH")
-
-        # Conda environment
-        if enable_conda:
-            # Activate the conda environment
-            setup_commands.append('eval "$(conda shell.bash hook)"')
-            setup_commands.append(f"echo 'Activating conda environment {sys.prefix}'")
-            setup_commands.append(f"conda activate {sys.prefix}")
-
-        job_kwargs["environment"] = {
-            **self.env,
-            **job_kwargs.get("environment", {}),
-            **(env or {}),
-        }
-        job_kwargs["setup_commands"] = setup_commands
-
-        base_path = local_data_path / "submit"
-        base_path.mkdir(exist_ok=True, parents=True)
-
-        # Serialize the runs
-        map_array_args: list[
-            tuple[
-                RunProtocol[TConfig, TReturn, Unpack[TArguments]],
-                Mapping[str, Any],
-                TConfig,
-                tuple[Unpack[TArguments]],
-            ]
-        ] = [(self._run, self._init_kwargs, c, args) for c, args in resolved_runs]
-        lsf_submission = lsf.to_array_batch_script(
-            base_path,
-            _runner_main,
-            map_array_args,
-            **job_kwargs,
-        )
-        print("Please run the following command to submit the jobs:")
-        print(lsf_submission.submission_command_str)
-
-    def submit_summit(
-        self,
-        runs: Sequence[TConfig] | Sequence[tuple[TConfig, Unpack[TArguments]]],
-        *,
-        project: str,
-        nodes: int = 1,
-        queue: Literal["batch", "batch-hm", "killable", "debug"] = "batch",
-        snapshot: bool | SnapshotConfig = False,
-        reset_id: bool = False,
-        enable_conda: bool = True,
-        lsf_kwargs: lsf.LSFJobKwargs = {},
-        env: Mapping[str, str] | None = None,
-    ):
-        kwargs: lsf.LSFJobKwargs = {
-            "summit": True,
-            "queue": queue,
-            "project": project,
-            "nodes": nodes,
-        }
-        kwargs.update(lsf_kwargs)
-        self.submit_lsf(
-            runs,
-            snapshot=snapshot,
-            reset_id=reset_id,
-            enable_conda=enable_conda,
-            env=env,
-            **kwargs,
-        )
-
-    @remove_slurm_environment_variables()
-    @remove_wandb_environment_variables()
-    def submit_slurm(
-        self,
-        runs: Sequence[TConfig] | Sequence[tuple[TConfig, Unpack[TArguments]]],
-        *,
-        gpus: int,
-        nodes: int,
-        partition: str,
-        cpus_per_task: int,
-        snapshot: bool | SnapshotConfig = False,
-        reset_id: bool = False,
-        constraint: str | None = None,
-        timeout: timedelta | None = None,
-        memory: int | None = None,
-        email: str | None = None,
-        slurm_additional_parameters: Mapping[str, str] | None = None,
-        slurm_setup: list[str] | None = None,
-        env: Mapping[str, str] | None = None,
-    ):
-        """
-        Submits a list of configs to a SLURM cluster.
-
-        Parameters
-        ----------
-        runs : Sequence[TConfig] | Sequence[tuple[TConfig, Unpack[TArguments]]]
-            A sequence of runs to submit.
-        gpus : int
-            The number of GPUs per node.
-        nodes : int
-            The number of nodes.
-        partition : str
-            The name of the partition to submit to.
-        cpus_per_task : int
-            The number of CPUs per task.
-        snapshot : bool | Path
-            The base path to save snapshots to.
-                - If `True`, the default path will be used (`{cwd}/ll-{id}/snapshot`).
-                - If `False`, no snapshots will be used.
-        constraint : str, optional
-            The name of the constraint to use.
-        timeout : timedelta, optional
-            The maximum time to run the job for.
-        memory : int, optional
-            The amount of memory to use.
-        email : str, optional
-            The email to send notifications to.
-        slurm_additional_parameters : Mapping[str, str], optional
-            Additional parameters to pass to the SLURM
-        """
-        id = str(uuid.uuid4())
-
-        resolved_runs = _resolve_runs(runs, reset_id=reset_id)
-        _validate_runs(resolved_runs)
-        local_data_path = self._local_data_path(id, resolved_runs)
-
-        # Handle snapshot
-        snapshot_path = self._snapshot(snapshot, resolved_runs, local_data_path)
-
-        env = {**self.env, **(env or {})}
-
-        base_path = Path(".") / "slurm_logs"
-        base_path.mkdir(exist_ok=True, parents=True)
-
-        additional_parameters = {}
-        if email:
-            additional_parameters.update({"mail_user": email, "mail_type": "FAIL"})
-        if constraint:
-            additional_parameters.update({"constraint": constraint})
-        if slurm_additional_parameters:
-            additional_parameters.update(slurm_additional_parameters)
-
-        setup = []
-        if env:
-            setup.extend(f"export {k}={v}" for k, v in env.items())
-        if slurm_setup:
-            setup.extend(slurm_setup)
-        if snapshot_path:
-            snapshot_str = str(snapshot_path.resolve().absolute())
-            setup.append(f"export {self.SNAPSHOT_ENV_NAME}={snapshot_str}")
-            setup.append(f"export PYTHONPATH={snapshot_str}:$PYTHONPATH")
-
-        parameters_kwargs = dict(
-            name=self.slurm_job_name,
-            mem_gb=memory,
-            cpus_per_task=cpus_per_task,
-            tasks_per_node=gpus,
-            gpus_per_node=gpus,
-            nodes=nodes,
-            slurm_partition=partition,
-            slurm_additional_parameters=additional_parameters,
-            slurm_setup=setup,
-        )
-        if timeout:
-            parameters_kwargs["timeout_min"] = int(timeout.total_seconds() / 60)
-
-        executor = AutoExecutor(folder=base_path / "%j")
-        executor.update_parameters(**parameters_kwargs)
-
-        map_array_args = list(zip(*[(c, *args) for c, args in resolved_runs]))
-        log.critical(f"Submitting {len(resolved_runs)} jobs to {partition}.")
-        jobs = executor.map_array(self._run_fn, *map_array_args)
-        for job, (config, _) in zip(jobs, resolved_runs):
-            log.critical(f"[id={config.id}] Submitted job: {job.job_id} to {partition}")
-        return jobs
-
-    submit = submit_slurm
 
 
 # First, let's create the function that's going to be run on the cluster.
