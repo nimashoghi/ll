@@ -25,7 +25,10 @@ class GenericJobKwargs(TypedDict, total=False):
     """The name of the job."""
 
     partition: str
-    """The partition or queue to submit the job to."""
+    """The partition or queue to submit the job to. Same as `queue`."""
+
+    queue: str
+    """The queue to submit the job to. Same as `partition`."""
 
     account: str
     """The account (or project) to charge the job to. Same as `project`."""
@@ -146,13 +149,36 @@ def update_kwargs_from_configs(
 Scheduler: TypeAlias = Literal["slurm", "lsf"]
 
 
+T = TypeVar("T", infer_variance=True)
+
+
+def _one_of(*fns: Callable[[], T | None]) -> T | None:
+    values = [fn() for fn in fns]
+
+    # Only one (or zero) value should be set. If not, raise an error.
+    if len(set(values)) > 1:
+        raise ValueError(f"Multiple values set: {values}")
+
+    return next((value for value in values if value is not None), None)
+
+
 def _to_slurm(kwargs: GenericJobKwargs) -> slurm.SlurmJobKwargs:
     slurm_kwargs: slurm.SlurmJobKwargs = {}
     if (name := kwargs.get("name")) is not None:
         slurm_kwargs["name"] = name
-    if (account := kwargs.get("account")) is not None:
+    if (
+        account := _one_of(
+            lambda: kwargs.get("account"),
+            lambda: kwargs.get("project"),
+        )
+    ) is not None:
         slurm_kwargs["account"] = account
-    if (partition := kwargs.get("partition")) is not None:
+    if (
+        partition := _one_of(
+            lambda: kwargs.get("partition"),
+            lambda: kwargs.get("queue"),
+        )
+    ) is not None:
         slurm_kwargs["partition"] = partition
     if (output_file := kwargs.get("output_file")) is not None:
         slurm_kwargs["output_file"] = output_file
@@ -203,10 +229,20 @@ def _to_lsf(kwargs: GenericJobKwargs) -> lsf.LSFJobKwargs:
     lsf_kwargs: lsf.LSFJobKwargs = {}
     if (name := kwargs.get("name")) is not None:
         lsf_kwargs["name"] = name
-    if (account := kwargs.get("account")) is not None:
+    if (
+        account := _one_of(
+            lambda: kwargs.get("account"),
+            lambda: kwargs.get("project"),
+        )
+    ) is not None:
         lsf_kwargs["project"] = account
-    if (queue := kwargs.get("partition")) is not None:
-        lsf_kwargs["queue"] = queue
+    if (
+        partition := _one_of(
+            lambda: kwargs.get("partition"),
+            lambda: kwargs.get("queue"),
+        )
+    ) is not None:
+        lsf_kwargs["queue"] = partition
     if (output_file := kwargs.get("output_file")) is not None:
         lsf_kwargs["output_file"] = output_file
     if (error_file := kwargs.get("error_file")) is not None:
