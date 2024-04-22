@@ -1,7 +1,6 @@
 import concurrent.futures
 import contextlib
 import fnmatch
-import io
 import uuid
 import weakref
 from abc import ABC, abstractmethod
@@ -103,13 +102,6 @@ class _Activation:
 
         return self.transformed
 
-    def to_bytes(self):
-        np_self = self()
-
-        with io.BytesIO() as f:
-            np.save(f, np_self)
-            return f.getvalue()
-
     @classmethod
     def from_value_or_lambda(cls, name: str, value_or_lambda: ValueOrLambda):
         return cls(name, WeakRef(value_or_lambda))
@@ -185,12 +177,12 @@ class _SaverBase(ABC):
         self._filters = filters
         self._transforms = transforms
 
-        self._acts_to_save: list[tuple[bytes, Path]] = []
+        self._acts_to_save: list[tuple[np.ndarray, Path]] = []
 
     @abstractmethod
     def save_to_file(
         self,
-        activation_bytes: bytes,
+        activation: np.ndarray,
         save_dir: Path,
     ) -> Path: ...
 
@@ -200,8 +192,8 @@ class _SaverBase(ABC):
 
         try:
             # Write all activations to disk
-            for activation_bytes, save_dir in self._acts_to_save:
-                self.save_to_file(activation_bytes, save_dir)
+            for activation, save_dir in self._acts_to_save:
+                self.save_to_file(activation, save_dir)
         finally:
             # Clear the activations
             self._acts_to_save.clear()
@@ -218,14 +210,14 @@ class _SaverBase(ABC):
             case "implicit":
                 # This mode automatically saves all logged activations immediately after they are logged using `ActSave({...})`.
                 # Save the activation to a file
-                self.save_to_file(activation.to_bytes(), save_dir)
+                self.save_to_file(activation(), save_dir)
             case "explicit":
                 # This mode stores activations in memory until they are explicitly saved using `ActSave.write()`.
                 # If the activations are not explicitly saved by the beginning of the next step, they are discarded. They can
                 # also be discarded explicitly using `ActSave.discard()`. This mode is useful for saving activations only when,
                 # e.g. when the training loss ends up being too high or the gradient explodes. This mode is the recommended
                 # mode for saving activations.
-                self._acts_to_save.append((activation.to_bytes(), save_dir))
+                self._acts_to_save.append((activation(), save_dir))
             case _:
                 assert_never(self.actsave_config.write_mode)
 
@@ -293,14 +285,14 @@ class _SyncNumpySaver(_SaverBase):
         self.config = config
 
     @override
-    def save_to_file(self, activation_bytes: bytes, save_dir: Path) -> Path:
+    def save_to_file(self, activation: np.ndarray, save_dir: Path) -> Path:
         # Get the next id and save the activation
         id = len(list(save_dir.glob("*.npy")))
         fpath = save_dir / f"{id:04d}.npy"
         assert not fpath.exists(), f"File {fpath} already exists"
 
         # Save the activation to a file
-        fpath.write_bytes(activation_bytes)
+        np.save(fpath, activation, allow_pickle=True)
         return fpath
 
 
@@ -335,11 +327,11 @@ class _AsyncNumpySaver(_SaverBase):
         )
 
     @staticmethod
-    def _write_fn(fpath: Path, activation_bytes: bytes):
-        fpath.write_bytes(activation_bytes)
+    def _write_fn(fpath: Path, activation: np.ndarray):
+        np.save(fpath, activation, allow_pickle=True)
 
     @override
-    def save_to_file(self, activation_bytes: bytes, save_dir: Path) -> Path:
+    def save_to_file(self, activation: np.ndarray, save_dir: Path) -> Path:
         # Get the next id and save the activation
         id = len(list(save_dir.glob("*.npy")))
         fpath = save_dir / f"{id:04d}.npy"
@@ -347,7 +339,7 @@ class _AsyncNumpySaver(_SaverBase):
 
         # Save the activation to a file
         # We save the activation asynchronously
-        self._executor.submit(self._write_fn, fpath, activation_bytes)
+        self._executor.submit(self._write_fn, fpath, activation)
         return fpath
 
 
