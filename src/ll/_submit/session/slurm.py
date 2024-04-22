@@ -5,11 +5,11 @@ from collections.abc import Callable, Mapping, Sequence
 from datetime import timedelta
 from logging import getLogger
 from pathlib import Path
-from typing import Any, Literal, overload
+from typing import Any, Literal
 
 from typing_extensions import TypeAlias, TypedDict, TypeVarTuple, Unpack
 
-from ...picklerunner import serialize_many, serialize_single
+from ...picklerunner import serialize_many
 from ._output import SubmitOutput
 
 log = getLogger(__name__)
@@ -454,66 +454,6 @@ def _update_kwargs(kwargs: SlurmJobKwargs):
     return kwargs
 
 
-@overload
-def to_batch_script(
-    dest: Path, command: str, /, **kwargs: Unpack[SlurmJobKwargs]
-) -> SubmitOutput: ...
-
-
-@overload
-def to_batch_script(
-    dest: Path,
-    callable: Callable[[Unpack[TArgs]], Any],
-    args: tuple[Unpack[TArgs]],
-    /,
-    **kwargs: Unpack[SlurmJobKwargs],
-) -> SubmitOutput: ...
-
-
-def to_batch_script(
-    dest: Path,
-    command_or_callable,
-    args=None,
-    /,
-    **kwargs: Unpack[SlurmJobKwargs],
-):
-    """
-    Create the batch script for the job.
-    """
-
-    kwargs = _update_kwargs(kwargs)
-
-    # Convert the command/callable to a string for the command
-    command: str
-    if isinstance(command_or_callable, str):
-        command = command_or_callable
-    elif callable(command_or_callable):
-        assert args is not None, "Expected args to be provided for callable"
-        command = serialize_single(
-            dest / "fn.pkl",
-            command_or_callable,
-            args,
-            {},
-        ).to_command_str()
-    else:
-        raise TypeError(f"Expected str or callable, got {type(command_or_callable)}")
-
-    script_path = _write_batch_script_to_file(dest, kwargs, command)
-    script_path = script_path.resolve().absolute()
-    return SubmitOutput(["sbatch", f"{script_path}"], script_path)
-
-
-@overload
-def to_array_batch_script(
-    dest: Path,
-    command: str,
-    num_jobs: int,
-    /,
-    **kwargs: Unpack[SlurmJobKwargs],
-) -> SubmitOutput: ...
-
-
-@overload
 def to_array_batch_script(
     dest: Path,
     callable: Callable[[Unpack[TArgs]], Any],
@@ -521,17 +461,7 @@ def to_array_batch_script(
     /,
     job_index_variable: str = "SLURM_ARRAY_TASK_ID",
     **kwargs: Unpack[SlurmJobKwargs],
-) -> SubmitOutput: ...
-
-
-def to_array_batch_script(
-    dest: Path,
-    command_or_callable,
-    args_list_or_num_jobs,
-    /,
-    job_index_variable: str = "SLURM_ARRAY_TASK_ID",
-    **kwargs: Unpack[SlurmJobKwargs],
-):
+) -> SubmitOutput:
     """
     Create the batch script for the job.
     """
@@ -539,32 +469,18 @@ def to_array_batch_script(
     kwargs = _update_kwargs(kwargs)
 
     # Convert the command/callable to a string for the command
-    command: str
-    num_jobs: int
-    if isinstance(command_or_callable, str):
-        command = command_or_callable
-        assert isinstance(
-            args_list_or_num_jobs, int
-        ), "Expected num_jobs to be provided for command"
-        num_jobs = args_list_or_num_jobs
-    elif callable(command_or_callable):
-        assert isinstance(
-            args_list_or_num_jobs, Sequence
-        ), "Expected args_list to be provided for callable"
-        args_list = args_list_or_num_jobs
-        num_jobs = len(args_list)
+    num_jobs = len(args_list)
 
-        destdir = dest / "fns"
-        destdir.mkdir(exist_ok=True)
+    destdir = dest / "fns"
+    destdir.mkdir(exist_ok=True)
 
-        command = serialize_many(
-            destdir,
-            command_or_callable,
-            [(args, {}) for args in args_list],
-            start_idx=1,  # Slurm job indices are 1-based
-        ).to_bash_command(job_index_variable)
-    else:
-        raise TypeError(f"Expected str or callable, got {type(command_or_callable)}")
+    command = serialize_many(
+        destdir,
+        callable,
+        [(args, {}) for args in args_list],
+        start_idx=1,  # Slurm job indices are 1-based
+    ).to_bash_command(job_index_variable)
+    command = " ".join(command)
 
     script_path = _write_batch_script_to_file(
         dest / "launch.sh",
@@ -573,4 +489,7 @@ def to_array_batch_script(
         job_array_n_jobs=num_jobs,
     )
     script_path = script_path.resolve().absolute()
-    return SubmitOutput(["sbatch", f"{script_path}"], script_path)
+    return SubmitOutput(
+        submission_command=["sbatch", f"{script_path}"],
+        submission_script_path=script_path,
+    )

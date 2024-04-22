@@ -244,60 +244,6 @@ def _to_lsf(kwargs: GenericJobKwargs) -> lsf.LSFJobKwargs:
     return lsf_kwargs
 
 
-@overload
-def to_batch_script(
-    scheduler: Scheduler,
-    dest: Path,
-    command: str,
-    /,
-    **kwargs: Unpack[GenericJobKwargs],
-) -> SubmitOutput: ...
-
-
-@overload
-def to_batch_script(
-    scheduler: Scheduler,
-    dest: Path,
-    callable: Callable[[Unpack[TArgs]], Any],
-    args: tuple[Unpack[TArgs]],
-    /,
-    **kwargs: Unpack[GenericJobKwargs],
-) -> SubmitOutput: ...
-
-
-def to_batch_script(
-    scheduler: Scheduler,
-    dest: Path,
-    command_or_callable,
-    args=None,
-    /,
-    **kwargs: Unpack[GenericJobKwargs],
-):
-    match scheduler:
-        case "slurm":
-            slurm_kwargs = _to_slurm(kwargs)
-            return slurm.to_batch_script(
-                dest, command_or_callable, cast(Any, args), **slurm_kwargs
-            )
-        case "lsf":
-            lsf_kwargs = _to_lsf(kwargs)
-            return lsf.to_batch_script(
-                dest, command_or_callable, cast(Any, args), **lsf_kwargs
-            )
-
-
-@overload
-def to_array_batch_script(
-    scheduler: Scheduler,
-    dest: Path,
-    command: str,
-    num_jobs: int,
-    /,
-    **kwargs: Unpack[GenericJobKwargs],
-) -> SubmitOutput: ...
-
-
-@overload
 def to_array_batch_script(
     scheduler: Scheduler,
     dest: Path,
@@ -306,18 +252,7 @@ def to_array_batch_script(
     /,
     job_index_variable: str | None = None,
     **kwargs: Unpack[GenericJobKwargs],
-) -> SubmitOutput: ...
-
-
-def to_array_batch_script(
-    scheduler: Scheduler,
-    dest: Path,
-    command_or_callable,
-    args_list_or_num_jobs,
-    /,
-    job_index_variable: str | None = None,
-    **kwargs: Unpack[GenericJobKwargs],
-):
+) -> SubmitOutput:
     job_index_variable_kwargs = {}
     if job_index_variable is not None:
         job_index_variable_kwargs["job_index_variable"] = job_index_variable
@@ -326,8 +261,8 @@ def to_array_batch_script(
             slurm_kwargs = _to_slurm(kwargs)
             return slurm.to_array_batch_script(
                 dest,
-                command_or_callable,
-                cast(Any, args_list_or_num_jobs),
+                callable,
+                args_list,
                 **job_index_variable_kwargs,
                 **slurm_kwargs,
             )
@@ -335,8 +270,8 @@ def to_array_batch_script(
             lsf_kwargs = _to_lsf(kwargs)
             return lsf.to_array_batch_script(
                 dest,
-                command_or_callable,
-                cast(Any, args_list_or_num_jobs),
+                callable,
+                args_list,
                 **job_index_variable_kwargs,
                 **lsf_kwargs,
             )

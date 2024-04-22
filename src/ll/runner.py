@@ -13,12 +13,12 @@ from logging import getLogger
 from pathlib import Path
 from typing import Any, Generic, Literal, Protocol, TypeAlias, cast, runtime_checkable
 
-import cloudpickle as pickle
 from tqdm.auto import tqdm
 from typing_extensions import TypedDict, TypeVar, TypeVarTuple, Unpack, override
 
 from ._submit.session import unified
 from .model.config import BaseConfig
+from .picklerunner import serialize_many
 from .trainer import Trainer
 from .util.environment import (
     remove_lsf_environment_variables,
@@ -274,39 +274,36 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
 
     def _launch_session(
         self,
-        config_paths: list[Path],
+        session_command: list[str],
         config_base_path: Path,
         session_name: str,
     ):
         # All we need to do here is launch `python -m ll.local_sessions_runner`
         # with the config paths as arguments. The `local_sessions_runner` will take care of the rest.
         # Obviously, the command above needs to be run in a screen session, so we can come back to it later.
-        return (
-            [
-                "screen",
-                "-dmS",
-                session_name,
-                # Save the logs to a file
-                "-L",
-                "-Logfile",
-                str((config_base_path / f"{session_name}.log").absolute()),
-                # Enable UTF-8 encoding
-                "-U",
-            ]
-            + ["python", "-m", "ll.local_sessions_runner"]
-            + [str(p.absolute()) for p in config_paths]
-        )
+        return [
+            "screen",
+            "-dmS",
+            session_name,
+            # Save the logs to a file
+            "-L",
+            "-Logfile",
+            str((config_base_path / f"{session_name}.log").absolute()),
+            # Enable UTF-8 encoding
+            "-U",
+            *session_command,
+        ]
 
     def local_sessions(
         self,
         runs: Sequence[TConfig] | Sequence[tuple[TConfig, Unpack[TArguments]]],
-        sessions: int | list[Mapping[str, str]] | list[RunnerSession],
+        sessions: int | Sequence[Mapping[str, str]] | Sequence[RunnerSession],
         name: str = "ll",
         config_pickle_save_path: Path | None = None,
         reset_id: bool = False,
         snapshot: bool | SnapshotConfig = False,
         delete_run_script_after_launch: bool = False,
-        prologue: list[str] | None = None,
+        prologue: Sequence[str] | None = None,
         env: Mapping[str, str] | None = None,
     ):
         """
@@ -348,7 +345,9 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         if env:
             if prologue is None:
                 prologue = []
+
             # Prepend so env takes precedence
+            prologue = list(prologue)
             prologue = [f"export {k}={v}" for k, v in env.items()] + prologue
 
         if isinstance(sessions, int):
@@ -365,14 +364,14 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         if config_pickle_save_path is None:
             config_pickle_save_path = local_data_path / "sessions"
             config_pickle_save_path.mkdir(exist_ok=True)
-
-        config_paths: list[Path] = []
-        for i, config in enumerate(resolved_runs):
-            config_path = config_pickle_save_path / f"ll_{i:03d}.pkl"
-            config_paths.append(config_path)
-            config = tuple([config[0], *config[1]])
-            with config_path.open("wb") as f:
-                pickle.dump((self._run, self._init_kwargs, config), f)
+        serialized = serialize_many(
+            config_pickle_save_path,
+            _runner_main,
+            [
+                ((self._run, self._init_kwargs, c, args), {})
+                for c, args in resolved_runs
+            ],
+        )
 
         # Resolve all session names
         session_names: list[str] = []
@@ -405,21 +404,19 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
 
             session_envs.append({**self.env, **session_env})
 
+        # Get the session commands
+        session_commands = serialized.to_bash_command_sequential_workers(
+            num_workers=len(session_names)
+        )
+
         # Launch all sessions
         commands: list[str] = []
 
-        for i, (session_env, session_name) in enumerate(
-            zip(session_envs, session_names)
+        for i, (session_env, session_name, session_command) in enumerate(
+            zip(session_envs, session_names, session_commands)
         ):
-            # Get the projects assigned to this session
-            session_config_paths = config_paths[i :: len(sessions)]
-
-            # If this session has no configs, skip it
-            if not session_config_paths:
-                continue
-
             command = self._launch_session(
-                session_config_paths,
+                session_command,
                 config_pickle_save_path,
                 session_name,
             )

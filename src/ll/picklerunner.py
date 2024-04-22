@@ -1,3 +1,6 @@
+import argparse
+import logging
+import os
 import sys
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
@@ -69,15 +72,63 @@ class SerializedMultiFunction(PathLike):
         self,
         job_index_variable: str,
         python_executable: str | None = None,
-    ) -> str:
+    ) -> list[str]:
         if python_executable is None:
             python_executable = sys.executable
 
-        command = f'{python_executable} -m {__name__} "{str(self.base_dir.absolute())}/${{{job_index_variable}}}.pkl"'
+        command: list[str] = []
+
+        # command = f'{python_executable} -m {__name__} "{str(self.base_dir.absolute())}/${{{job_index_variable}}}.pkl"'
+        command.append(python_executable)
+        command.append("-m")
+        command.append(__name__)
+        command.append(
+            f'"{str(self.base_dir.absolute())}/${{{job_index_variable}}}.pkl"'
+        )
 
         if self._additional_command_parts:
-            command += " " + " ".join(self._additional_command_parts)
+            # command += " " + " ".join(self._additional_command_parts)
+            command.extend(self._additional_command_parts)
         return command
+
+    def _to_bash_command_sequential_worker(
+        self,
+        num_workers: int,
+        worker_id: int,
+        python_executable: str,
+    ) -> list[str]:
+        assert 0 <= worker_id < num_workers, f"{worker_id=} {num_workers=}"
+
+        all_files = [
+            f'"{str(fn.path.absolute())}"'
+            for i, fn in enumerate(self.functions)
+            if i % num_workers == worker_id
+        ]
+
+        command: list[str] = []
+        # command = f"{python_executable} -m {__name__} {all_files}"
+        command.append(python_executable)
+        command.append("-m")
+        command.append(__name__)
+        command.extend(all_files)
+
+        if self._additional_command_parts:
+            # command += " " + " ".join(self._additional_command_parts)
+            command.extend(self._additional_command_parts)
+        return command
+
+    def to_bash_command_sequential_workers(
+        self,
+        num_workers: int,
+        python_executable: str | None = None,
+    ) -> list[list[str]]:
+        if python_executable is None:
+            python_executable = sys.executable
+
+        return [
+            self._to_bash_command_sequential_worker(num_workers, i, python_executable)
+            for i in range(num_workers)
+        ]
 
     @override
     def __fspath__(self) -> str:
@@ -87,14 +138,14 @@ class SerializedMultiFunction(PathLike):
 def serialize_many(
     destdir: _Path,
     fn: Callable,
-    args_and_kwargs: Sequence[tuple[Sequence[Any], Mapping[str, Any]]],
+    args_and_kwargs_list: Sequence[tuple[Sequence[Any], Mapping[str, Any]]],
     start_idx: int = 0,
     additional_command_parts: Sequence[str] = (),
 ):
     serialized_list: list[SerializedFunction] = []
 
     destdir = Path(destdir)
-    for i, (args, kwargs) in enumerate(args_and_kwargs):
+    for i, (args, kwargs) in enumerate(args_and_kwargs_list):
         dest = destdir / f"{i+start_idx}.pkl"
         serialized = serialize_single(dest, fn, args, kwargs)
         serialized_list.append(serialized)
@@ -139,23 +190,18 @@ def execute_many(fns: SerializedMultiFunction | Sequence[_Path]):
     return [execute_single(path) for path in fns]
 
 
-def picklerunner_main():
-    import argparse
-    import logging
+def _resolve_paths(paths: Sequence[Path]):
+    for path in paths:
+        if path.is_file():
+            yield path
+            continue
 
-    def _resolve_paths(paths: Sequence[Path]):
-        for path in paths:
-            if path.is_file():
-                yield path
-                continue
+        for child in path.iterdir():
+            if child.is_file() and child.suffix == ".pkl":
+                yield child
 
-            for child in path.iterdir():
-                if child.is_file() and child.suffix == ".pkl":
-                    yield child
 
-    logging.basicConfig(level=logging.INFO)
-    log = logging.getLogger(__name__)
-
+def _parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "paths",
@@ -168,12 +214,18 @@ def picklerunner_main():
         action=argparse.BooleanOptionalAction,
         help="Unset the CUDA_VISIBLE_DEVICES environment variable",
     )
-    args = parser.parse_args()
 
+    args = parser.parse_args()
+    return args
+
+
+def picklerunner_main():
+    logging.basicConfig(level=logging.INFO)
+    log = logging.getLogger(__name__)
+
+    args = _parse_args()
     if args.unset_cuda:
         log.critical("Unsetting CUDA_VISIBLE_DEVICES...")
-        import os
-
         os.environ.pop("CUDA_VISIBLE_DEVICES", None)
         for i in range(40):
             os.environ.pop(f"CUDA_VISIBLE_DEVICES{i}", None)

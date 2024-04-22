@@ -4,19 +4,15 @@ from collections.abc import Callable, Mapping, Sequence
 from datetime import timedelta
 from logging import getLogger
 from pathlib import Path
-from typing import Any, overload
+from typing import Any
 
 from typing_extensions import TypeAlias, TypedDict, TypeVarTuple, Unpack
 
-from ...picklerunner import serialize_many, serialize_single
+from ...picklerunner import serialize_many
 from ._output import SubmitOutput
 
 log = getLogger(__name__)
 
-DEFAULT_JOB_NAME = "ll"
-DEFAULT_NODES = 1
-DEFAULT_WALLTIME = timedelta(hours=2)
-DEFAULT_SUMMIT = False
 
 TArgs = TypeVarTuple("TArgs")
 
@@ -202,6 +198,10 @@ class LSFJobKwargs(TypedDict, total=False):
 
 
 DEFAULT_KWARGS: LSFJobKwargs = {
+    "name": "ll",
+    "nodes": 1,
+    "walltime": timedelta(hours=2),
+    "summit": False,
     "rs_per_node": 1,
 }
 
@@ -233,7 +233,7 @@ def _summit_update_kwargs_fn(kwargs: LSFJobKwargs) -> LSFJobKwargs:
 
     if (rs_per_node := kwargs.get("rs_per_node")) is not None:
         # Add the total number of resource sets requested across all nodes in the job
-        total_num_rs = rs_per_node * kwargs.get("nodes", DEFAULT_NODES)
+        total_num_rs = rs_per_node * kwargs.get("nodes", 1)
         command_parts.append(f"-n{total_num_rs}")
 
         # Add the number of resource sets requested on each node
@@ -302,15 +302,15 @@ def _write_batch_script_to_file(
     with path.open("w") as f:
         f.write("#!/bin/bash\n")
 
-        name = kwargs.get("name", DEFAULT_JOB_NAME)
-        if job_array_n_jobs is not None:
-            name += "[1-" + str(job_array_n_jobs) + "]"
-        f.write(f"#BSUB -J {name}\n")
+        if (name := kwargs.get("name")) is not None:
+            if job_array_n_jobs is not None:
+                name += "[1-" + str(job_array_n_jobs) + "]"
+            f.write(f"#BSUB -J {name}\n")
 
         if (project := kwargs.get("project")) is not None:
             f.write(f"#BSUB -P {project}\n")
 
-        if (walltime := kwargs.get("walltime", DEFAULT_WALLTIME)) is not None:
+        if (walltime := kwargs.get("walltime")) is not None:
             # Convert the walltime to the format expected by LSF:
             # -W [hour:]minute[/host_name | /host_model]
             # E.g., 72 hours -> 72:00
@@ -320,7 +320,7 @@ def _write_batch_script_to_file(
             walltime = f"{hours:02d}:{minutes:02d}"
             f.write(f"#BSUB -W {walltime}\n")
 
-        if (nodes := kwargs.get("nodes", DEFAULT_NODES)) is not None:
+        if (nodes := kwargs.get("nodes")) is not None:
             f.write(f"#BSUB -nnodes {nodes}\n")
 
         if (output_file := kwargs.get("output_file")) is not None:
@@ -399,7 +399,7 @@ def _update_kwargs(kwargs_in: LSFJobKwargs):
     kwargs = copy.deepcopy(DEFAULT_KWARGS)
 
     # If the job is being submitted to Summit, update the kwargs with the Summit defaults
-    if kwargs.get("summit", DEFAULT_SUMMIT):
+    if kwargs.get("summit"):
         kwargs.update(SUMMIT_DEFAULTS)
 
     # Update the kwargs with the provided values
@@ -412,74 +412,6 @@ def _update_kwargs(kwargs_in: LSFJobKwargs):
     return kwargs
 
 
-@overload
-def to_batch_script(
-    dest: Path, command: str, /, **kwargs: Unpack[LSFJobKwargs]
-) -> SubmitOutput: ...
-
-
-@overload
-def to_batch_script(
-    dest: Path,
-    callable: Callable[[Unpack[TArgs]], Any],
-    args: tuple[Unpack[TArgs]],
-    /,
-    **kwargs: Unpack[LSFJobKwargs],
-) -> SubmitOutput: ...
-
-
-def to_batch_script(
-    dest: Path,
-    command_or_callable,
-    args=None,
-    /,
-    **kwargs: Unpack[LSFJobKwargs],
-):
-    """
-    Create the batch script for the job.
-    """
-
-    kwargs = _update_kwargs(kwargs)
-
-    # Convert the command/callable to a string for the command
-    command: str
-    if isinstance(command_or_callable, str):
-        command = command_or_callable
-    elif callable(command_or_callable):
-        additional_command_parts: list[str] = []
-        if kwargs.get("unset_cuda_visible_devices", False):
-            additional_command_parts.append("--unset-cuda")
-
-        assert args is not None, "Expected args to be provided for callable"
-        command = serialize_single(
-            dest / "fn.pkl",
-            command_or_callable,
-            args,
-            {},
-            additional_command_parts=additional_command_parts,
-        ).to_command_str()
-    else:
-        raise TypeError(f"Expected str or callable, got {type(command_or_callable)}")
-
-    script_path = _write_batch_script_to_file(dest, kwargs, command)
-    script_path = script_path.resolve().absolute()
-    return SubmitOutput(
-        submission_command=["bsub", str(script_path)],
-        submission_script_path=script_path,
-    )
-
-
-@overload
-def to_array_batch_script(
-    dest: Path,
-    command: str,
-    num_jobs: int,
-    /,
-    **kwargs: Unpack[LSFJobKwargs],
-) -> SubmitOutput: ...
-
-
-@overload
 def to_array_batch_script(
     dest: Path,
     callable: Callable[[Unpack[TArgs]], Any],
@@ -487,17 +419,7 @@ def to_array_batch_script(
     /,
     job_index_variable: str = "LSB_JOBINDEX",
     **kwargs: Unpack[LSFJobKwargs],
-) -> SubmitOutput: ...
-
-
-def to_array_batch_script(
-    dest: Path,
-    command_or_callable,
-    args_list_or_num_jobs,
-    /,
-    job_index_variable: str = "LSB_JOBINDEX",
-    **kwargs: Unpack[LSFJobKwargs],
-):
+) -> SubmitOutput:
     """
     Create the batch script for the job.
     """
@@ -505,37 +427,23 @@ def to_array_batch_script(
     kwargs = _update_kwargs(kwargs)
 
     # Convert the command/callable to a string for the command
-    command: str
-    num_jobs: int
-    if isinstance(command_or_callable, str):
-        command = command_or_callable
-        assert isinstance(
-            args_list_or_num_jobs, int
-        ), "Expected num_jobs to be provided for command"
-        num_jobs = args_list_or_num_jobs
-    elif callable(command_or_callable):
-        assert isinstance(
-            args_list_or_num_jobs, Sequence
-        ), "Expected args_list to be provided for callable"
-        args_list = args_list_or_num_jobs
-        num_jobs = len(args_list)
+    num_jobs = len(args_list)
 
-        destdir = dest / "fns"
-        destdir.mkdir(exist_ok=True)
+    destdir = dest / "fns"
+    destdir.mkdir(exist_ok=True)
 
-        additional_command_parts: list[str] = []
-        if kwargs.get("unset_cuda_visible_devices", False):
-            additional_command_parts.append("--unset-cuda")
+    additional_command_parts: list[str] = []
+    if kwargs.get("unset_cuda_visible_devices", False):
+        additional_command_parts.append("--unset-cuda")
 
-        command = serialize_many(
-            destdir,
-            command_or_callable,
-            [(args, {}) for args in args_list],
-            start_idx=1,  # LSF job indices are 1-based
-            additional_command_parts=additional_command_parts,
-        ).to_bash_command(job_index_variable)
-    else:
-        raise TypeError(f"Expected str or callable, got {type(command_or_callable)}")
+    command = serialize_many(
+        destdir,
+        callable,
+        [(args, {}) for args in args_list],
+        start_idx=1,  # LSF job indices are 1-based
+        additional_command_parts=additional_command_parts,
+    ).to_bash_command(job_index_variable)
+    command = " ".join(command)
 
     script_path = _write_batch_script_to_file(
         dest / "launch.sh",
