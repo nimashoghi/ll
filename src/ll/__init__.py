@@ -1,7 +1,6 @@
-from . import actsave as A
+from . import actsave as actsave
 from . import model as model
 from . import nn as nn
-from . import typecheck as tc
 from . import typecheck as typecheck
 from .actsave import ActLoad as ActLoad
 from .actsave import ActSave as ActSave
@@ -52,7 +51,3 @@ from .runner import SnapshotConfig as SnapshotConfig
 from .trainer import Trainer as Trainer
 from .util.singleton import Registry as Registry
 from .util.singleton import Singleton as Singleton
-
-_ = A
-_ = nn
-_ = tc

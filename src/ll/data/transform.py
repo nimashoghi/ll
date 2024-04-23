@@ -3,7 +3,7 @@ from collections.abc import Callable
 from typing import Any, cast
 
 import wrapt
-from typing_extensions import TypeVar, override
+from typing_extensions import TypeVar
 
 TDataset = TypeVar("TDataset", infer_variance=True)
 
@@ -24,7 +24,6 @@ def transform(
     """
 
     class _TransformedDataset(wrapt.ObjectProxy):
-        @override
         def __getitem__(self, idx):
             nonlocal deepcopy, transform
 
@@ -53,7 +52,6 @@ def transform_with_index(
     """
 
     class _TransformedWithIndexDataset(wrapt.ObjectProxy):
-        @override
         def __getitem__(self, idx: int):
             nonlocal deepcopy, transform
 
