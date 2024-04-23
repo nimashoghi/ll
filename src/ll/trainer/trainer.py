@@ -460,6 +460,9 @@ class Trainer(LightningTrainer):
                     resolved_precision = (
                         "bf16-mixed" if torch.cuda.is_bf16_supported() else "16-mixed"
                     )
+                    log.critical(
+                        f"Auto-resolving {precision=} to {resolved_precision=}."
+                    )
                 case _:
                     assert_never(precision)
 

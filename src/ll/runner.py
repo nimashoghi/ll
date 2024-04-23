@@ -278,9 +278,6 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         config_base_path: Path,
         session_name: str,
     ):
-        # All we need to do here is launch `python -m ll.local_sessions_runner`
-        # with the config paths as arguments. The `local_sessions_runner` will take care of the rest.
-        # Obviously, the command above needs to be run in a screen session, so we can come back to it later.
         return [
             "screen",
             "-dmS",
