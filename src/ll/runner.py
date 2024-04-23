@@ -108,6 +108,12 @@ class RunnerSession:
     name: str | None = None
     """The name of the session."""
 
+    world_size: int | None = None
+    """The number of tasks to run in the session.
+    If this is set, each task is run in a separate screen session with
+    the `LOCAL_RANK` environment variable set to the task index.
+    """
+
 
 SessionGPUIndex: TypeAlias = int | tuple[int, ...]
 
@@ -402,6 +408,14 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
 
             session_envs.append({**self.env, **session_env})
 
+        # Get the world size for each session
+        session_world_sizes: list[int | None] = []
+        for session in sessions:
+            if not isinstance(session, RunnerSession):
+                session_world_sizes.append(None)
+            else:
+                session_world_sizes.append(session.world_size)
+
         # Get the session commands
         session_commands = serialized.to_bash_command_sequential_workers(
             num_workers=len(session_names)
@@ -410,19 +424,33 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         # Launch all sessions
         commands: list[str] = []
 
-        for i, (session_env, session_name, session_command) in enumerate(
-            zip(session_envs, session_names, session_commands)
+        def _session_world_size_to_env(
+            world_size: int | None,
+        ) -> list[Mapping[str, str]]:
+            if world_size is None:
+                return [{}]
+            return [{"LOCAL_RANK": str(i)} for i in range(world_size)]
+
+        for i, (
+            session_env,
+            session_name,
+            session_command,
+            session_world_size,
+        ) in enumerate(
+            zip(session_envs, session_names, session_commands, session_world_sizes)
         ):
             command = self._launch_session(
                 session_command,
                 config_pickle_save_path,
                 session_name,
             )
-
-            # log.critical(f"Sesssion {i+1}/{n_sessions} command: {command_str}")
-            command_prefix = " ".join(f'{k}="{v}"' for k, v in session_env.items())
-            command_str = " ".join(command)
-            commands.append(f"{command_prefix} {command_str}")
+            for additional_env in _session_world_size_to_env(session_world_size):
+                # log.critical(f"Sesssion {i+1}/{n_sessions} command: {command_str}")
+                command_prefix = " ".join(
+                    f'{k}="{v}"' for k, v in {**session_env, **additional_env}.items()
+                )
+                command_str = " ".join(command)
+                commands.append(f"{command_prefix} {command_str}")
 
         # Create a shell script to launch all sessions
         script_path = config_pickle_save_path / "launch.sh"
@@ -494,6 +522,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         snapshot: bool | SnapshotConfig = False,
         prologue: list[str] | None = None,
         env: Mapping[str, str] | None = None,
+        separate_session_per_task: bool = True,
     ):
         """
         Launches len(sessions) local runs in different environments using `screen`.
@@ -520,6 +549,8 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
             A list of commands to run at the beginning of the shell script.
         env : Mapping[str, str], optional
             Additional environment variables to set.
+        separate_session_per_task : bool, optional
+            If `True`, each GPU task will be run in a separate screen session with the `LOCAL_RANK` environment variable set to the task index.
 
         Returns
         -------
@@ -562,7 +593,13 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
                 session_name = session_name_gpu
                 if num_jobs_per_gpu > 1:
                     session_name = f"{session_name}_job{job_idx}"
-                sessions.append(RunnerSession(session_env, session_name))
+                sessions.append(
+                    RunnerSession(
+                        session_env,
+                        session_name,
+                        world_size=len(gpu_idxs) if separate_session_per_task else None,
+                    )
+                )
 
         # Launch the sessions
         return self.local_sessions(
