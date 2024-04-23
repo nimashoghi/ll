@@ -443,12 +443,15 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         ) in enumerate(
             zip(session_envs, session_names, session_commands, session_world_sizes)
         ):
-            command = self._launch_session(
-                session_command,
-                config_pickle_save_path,
+            for rank_session_name, additional_env in _session_world_size_to_env(
                 session_name,
-            )
-            for additional_env in _session_world_size_to_env(session_world_size):
+                session_world_size,
+            ):
+                command = self._launch_session(
+                    session_command,
+                    config_pickle_save_path,
+                    rank_session_name,
+                )
                 # log.critical(f"Sesssion {i+1}/{n_sessions} command: {command_str}")
                 command_prefix = " ".join(
                     f'{k}="{v}"' for k, v in {**session_env, **additional_env}.items()
