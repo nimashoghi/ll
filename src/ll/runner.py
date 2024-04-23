@@ -18,7 +18,6 @@ from typing_extensions import TypedDict, TypeVar, TypeVarTuple, Unpack, override
 
 from ._submit.session import unified
 from .model.config import BaseConfig
-from .picklerunner import serialize_many
 from .trainer import Trainer
 from .util.environment import (
     remove_lsf_environment_variables,
@@ -358,6 +357,8 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         snapshot_path = self._snapshot(snapshot, resolved_runs, local_data_path)
 
         # Save all configs to pickle files
+        from .picklerunner import serialize_many
+
         if config_pickle_save_path is None:
             config_pickle_save_path = local_data_path / "sessions"
             config_pickle_save_path.mkdir(exist_ok=True)

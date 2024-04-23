@@ -9,7 +9,6 @@ from typing import Any, Literal
 
 from typing_extensions import TypeAlias, TypedDict, TypeVarTuple, Unpack
 
-from ...picklerunner import serialize_many
 from ._output import SubmitOutput
 
 log = getLogger(__name__)
@@ -465,6 +464,8 @@ def to_array_batch_script(
     """
     Create the batch script for the job.
     """
+
+    from ...picklerunner import serialize_many
 
     kwargs = _update_kwargs(kwargs)
 
