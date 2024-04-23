@@ -316,26 +316,16 @@ def to_array_batch_script(
 def infer_current_scheduler() -> Scheduler:
     # First, we check for `bsub` as it's much less common than `sbatch`.
     try:
-        subprocess.run(
-            ["bsub", "-V"],
-            check=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-        )
+        subprocess.check_output(["bsub", "-V"])
         return "lsf"
-    except FileNotFoundError:
+    except subprocess.CalledProcessError:
         pass
 
     # Next, we check for `sbatch` as it's the most common scheduler.
     try:
-        subprocess.run(
-            ["sbatch", "--version"],
-            check=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-        )
+        subprocess.check_output(["sbatch", "--version"])
         return "slurm"
-    except FileNotFoundError:
+    except subprocess.CalledProcessError:
         pass
 
     raise RuntimeError("Could not determine the current scheduler.")
