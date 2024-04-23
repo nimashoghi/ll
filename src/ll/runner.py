@@ -7,7 +7,7 @@ import uuid
 from collections import Counter
 from collections.abc import Mapping, Sequence
 from contextlib import ExitStack
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from functools import wraps
 from logging import getLogger
 from pathlib import Path
@@ -108,11 +108,8 @@ class RunnerSession:
     name: str | None = None
     """The name of the session."""
 
-    world_size: int | None = None
-    """The number of tasks to run in the session.
-    If this is set, each task is run in a separate screen session with
-    the `LOCAL_RANK` environment variable set to the task index.
-    """
+    per_rank_env: Sequence[Mapping[str, str]] | None = None
+    """The environment variables to set for each rank."""
 
 
 SessionGPUIndex: TypeAlias = int | tuple[int, ...]
@@ -409,12 +406,12 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
             session_envs.append({**self.env, **session_env})
 
         # Get the world size for each session
-        session_world_sizes: list[int | None] = []
+        session_per_rank_envs: list[Sequence[Mapping[str, str]] | None] = []
         for session in sessions:
             if not isinstance(session, RunnerSession):
-                session_world_sizes.append(None)
+                session_per_rank_envs.append(None)
             else:
-                session_world_sizes.append(session.world_size)
+                session_per_rank_envs.append(session.per_rank_env)
 
         # Get the session commands
         session_commands = serialized.to_bash_command_sequential_workers(
@@ -426,26 +423,26 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
 
         def _session_world_size_to_env(
             session_name: str,
-            world_size: int | None,
+            per_rank_env: Sequence[Mapping[str, str]] | None,
         ) -> list[tuple[str, Mapping[str, str]]]:
-            if world_size is None:
+            if not per_rank_env:
                 return [(session_name, {})]
             return [
-                (f"{session_name}_rank{i}", {"LOCAL_RANK": str(i)})
-                for i in range(world_size)
+                (f"{session_name}_rank{i}", {**env})
+                for i, env in enumerate(per_rank_env)
             ]
 
         for i, (
             session_env,
             session_name,
             session_command,
-            session_world_size,
+            session_per_rank_env,
         ) in enumerate(
-            zip(session_envs, session_names, session_commands, session_world_sizes)
+            zip(session_envs, session_names, session_commands, session_per_rank_envs)
         ):
             for rank_session_name, additional_env in _session_world_size_to_env(
                 session_name,
-                session_world_size,
+                session_per_rank_env,
             ):
                 command = self._launch_session(
                     session_command,
@@ -600,13 +597,34 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
                 session_name = session_name_gpu
                 if num_jobs_per_gpu > 1:
                     session_name = f"{session_name}_job{job_idx}"
+
+                per_rank_env = None
+                if separate_session_per_task:
+                    world_size = len(gpu_idxs)
+                    per_rank_env = [
+                        self._gpu_env(i, world_size) for i in range(world_size)
+                    ]
                 sessions.append(
-                    RunnerSession(
-                        session_env,
-                        session_name,
-                        world_size=len(gpu_idxs) if separate_session_per_task else None,
-                    )
+                    RunnerSession(session_env, session_name, per_rank_env=per_rank_env)
                 )
+
+        if separate_session_per_task:
+            # Now that we know the total number of concurrent sessions, we can find
+            #   that many open ports for the sessions to use.
+            ports = list(self._find_n_free_ports(len(sessions)))
+
+            # Update the sessions with the port information.
+            sessions = [
+                replace(
+                    session,
+                    env={
+                        **session.env,
+                        "MASTER_ADDR": "127.0.0.1",
+                        "MASTER_PORT": str(port),
+                    },
+                )
+                for session, port in zip(sessions, ports)
+            ]
 
         # Launch the sessions
         return self.local_sessions(
@@ -619,6 +637,28 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
             prologue=prologue,
             env=env,
         )
+
+    @staticmethod
+    def _find_n_free_ports(n: int):
+        import socket
+
+        with contextlib.ExitStack() as stack:
+            for _ in range(n):
+                s = stack.enter_context(
+                    contextlib.closing(
+                        socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                    )
+                )
+                s.bind(("", 0))
+                s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                yield s.getsockname()[1]
+
+    @staticmethod
+    def _gpu_env(local_rank: int, world_size: int):
+        return {
+            "LOCAL_RANK": str(local_rank),
+            "WORLD_SIZE": str(world_size),
+        }
 
     def fast_dev_run(
         self,
