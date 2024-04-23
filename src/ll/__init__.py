@@ -37,6 +37,7 @@ from .model import LightningDataModuleBase as LightningDataModuleBase
 from .model import LightningModuleBase as LightningModuleBase
 from .model import LoggingConfig as LoggingConfig
 from .model import OptimizationConfig as OptimizationConfig
+from .model import PrimaryMetricConfig as PrimaryMetricConfig
 from .model import PythonLogging as PythonLogging
 from .model import ReproducibilityConfig as ReproducibilityConfig
 from .model import RunnerConfig as RunnerConfig
