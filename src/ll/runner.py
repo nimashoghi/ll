@@ -425,11 +425,15 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         commands: list[str] = []
 
         def _session_world_size_to_env(
+            session_name: str,
             world_size: int | None,
-        ) -> list[Mapping[str, str]]:
+        ) -> list[tuple[str, Mapping[str, str]]]:
             if world_size is None:
-                return [{}]
-            return [{"LOCAL_RANK": str(i)} for i in range(world_size)]
+                return [(session_name, {})]
+            return [
+                (f"{session_name}_rank{i}", {"LOCAL_RANK": str(i)})
+                for i in range(world_size)
+            ]
 
         for i, (
             session_env,
