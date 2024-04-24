@@ -690,7 +690,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         return_values: list[TReturn] = []
         for config, args in tqdm(resolved_runs, desc="Fast dev run"):
             run_id = config.id
-            run_name = config.name
+            run_name = config.run_name
             try:
                 config.trainer.fast_dev_run = n_batches
                 return_value = self.local([(config, *args)], env=env, reset_id=True)

@@ -388,7 +388,7 @@ class WandbLoggerConfig(BaseLoggerConfig):
         return WandbLogger(
             save_dir=save_dir,
             project=self.project or _project_name(root_config),
-            name=root_config.name,
+            name=root_config.run_name,
             version=root_config.id,
             log_model=self.log_model,
             notes=(
@@ -430,7 +430,7 @@ class CSVLoggerConfig(BaseLoggerConfig):
         save_dir.mkdir(parents=True, exist_ok=True)
         return CSVLogger(
             save_dir=save_dir,
-            name=root_config.name or root_config.id,
+            name=root_config.run_name,
             version=root_config.id,
             prefix=self.prefix,
             flush_logs_every_n_steps=self.flush_logs_every_n_steps,
@@ -496,7 +496,7 @@ class TensorboardLoggerConfig(BaseLoggerConfig):
         save_dir.mkdir(parents=True, exist_ok=True)
         return TensorBoardLogger(
             save_dir=save_dir,
-            name=root_config.name or root_config.id,
+            name=root_config.run_name,
             version=root_config.id,
             log_graph=self.log_graph,
             default_hp_metric=self.default_hp_metric,
@@ -1644,6 +1644,8 @@ class BaseConfig(TypedConfig):
     """ID of the run."""
     name: str | None = None
     """Run name."""
+    name_parts: list[str] = []
+    """A list of parts used to construct the run name. This is useful for constructing the run name dynamically."""
     project: str | None = None
     """Project name."""
     tags: list[str] = []
@@ -1675,6 +1677,16 @@ class BaseConfig(TypedConfig):
 
     meta: dict[str, Any] = {}
     """Additional metadata for this run. This can be used to store arbitrary data that is not part of the config schema."""
+
+    @property
+    def run_name(self) -> str:
+        parts = self.name_parts.copy()
+        if self.name is not None:
+            parts = [self.name] + parts
+        name = "-".join(parts)
+        if not name:
+            name = self.id
+        return name
 
     def clone(self, with_new_id: bool = True) -> Self:
         c = copy.deepcopy(self)
