@@ -17,7 +17,14 @@ class ResidualSequential(nn.Sequential):
 
 def MLP(
     dims: list[int],
-    activation: BaseNonlinearityConfig | nn.Module | Callable[[], nn.Module],
+    activation: BaseNonlinearityConfig
+    | nn.Module
+    | Callable[[], nn.Module]
+    | None = None,
+    nonlinearity: BaseNonlinearityConfig
+    | nn.Module
+    | Callable[[], nn.Module]
+    | None = None,
     bias: bool = True,
     no_bias_scalar: bool = True,
     ln: bool | Literal["pre", "post"] = False,
@@ -31,6 +38,7 @@ def MLP(
 
     Args:
         dims (list[int]): List of integers representing the dimensions of the MLP.
+        nonlinearity (Callable[[], nn.Module]): Activation function to use between layers.
         activation (Callable[[], nn.Module]): Activation function to use between layers.
         bias (bool, optional): Whether to include bias terms in the linear layers. Defaults to True.
         no_bias_scalar (bool, optional): Whether to exclude bias terms when the output dimension is 1. Defaults to True.
@@ -43,6 +51,9 @@ def MLP(
     Returns:
         nn.Sequential: The constructed MLP.
     """
+
+    if activation is None:
+        activation = nonlinearity
 
     if len(dims) < 2:
         raise ValueError("mlp requires at least 2 dimensions")
@@ -71,9 +82,12 @@ def MLP(
                 case nn.Module():
                     # In this case, we create a deep copy of the module to avoid sharing parameters (if any).
                     layers.append(copy.deepcopy(activation))
-                case _:
-                    assert callable(activation), "activation must be callable"
+                case Callable():
                     layers.append(activation())
+                case _:
+                    raise ValueError(
+                        "Either `nonlinearity` or `activation` must be provided"
+                    )
 
     layers.extend(post_layers)
 

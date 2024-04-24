@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 from typing import Annotated, Literal
 
+import torch
 import torch.nn as nn
 from typing_extensions import override
 
@@ -122,6 +123,21 @@ class MishNonlinearityConfig(BaseNonlinearityConfig):
         return nn.Mish()
 
 
+class SwiGLU(nn.SiLU):
+    @override
+    def forward(self, input: torch.Tensor):
+        input, gate = input.chunk(2, dim=-1)
+        return input * super().forward(gate)
+
+
+class SwiGLUNonlinearityConfig(BaseNonlinearityConfig):
+    name: Literal["swiglu"] = "swiglu"
+
+    @override
+    def create_module(self) -> nn.Module:
+        return SwiGLU()
+
+
 NonlinearityConfig = Annotated[
     ReLUNonlinearityConfig
     | SigmoidNonlinearityConfig
@@ -135,6 +151,7 @@ NonlinearityConfig = Annotated[
     | GELUNonlinearityConfig
     | SwishNonlinearityConfig
     | SiLUNonlinearityConfig
-    | MishNonlinearityConfig,
+    | MishNonlinearityConfig
+    | SwiGLUNonlinearityConfig,
     Field(discriminator="name"),
 ]
