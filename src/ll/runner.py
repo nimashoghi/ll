@@ -527,6 +527,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         prologue: list[str] | None = None,
         env: Mapping[str, str] | None = None,
         separate_session_per_task: bool = True,
+        throw_on_gpu_index_error: bool = True,
     ):
         """
         Launches len(sessions) local runs in different environments using `screen`.
@@ -555,6 +556,8 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
             Additional environment variables to set.
         separate_session_per_task : bool, optional
             If `True`, each GPU task will be run in a separate screen session with the `LOCAL_RANK` environment variable set to the task index.
+        throw_on_gpu_index_error: bool, optional
+            If `True`, an error will be raised if an invalid GPU index is provided.
 
         Returns
         -------
@@ -580,10 +583,13 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         del gpus
 
         # Make sure all the requested GPUs are available
-        for gpu_idxs in gpus_dict:
-            for gpu_idx in gpu_idxs:
-                if gpu_idx not in all_gpus:
-                    raise ValueError(f"GPU {gpu_idx} is not available.")
+        if throw_on_gpu_index_error:
+            for gpu_idxs in gpus_dict:
+                for gpu_idx in gpu_idxs:
+                    if gpu_idx not in all_gpus:
+                        raise ValueError(
+                            f"GPU {gpu_idx} is not available. Available GPUs: {all_gpus}"
+                        )
 
         log.critical(f"Detected {len(gpus_dict)} GPUs; {gpus_dict=}.")
 
