@@ -1023,6 +1023,19 @@ class CheckpointSavingConfig(TypedConfig):
     ]
     """Checkpoint callback configurations."""
 
+    def disable_(self):
+        self.enabled = False
+        return self
+
+    def should_save_checkpoints(self, root_config: "BaseConfig"):
+        if not self.enabled:
+            return False
+
+        if root_config.trainer.fast_dev_run:
+            return False
+
+        return True
+
     @property
     def model_checkpoint(self) -> ModelCheckpointCallbackConfig | None:
         return next(
@@ -1053,7 +1066,10 @@ class CheckpointSavingConfig(TypedConfig):
             ),
         )
 
-    def construct_callbacks(self, root_config):
+    def construct_callbacks(self, root_config: "BaseConfig"):
+        if not self.should_save_checkpoints(root_config):
+            return []
+
         callbacks: list[Checkpoint] = []
         for callback_config in self.checkpoint_callbacks:
             if not callback_config.enabled:

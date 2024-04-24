@@ -290,7 +290,7 @@ class Trainer(LightningTrainer):
         if config.trainer.early_stopping is not None:
             yield config.trainer.early_stopping.construct_callback(config)
 
-        if config.trainer.checkpoint_saving.enabled:
+        if config.trainer.checkpoint_saving.should_save_checkpoints(config):
             yield from config.trainer.checkpoint_saving.construct_callbacks(config)
 
         if config.trainer.python_logging.use_rich_progress_bar:
