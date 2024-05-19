@@ -468,6 +468,9 @@ class Trainer(LightningTrainer):
 
             _update_kwargs(precision=resolved_precision)
 
+        if (detect_anomaly := config.trainer.detect_anomaly) is not None:
+            _update_kwargs(detect_anomaly=detect_anomaly)
+
         if (
             grad_clip_config := config.trainer.optimizer.gradient_clipping
         ) is not None and grad_clip_config.enabled:

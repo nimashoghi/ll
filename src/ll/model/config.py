@@ -1411,6 +1411,11 @@ class TrainerConfig(TypedConfig):
         Default: ``None``.
     """
 
+    detect_anomaly: bool | None = None
+    """Enable anomaly detection for the autograd engine.
+    Default: ``False``.
+    """
+
     plugins: list[PluginConfigProtocol] | None = None
     """
     Plugins allow modification of core behavior like ddp and amp, and enable custom lightning plugins.
