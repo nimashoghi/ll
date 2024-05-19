@@ -61,7 +61,7 @@ class BaseProfilerConfig(TypedConfig, ABC):
     """
 
     @abstractmethod
-    def construct_profiler(self) -> Profiler: ...
+    def construct_profiler(self, root_config: "BaseConfig") -> Profiler: ...
 
 
 class SimpleProfilerConfig(BaseProfilerConfig):
@@ -74,13 +74,21 @@ class SimpleProfilerConfig(BaseProfilerConfig):
     """
 
     @override
-    def construct_profiler(self):
+    def construct_profiler(self, root_config):
         from lightning.pytorch.profilers.simple import SimpleProfiler
+
+        if (dirpath := self.dirpath) is None:
+            dirpath = root_config.directory.resolve_subdirectory(
+                root_config.id, "profile"
+            )
+
+        if (filename := self.filename) is None:
+            filename = f"{root_config.id}_profile.txt"
 
         return SimpleProfiler(
             extended=self.extended,
-            dirpath=self.dirpath,
-            filename=self.filename,
+            dirpath=dirpath,
+            filename=filename,
         )
 
 
@@ -95,13 +103,21 @@ class AdvancedProfilerConfig(BaseProfilerConfig):
     """
 
     @override
-    def construct_profiler(self):
+    def construct_profiler(self, root_config):
         from lightning.pytorch.profilers.advanced import AdvancedProfiler
+
+        if (dirpath := self.dirpath) is None:
+            dirpath = root_config.directory.resolve_subdirectory(
+                root_config.id, "profile"
+            )
+
+        if (filename := self.filename) is None:
+            filename = f"{root_config.id}_profile.txt"
 
         return AdvancedProfiler(
             line_count_restriction=self.line_count_restriction,
-            dirpath=self.dirpath,
-            filename=self.filename,
+            dirpath=dirpath,
+            filename=filename,
         )
 
 
@@ -155,8 +171,16 @@ class PyTorchProfilerConfig(BaseProfilerConfig):
     """Keyword arguments for the PyTorch profiler. This depends on your PyTorch version"""
 
     @override
-    def construct_profiler(self):
+    def construct_profiler(self, root_config):
         from lightning.pytorch.profilers.pytorch import PyTorchProfiler
+
+        if (dirpath := self.dirpath) is None:
+            dirpath = root_config.directory.resolve_subdirectory(
+                root_config.id, "profile"
+            )
+
+        if (filename := self.filename) is None:
+            filename = f"{root_config.id}_profile.txt"
 
         return PyTorchProfiler(
             group_by_input_shapes=self.group_by_input_shapes,
@@ -166,8 +190,8 @@ class PyTorchProfilerConfig(BaseProfilerConfig):
             sort_by_key=self.sort_by_key,
             record_module_names=self.record_module_names,
             table_kwargs=self.table_kwargs,
-            dirpath=self.dirpath,
-            filename=self.filename,
+            dirpath=dirpath,
+            filename=filename,
             **self.additional_profiler_kwargs,
         )
 
@@ -723,6 +747,9 @@ class DirectoryConfig(TypedConfig):
     activation: Path | None = None
     """Activation directory to use for the trainer. If None, will use lltrainer/{id}/activation/."""
 
+    profile: Path | None = None
+    """Directory to save profiling information to. If None, will use lltrainer/{id}/profile/."""
+
     def resolve_run_root_directory(self, run_id: str) -> Path:
         if (project_root_dir := self.project_root) is None:
             project_root_dir = Path.cwd()
@@ -746,7 +773,7 @@ class DirectoryConfig(TypedConfig):
     def resolve_subdirectory(
         self,
         run_id: str,
-        subdirectory: Literal["log", "stdio", "checkpoint", "activation"],
+        subdirectory: Literal["log", "stdio", "checkpoint", "activation", "profile"],
     ) -> Path:
         # The subdir will be $CWD/lltrainer/{id}/{log, stdio, checkpoint, activation}/
         if (subdir := getattr(self, subdirectory)) is not None:
@@ -1742,6 +1769,20 @@ class BaseConfig(TypedConfig):
         self.debug = True
         self.trainer.logging.enabled = False
         self.trainer.python_logging.log_level = "DEBUG"
+
+        return self
+
+    def reset_(
+        self,
+        *,
+        id: bool = True,
+        project_root: bool = True,
+    ):
+        if id:
+            self.id = self.generate_id()
+
+        if project_root:
+            self.directory = DirectoryConfig()
 
         return self
 

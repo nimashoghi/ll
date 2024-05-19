@@ -19,6 +19,7 @@ from .model import BaseProfilerConfig as BaseProfilerConfig
 from .model import CheckpointCallbackBaseConfig as CheckpointCallbackBaseConfig
 from .model import CheckpointLoadingConfig as CheckpointLoadingConfig
 from .model import CheckpointSavingConfig as CheckpointSavingConfig
+from .model import ConfigList as ConfigList
 from .model import DirectoryConfig as DirectoryConfig
 from .model import (
     EnvironmentClassInformationConfig as EnvironmentClassInformationConfig,

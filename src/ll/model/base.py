@@ -16,7 +16,7 @@ from lightning.fabric.utilities.types import _MAP_LOCATION_TYPE, _PATH
 from lightning.pytorch import LightningDataModule, LightningModule, Trainer
 from lightning.pytorch.callbacks import Callback
 from lightning.pytorch.utilities.types import STEP_OUTPUT
-from typing_extensions import Self, TypeVar, override
+from typing_extensions import Self, TypeVar, deprecated, override
 
 from ..trainer._wrappers.log_batch_info import LogBatchInfoWrapper
 from ..trainer._wrappers.skip_batch import SkipBatchWrapper
@@ -47,6 +47,12 @@ THparams = TypeVar("THparams", bound=BaseConfig, infer_variance=True)
 
 
 class Base(DebugModuleMixin, Generic[THparams]):
+    @deprecated("Use `ll.nn.MLP` instead.")
+    def mlp(self, *args, **kwargs):
+        from ..nn.mlp import MLP
+
+        return MLP(*args, **kwargs)
+
     @torch.jit.unused
     @property
     def config(self) -> THparams:

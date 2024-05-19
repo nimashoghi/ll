@@ -5,9 +5,11 @@ from pathlib import Path
 from typing import cast, overload
 
 import numpy as np
-from typing_extensions import override
+from typing_extensions import TypeVar, override
 
 log = getLogger(__name__)
+
+T = TypeVar("T", infer_variance=True)
 
 
 @dataclass
@@ -124,6 +126,9 @@ class ActLoad:
         return (
             f"ActLoad(dir={self._dir}, activations={list(self.activations.values())})"
         )
+
+    def get(self, name: str, /, default: T) -> LoadedActivation | T:
+        return self.activations.get(name, default)
 
 
 ActivationLoader = ActLoad

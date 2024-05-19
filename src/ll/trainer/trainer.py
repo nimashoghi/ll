@@ -484,7 +484,7 @@ class Trainer(LightningTrainer):
         if profiler := config.trainer.profiler:
             # If the profiler is an ProfilerConfig instance, then we instantiate it.
             if isinstance(profiler, BaseProfilerConfig):
-                profiler = profiler.construct_profiler()
+                profiler = profiler.construct_profiler(config)
                 # Make sure that the profiler is an instance of `Profiler`.
                 if not isinstance(profiler, Profiler):
                     raise ValueError(f"{profiler=} is not an instance of `{Profiler}`.")
@@ -503,7 +503,7 @@ class Trainer(LightningTrainer):
 
         if not config.trainer.logging.enabled:
             log.critical(f"Disabling logger because {config.trainer.logging.enabled=}.")
-            _update_kwargs(logger=False)
+            kwargs["logger"] = False
         else:
             _update_kwargs(logger=config.trainer.logging.construct_loggers(config))
 

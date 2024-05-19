@@ -1,3 +1,5 @@
+from typing_extensions import TypeAlias
+
 from ..actsave._config import ActSaveAsyncSaverConfig as ActSaveAsyncSaverConfig
 from ..actsave._config import ActSaveConfig as ActSaveConfig
 from ..actsave._config import ActSaveSyncSaverConfig as ActSaveSyncSaverConfig
@@ -42,3 +44,5 @@ from .config import RunnerOutputSaveConfig as RunnerOutputSaveConfig
 from .config import SeedEverythingConfig as SeedEverythingConfig
 from .config import TrainerConfig as TrainerConfig
 from .config import WandbWatchConfig as WandbWatchConfig
+
+ConfigList: TypeAlias = list[tuple[BaseConfig, type[LightningModuleBase]]]

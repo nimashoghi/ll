@@ -67,7 +67,7 @@ class WeakRef(Generic[T]):
 
 
 @dataclass
-class _Activation:
+class Activation:
     name: str
     ref: WeakRef[ValueOrLambda] | None
     transformed: np.ndarray | None = None
@@ -111,7 +111,7 @@ class _Activation:
         return [cls.from_value_or_lambda(k, v) for k, v in d.items()]
 
 
-Transform = Callable[[_Activation], Mapping[str, ValueOrLambda]]
+Transform = Callable[[Activation], Mapping[str, ValueOrLambda]]
 
 
 def _ensure_supported():
@@ -198,7 +198,7 @@ class _SaverBase(ABC):
             # Clear the activations
             self._acts_to_save.clear()
 
-    def _save_activation(self, activation: _Activation):
+    def _save_activation(self, activation: Activation):
         # Save the activation to self._save_dir / {name} /
         prefixes = [prefix.label for prefix in self._prefixes_fn()]
         file_name = ".".join(prefixes + [activation.name])
@@ -231,9 +231,9 @@ class _SaverBase(ABC):
         kwargs.update(acts or {})
 
         # Build activations
-        activations = _Activation.from_dict(kwargs)
+        activations = Activation.from_dict(kwargs)
 
-        transformed_activations: list[_Activation] = []
+        transformed_activations: list[Activation] = []
 
         for activation in activations:
             # Make sure name matches at least one filter if filters are specified
@@ -256,7 +256,7 @@ class _SaverBase(ABC):
                         continue
 
                     # Otherwise, add the transform to the activations
-                    transformed_activations.extend(_Activation.from_dict(transform_out))
+                    transformed_activations.extend(Activation.from_dict(transform_out))
 
         # Now, we save the transformed activations.
         for transformed_activation in transformed_activations:
@@ -347,7 +347,14 @@ class ActSaveProvider:
     _saver: _SaverBase | None = None
     _contexts: list[ActSaveContextInfo] = []
 
-    def initialize(self, config: ActSaveConfig, save_dir: Path):
+    def initialize(
+        self,
+        config: ActSaveConfig,
+        save_dir: Path,
+        *,
+        filters: list[str] | None = None,
+        transforms: list[tuple[str, Transform]] | None = None,
+    ):
         if self._saver is None:
             # Create the actsave directory
             save_dir.mkdir(parents=True, exist_ok=True)
@@ -363,13 +370,21 @@ class ActSaveProvider:
             self._saver = saver_cls(
                 save_dir,
                 lambda: self._contexts,
-                filters=config.filters,
+                filters=[*(config.filters or []), *(filters or [])],
+                transforms=transforms,
             )
 
     @contextlib.contextmanager
-    def enabled(self, config: ActSaveConfig, save_dir: Path):
+    def enabled(
+        self,
+        config: ActSaveConfig,
+        save_dir: Path,
+        *,
+        filters: list[str] | None = None,
+        transforms: list[tuple[str, Transform]] | None = None,
+    ):
         prev = self._saver
-        self.initialize(config, save_dir)
+        self.initialize(config, save_dir, filters=filters, transforms=transforms)
         try:
             yield
         finally:

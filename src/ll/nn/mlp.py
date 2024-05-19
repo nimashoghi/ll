@@ -1,12 +1,19 @@
 import copy
 from collections.abc import Callable
-from typing import Literal
+from typing import Literal, Protocol, runtime_checkable
 
 import torch
 import torch.nn as nn
 from typing_extensions import override
 
 from .nonlinearity import BaseNonlinearityConfig
+
+
+@runtime_checkable
+class LinearModuleConstructor(Protocol):
+    def __call__(
+        self, in_features: int, out_features: int, bias: bool = True
+    ) -> nn.Module: ...
 
 
 class ResidualSequential(nn.Sequential):
@@ -32,6 +39,7 @@ def MLP(
     residual: bool = False,
     pre_layers: list[nn.Module] = [],
     post_layers: list[nn.Module] = [],
+    linear_cls: LinearModuleConstructor = nn.Linear,
 ):
     """
     Constructs a multi-layer perceptron (MLP) with the given dimensions and activation function.
@@ -72,7 +80,7 @@ def MLP(
         in_features = dims[i]
         out_features = dims[i + 1]
         bias_ = bias and not (no_bias_scalar and out_features == 1)
-        layers.append(nn.Linear(in_features, out_features, bias=bias_))
+        layers.append(linear_cls(in_features, out_features, bias=bias_))
         if dropout is not None:
             layers.append(nn.Dropout(dropout))
         if i < len(dims) - 2:
