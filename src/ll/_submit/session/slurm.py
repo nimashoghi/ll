@@ -242,6 +242,15 @@ class SlurmJobKwargs(TypedDict, total=False):
     This corresponds to the "--signal" option in sbatch.
     """
 
+    open_mode: str
+    """
+    The open mode for the output and error files.
+
+    This corresponds to the "--open-mode" option in sbatch.
+
+    Valid values are "append" and "truncate".
+    """
+
     setup_commands: Sequence[str]
     """
     The setup commands to run before the job.
@@ -277,6 +286,7 @@ def _default_update_kwargs_fn(
 DEFAULT_KWARGS: SlurmJobKwargs = {
     "signal": signal.SIGUSR1,
     "update_kwargs_fn": _default_update_kwargs_fn,
+    "open_mode": "append",
 }
 
 
@@ -391,6 +401,9 @@ def _write_batch_script_to_file(
 
         if kwargs.get("exclusive"):
             f.write("#SBATCH --exclusive\n")
+
+        if (open_mode := kwargs.get("open_mode")) is not None:
+            f.write(f"#SBATCH --open-mode={open_mode}\n")
 
         if (constraint := kwargs.get("constraint")) is not None:
             if isinstance(constraint, str):
