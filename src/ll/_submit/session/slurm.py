@@ -275,7 +275,7 @@ def _determine_gres(kwargs: SlurmJobKwargs) -> Sequence[str] | None:
 
     # `--gpus-per-task` is only supported if `--ntasks-per-node` is set (or can be inferred).
     if (gpus_per_task := kwargs.get("gpus_per_task")) is not None:
-        if _determine_ntasks_per_node(kwargs) is None:
+        if (ntasks_per_node := _determine_ntasks_per_node(kwargs)) is None:
             raise ValueError(
                 "Cannot specify `gpus_per_task` without `ntasks_per_node`."
             )
@@ -283,7 +283,8 @@ def _determine_gres(kwargs: SlurmJobKwargs) -> Sequence[str] | None:
         if isinstance(gpus_per_task, str):
             gpus_per_task = int(gpus_per_task)
 
-        return [f"gpu:{gpus_per_task}"]
+        gpus_per_node = ntasks_per_node * gpus_per_task
+        return [f"gpu:{gpus_per_node}"]
 
     # `--gpus-per-node` has no restrictions
     if (gpus_per_node := kwargs.get("gpus_per_node")) is not None:
