@@ -13,10 +13,6 @@ from ._output import SubmitOutput
 
 log = getLogger(__name__)
 
-DEFAULT_JOB_NAME = "ll"
-DEFAULT_NODES = 1
-DEFAULT_WALLTIME = timedelta(hours=2)
-
 TArgs = TypeVarTuple("TArgs")
 
 _Path: TypeAlias = str | Path | os.PathLike
@@ -277,15 +273,11 @@ class SlurmJobKwargs(TypedDict, total=False):
     """A function to update the kwargs."""
 
 
-def _default_update_kwargs_fn(
-    kwargs: SlurmJobKwargs, base_path: Path
-) -> SlurmJobKwargs:
-    return kwargs
-
-
 DEFAULT_KWARGS: SlurmJobKwargs = {
+    "name": "ll",
+    "nodes": 1,
+    # "time": timedelta(hours=2),
     "signal": signal.SIGUSR1,
-    "update_kwargs_fn": _default_update_kwargs_fn,
     "open_mode": "append",
 }
 
@@ -299,15 +291,16 @@ def _write_batch_script_to_file(
     with path.open("w") as f:
         f.write("#!/bin/bash\n")
 
-        name = kwargs.get("name", DEFAULT_JOB_NAME)
         if job_array_n_jobs is not None:
             f.write(f"#SBATCH --array=1-{job_array_n_jobs}\n")
-        f.write(f"#SBATCH -J {name}\n")
+
+        if (name := kwargs.get("name")) is not None:
+            f.write(f"#SBATCH -J {name}\n")
 
         if (account := kwargs.get("account")) is not None:
             f.write(f"#SBATCH --account={account}\n")
 
-        if (time := kwargs.get("time", DEFAULT_WALLTIME)) is not None:
+        if (time := kwargs.get("time")) is not None:
             # A time limit of zero requests that no time limit be imposed. Acceptable time formats include "minutes", "minutes:seconds", "hours:minutes:seconds", "days-hours", "days-hours:minutes" and "days-hours:minutes:seconds".
             if time == 0:
                 time_str = "0"
@@ -322,7 +315,7 @@ def _write_batch_script_to_file(
                     time_str = f"{int(hours):02d}:{int(minutes):02d}:{int(seconds):02d}"
             f.write(f"#SBATCH --time={time_str}\n")
 
-        if (nodes := kwargs.get("nodes", DEFAULT_NODES)) is not None:
+        if (nodes := kwargs.get("nodes")) is not None:
             f.write(f"#SBATCH --nodes={nodes}\n")
 
         if (ntasks := kwargs.get("ntasks")) is not None:
