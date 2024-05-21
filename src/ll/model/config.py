@@ -39,6 +39,7 @@ from typing_extensions import Self, TypedDict, TypeVar, override
 from ..actsave import ActSaveConfig
 from ..config import Field, TypedConfig
 from ..util.slurm import parse_slurm_node_list
+from ._config.callback import CallbackConfig
 
 log = getLogger(__name__)
 
@@ -1437,6 +1438,9 @@ class TrainerConfig(TypedConfig):
     To profile individual steps during training and assist in identifying bottlenecks.
         Default: ``None``.
     """
+
+    callbacks: list[CallbackConfig] = []
+    """Callbacks to use during training."""
 
     detect_anomaly: bool | None = None
     """Enable anomaly detection for the autograd engine.

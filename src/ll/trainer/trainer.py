@@ -494,6 +494,11 @@ class Trainer(LightningTrainer):
             # kwargs["profiler"] = profiler
             _update_kwargs(profiler=profiler)
 
+        if callbacks := config.trainer.callbacks:
+            _update_kwargs(
+                callbacks=[callback.construct_callback() for callback in callbacks]
+            )
+
         if plugin_configs := config.trainer.plugins:
             _update_kwargs(
                 plugins=[
