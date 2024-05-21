@@ -478,10 +478,17 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
                 f.write(f"export PYTHONPATH={snapshot_str}:$PYTHONPATH\n")
                 f.write(f"export {self.SNAPSHOT_ENV_NAME}={snapshot_str}\n\n")
 
-            # Activate the conda environment
-            f.write('eval "$(conda shell.bash hook)"\n')
-            f.write(f'echo "Activating conda environment {sys.prefix}"\n')
-            f.write(f"conda activate {sys.prefix}\n\n")
+            # Activate the environment
+            # Let's detect the environment: If we're in a pixi environment,
+            #   use pixi's shell hook instead.
+            if "/.pixi/" in sys.prefix:
+                f.write('eval "$(pixi shell-hook)"\n')
+                f.write(f'echo "Activating pixi environment {sys.prefix}"\n\n')
+            else:
+                # Otherwise, assume we're in a conda environment.
+                f.write('eval "$(conda shell.bash hook)"\n')
+                f.write(f'echo "Activating conda environment {sys.prefix}"\n')
+                f.write(f"conda activate {sys.prefix}\n\n")
 
             # Launch the sessions
             for command in commands:
