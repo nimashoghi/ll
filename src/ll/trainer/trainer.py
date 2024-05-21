@@ -515,9 +515,16 @@ class Trainer(LightningTrainer):
         if config.trainer.auto_determine_num_nodes:
             # When num_nodes is auto, we need to detect the number of nodes.
             if SLURMEnvironment.detect():
-                num_nodes = SLURMEnvironment().world_size()
-                log.critical(f"SLURM detected with {num_nodes=}.")
-                _update_kwargs(num_nodes=num_nodes)
+                if (num_nodes := os.environ.get("SLURM_NNODES")) is not None:
+                    num_nodes = int(num_nodes)
+                    log.critical(f"SLURM detected with {num_nodes=}.")
+                    _update_kwargs(num_nodes=num_nodes)
+                else:
+                    log.critical(
+                        "SLURM detected, but SLURM_NNODES not found. "
+                        "We'll continue without setting num_nodes, but this may cause issues."
+                    )
+
             elif LSFEnvironment.detect():
                 num_nodes = LSFEnvironment().world_size()
                 log.critical(f"LSF detected with {num_nodes=}.")

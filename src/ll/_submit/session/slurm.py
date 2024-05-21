@@ -112,13 +112,6 @@ class SlurmJobKwargs(TypedDict, total=False):
     This corresponds to the "-c" option in sbatch.
     """
 
-    cpus_per_gpu: int
-    """
-    Specify the number of CPUs required for the job on each GPU to be allocated.
-
-    This corresponds to the "--cpus-per-gpu" option in sbatch.
-    """
-
     nodes: int
     """
     The number of nodes to use for the job.
@@ -133,32 +126,11 @@ class SlurmJobKwargs(TypedDict, total=False):
     This corresponds to the "-n" option in sbatch. The default is 1 task.
     """
 
-    ntasks_per_core: int
-    """
-    The number of tasks for each core.
-
-    This corresponds to the "--ntasks-per-core" option in sbatch.
-    """
-
-    ntasks_per_gpu: int
-    """
-    The number of tasks for each GPU.
-
-    This corresponds to the "--ntasks-per-gpu" option in sbatch.
-    """
-
     ntasks_per_node: int
     """
     The number of tasks for each node.
 
     This corresponds to the "--ntasks-per-node" option in sbatch.
-    """
-
-    ntasks_per_socket: int
-    """
-    The number of tasks for each socket.
-
-    This corresponds to the "--ntasks-per-socket" option in sbatch.
     """
 
     constraint: str | Sequence[str]
@@ -187,13 +159,6 @@ class SlurmJobKwargs(TypedDict, total=False):
     Specify the number of GPUs required for the job on each node included in the job's resource allocation. An optional GPU type specification can be supplied.
 
     This corresponds to the "--gpus-per-node" option in sbatch.
-    """
-
-    gpus_per_socket: int | str
-    """
-    Specify the number of GPUs required for the job on each socket to be spawned in the job's resource allocation. An optional GPU type specification can be supplied.
-
-    This corresponds to the "--gpus-per-socket" option in sbatch.
     """
 
     gpus_per_task: int | str
@@ -287,6 +252,69 @@ DEFAULT_KWARGS: SlurmJobKwargs = {
 }
 
 
+def _determine_gres(kwargs: SlurmJobKwargs) -> Sequence[str] | None:
+    """
+    There are many different ways to specify GPU resources, but some are buggy.
+
+    This function normalizes all other ways to specify GPU resources to the `gres` option.
+    """
+
+    # If `--gres` is set, just return it
+    if (gres := kwargs.get("gres")) is not None:
+        if isinstance(gres, str):
+            gres = [gres]
+        return gres
+
+    # We will only support `--gpus` if `--nodes` is set to 1
+    if (gpus := kwargs.get("gpus")) is not None:
+        if kwargs.get("nodes") != 1:
+            raise ValueError("Cannot specify `gpus` without `nodes` set to 1.")
+        if isinstance(gpus, int):
+            gpus = [f"gpu:{gpus}"]
+        return gpus
+
+    # `--gpus-per-task` is only supported if `--ntasks-per-node` is set (or can be inferred).
+    if (gpus_per_task := kwargs.get("gpus_per_task")) is not None:
+        if _determine_ntasks_per_node(kwargs) is None:
+            raise ValueError(
+                "Cannot specify `gpus_per_task` without `ntasks_per_node`."
+            )
+
+        if isinstance(gpus_per_task, str):
+            gpus_per_task = int(gpus_per_task)
+
+        return [f"gpu:{gpus_per_task}"]
+
+    # `--gpus-per-node` has no restrictions
+    if (gpus_per_node := kwargs.get("gpus_per_node")) is not None:
+        if isinstance(gpus_per_node, int):
+            gpus_per_node = [f"gpu:{gpus_per_node}"]
+        return gpus_per_node
+
+    return None
+
+
+def _determine_ntasks_per_node(kwargs: SlurmJobKwargs) -> int | None:
+    # If `--ntasks-per-node` is set, just return it
+    if (ntasks_per_node := kwargs.get("ntasks_per_node")) is not None:
+        return ntasks_per_node
+
+    # If `--ntasks` is set, we can infer `--ntasks-per-node`
+    if (ntasks := kwargs.get("ntasks")) is not None:
+        if (nodes := kwargs.get("nodes")) is None:
+            raise ValueError("Cannot infer `ntasks_per_node` without `nodes`.")
+
+        # If nnodes is not divisible by ntasks, raise an error
+        if nodes % ntasks != 0:
+            raise ValueError(
+                "The number of nodes must be divisible by the number of tasks."
+            )
+
+        return ntasks // nodes
+
+    return None
+
+
 def _write_batch_script_to_file(
     path: Path,
     kwargs: SlurmJobKwargs,
@@ -326,17 +354,8 @@ def _write_batch_script_to_file(
         if (ntasks := kwargs.get("ntasks")) is not None:
             f.write(f"#SBATCH --ntasks={ntasks}\n")
 
-        if (ntasks_per_core := kwargs.get("ntasks_per_core")) is not None:
-            f.write(f"#SBATCH --ntasks-per-core={ntasks_per_core}\n")
-
-        if (ntasks_per_gpu := kwargs.get("ntasks_per_gpu")) is not None:
-            f.write(f"#SBATCH --ntasks-per-gpu={ntasks_per_gpu}\n")
-
         if (ntasks_per_node := kwargs.get("ntasks_per_node")) is not None:
             f.write(f"#SBATCH --ntasks-per-node={ntasks_per_node}\n")
-
-        if (ntasks_per_socket := kwargs.get("ntasks_per_socket")) is not None:
-            f.write(f"#SBATCH --ntasks-per-socket={ntasks_per_socket}\n")
 
         if (output_file := kwargs.get("output_file")) is not None:
             output_file = str(Path(output_file).absolute())
@@ -366,25 +385,8 @@ def _write_batch_script_to_file(
         if (cpus_per_task := kwargs.get("cpus_per_task")) is not None:
             f.write(f"#SBATCH --cpus-per-task={cpus_per_task}\n")
 
-        if (cpus_per_gpu := kwargs.get("cpus_per_gpu")) is not None:
-            f.write(f"#SBATCH --cpus-per-gpu={cpus_per_gpu}\n")
-
-        if (gres := kwargs.get("gres")) is not None:
-            if isinstance(gres, str):
-                gres = [gres]
+        if gres := _determine_gres(kwargs):
             f.write(f"#SBATCH --gres={','.join(gres)}\n")
-
-        if (gpus := kwargs.get("gpus")) is not None:
-            f.write(f"#SBATCH --gpus={gpus}\n")
-
-        if (gpus_per_node := kwargs.get("gpus_per_node")) is not None:
-            f.write(f"#SBATCH --gpus-per-node={gpus_per_node}\n")
-
-        if (gpus_per_socket := kwargs.get("gpus_per_socket")) is not None:
-            f.write(f"#SBATCH --gpus-per-socket={gpus_per_socket}\n")
-
-        if (gpus_per_task := kwargs.get("gpus_per_task")) is not None:
-            f.write(f"#SBATCH --gpus-per-task={gpus_per_task}\n")
 
         if (mail_user := kwargs.get("mail_user")) is not None:
             f.write(f"#SBATCH --mail-user={mail_user}\n")
