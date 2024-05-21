@@ -268,6 +268,11 @@ class SlurmJobKwargs(TypedDict, total=False):
     This is used to add commands like `srun` to the job command.
     """
 
+    srun_flags: str | Sequence[str]
+    """
+    The flags to pass to the `srun` command.
+    """
+
     # Our own custom options
     update_kwargs_fn: "Callable[[SlurmJobKwargs, Path], SlurmJobKwargs]"
     """A function to update the kwargs."""
@@ -447,7 +452,12 @@ def _update_kwargs(kwargs: SlurmJobKwargs, base_path: Path):
         kwargs["error_file"] = logs_base / "error_%j_%a.err"
 
     # Update the command_prefix to add srun:
-    command_parts: list[str] = ["srun", "--unbuffered"]
+    command_parts: list[str] = ["srun"]
+    if (srun_flags := kwargs.get("srun_flags")) is not None:
+        if isinstance(srun_flags, str):
+            srun_flags = [srun_flags]
+        command_parts.extend(srun_flags)
+    command_parts.append("--unbuffered")
 
     # Add the task id to the output filenames
     if (f := kwargs.get("output_file")) is not None:
