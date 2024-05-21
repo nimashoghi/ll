@@ -264,12 +264,24 @@ class SlurmJobKwargs(TypedDict, total=False):
     """
 
     # Our own custom options
-    update_kwargs_fn: "Callable[[SlurmJobKwargs], SlurmJobKwargs]"
+    update_kwargs_fn: "Callable[[SlurmJobKwargs, Path], SlurmJobKwargs]"
     """A function to update the kwargs."""
 
 
-def _default_update_kwargs_fn(kwargs: SlurmJobKwargs) -> SlurmJobKwargs:
+def _default_update_kwargs_fn(
+    kwargs: SlurmJobKwargs, base_path: Path
+) -> SlurmJobKwargs:
     kwargs = copy.deepcopy(kwargs)
+
+    # If out/err files are not specified, set them
+    logs_base = base_path.parent / "logs"
+    logs_base.mkdir(exist_ok=True)
+
+    if kwargs.get("output_file") is None:
+        kwargs["output_file"] = logs_base / "output_%j_%t.out"
+
+    if kwargs.get("error_file") is None:
+        kwargs["error_file"] = logs_base / "error_%j_%t.err"
 
     # Update the command_prefix to add srun:
     command_parts: list[str] = ["srun", "--unbuffered"]
@@ -304,21 +316,6 @@ def _write_batch_script_to_file(
     command: str,
     job_array_n_jobs: int | None = None,
 ):
-    logs_base = path.parent / "logs"
-    logs_base.mkdir(exist_ok=True)
-
-    if kwargs.get("output_file") is None:
-        if job_array_n_jobs is None:
-            kwargs["output_file"] = logs_base / "output_%j.out"
-        else:
-            kwargs["output_file"] = logs_base / "output_%j_%a.out"
-
-    if kwargs.get("error_file") is None:
-        if job_array_n_jobs is None:
-            kwargs["error_file"] = logs_base / "error_%j.err"
-        else:
-            kwargs["error_file"] = logs_base / "error_%j_%a.err"
-
     with path.open("w") as f:
         f.write("#!/bin/bash\n")
 
@@ -458,13 +455,13 @@ def _write_batch_script_to_file(
     return path
 
 
-def _update_kwargs(kwargs: SlurmJobKwargs):
+def _update_kwargs(kwargs: SlurmJobKwargs, base_path: Path):
     # Update the kwargs with the default values
     kwargs = copy.deepcopy(kwargs)
     kwargs = {**DEFAULT_KWARGS, **kwargs}
 
     if (update_kwargs_fn := kwargs.get("update_kwargs_fn")) is not None:
-        kwargs = copy.deepcopy(update_kwargs_fn(kwargs))
+        kwargs = copy.deepcopy(update_kwargs_fn(kwargs, base_path))
 
     return kwargs
 
@@ -483,7 +480,7 @@ def to_array_batch_script(
 
     from ...picklerunner import serialize_many
 
-    kwargs = _update_kwargs(kwargs)
+    kwargs = _update_kwargs(kwargs, dest)
 
     # Convert the command/callable to a string for the command
     num_jobs = len(args_list)
