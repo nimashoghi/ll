@@ -271,36 +271,6 @@ class SlurmJobKwargs(TypedDict, total=False):
 def _default_update_kwargs_fn(
     kwargs: SlurmJobKwargs, base_path: Path
 ) -> SlurmJobKwargs:
-    kwargs = copy.deepcopy(kwargs)
-
-    # If out/err files are not specified, set them
-    logs_base = base_path.parent / "logs"
-    logs_base.mkdir(exist_ok=True)
-
-    if kwargs.get("output_file") is None:
-        kwargs["output_file"] = logs_base / "output_%j_%t.out"
-
-    if kwargs.get("error_file") is None:
-        kwargs["error_file"] = logs_base / "error_%j_%t.err"
-
-    # Update the command_prefix to add srun:
-    command_parts: list[str] = ["srun", "--unbuffered"]
-    # Add the task id to the output filenames
-    if (f := kwargs.get("output_file")) is not None:
-        f = Path(f).absolute()
-        command_parts.extend(["--output", f"{f.stem}_%t{f.suffix}"])
-        kwargs["output_file"] = f.with_name(f"{f.stem}_0{f.suffix}")
-    if (f := kwargs.get("error_file")) is not None:
-        f = Path(f).absolute()
-        command_parts.extend(["--error", f"{f.stem}_%t{f.suffix}"])
-        kwargs["error_file"] = f.with_name(f"{f.stem}_0{f.suffix}")
-
-    # If there is already a command prefix, combine them.
-    if (existing_command_prefix := kwargs.get("command_prefix")) is not None:
-        command_parts.extend(existing_command_prefix.split())
-    # Add the command prefix to the kwargs.
-    kwargs["command_prefix"] = " ".join(command_parts)
-
     return kwargs
 
 
@@ -459,6 +429,43 @@ def _update_kwargs(kwargs: SlurmJobKwargs, base_path: Path):
     # Update the kwargs with the default values
     kwargs = copy.deepcopy(kwargs)
     kwargs = {**DEFAULT_KWARGS, **kwargs}
+
+    # If out/err files are not specified, set them
+    logs_base = base_path.parent / "logs"
+    logs_base.mkdir(exist_ok=True)
+
+    if kwargs.get("output_file") is None:
+        kwargs["output_file"] = logs_base / "output_%j_%a.out"
+
+    if kwargs.get("error_file") is None:
+        kwargs["error_file"] = logs_base / "error_%j_%a.err"
+
+    # Update the command_prefix to add srun:
+    command_parts: list[str] = ["srun", "--unbuffered"]
+
+    # Add the task id to the output filenames
+    if (f := kwargs.get("output_file")) is not None:
+        f = Path(f).absolute()
+        command_parts.extend(
+            [
+                "--output",
+                str(f.with_name(f"{f.stem}-%t{f.suffix}").absolute()),
+            ]
+        )
+    if (f := kwargs.get("error_file")) is not None:
+        f = Path(f).absolute()
+        command_parts.extend(
+            [
+                "--error",
+                str(f.with_name(f"{f.stem}-%t{f.suffix}").absolute()),
+            ]
+        )
+
+    # If there is already a command prefix, combine them.
+    if (existing_command_prefix := kwargs.get("command_prefix")) is not None:
+        command_parts.extend(existing_command_prefix.split())
+    # Add the command prefix to the kwargs.
+    kwargs["command_prefix"] = " ".join(command_parts)
 
     if (update_kwargs_fn := kwargs.get("update_kwargs_fn")) is not None:
         kwargs = copy.deepcopy(update_kwargs_fn(kwargs, base_path))
