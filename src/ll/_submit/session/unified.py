@@ -318,14 +318,14 @@ def infer_current_scheduler() -> Scheduler:
     try:
         subprocess.check_output(["bsub", "-V"])
         return "lsf"
-    except subprocess.CalledProcessError:
+    except BaseException:
         pass
 
     # Next, we check for `sbatch` as it's the most common scheduler.
     try:
         subprocess.check_output(["sbatch", "--version"])
         return "slurm"
-    except subprocess.CalledProcessError:
+    except BaseException:
         pass
 
     raise RuntimeError("Could not determine the current scheduler.")
