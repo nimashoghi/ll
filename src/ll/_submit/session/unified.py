@@ -296,6 +296,7 @@ def to_array_batch_script(
     args_list: Sequence[tuple[Unpack[TArgs]]],
     /,
     job_index_variable: str | None = None,
+    print_environment_info: bool = True,
     **kwargs: Unpack[GenericJobKwargs],
 ) -> SubmitOutput:
     job_index_variable_kwargs = {}
@@ -309,6 +310,7 @@ def to_array_batch_script(
                 callable,
                 args_list,
                 **job_index_variable_kwargs,
+                print_environment_info=print_environment_info,
                 **slurm_kwargs,
             )
         case "lsf":
@@ -318,6 +320,7 @@ def to_array_batch_script(
                 callable,
                 args_list,
                 **job_index_variable_kwargs,
+                print_environment_info=print_environment_info,
                 **lsf_kwargs,
             )
 

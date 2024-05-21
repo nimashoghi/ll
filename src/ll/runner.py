@@ -304,6 +304,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         delete_run_script_after_launch: bool = False,
         prologue: Sequence[str] | None = None,
         env: Mapping[str, str] | None = None,
+        print_environment_info: bool = True,
     ):
         """
         Launches len(sessions) local runs in different environments using `screen`.
@@ -328,6 +329,8 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
             A list of commands to run at the beginning of the shell script.
         env : Mapping[str, str], optional
             Additional environment variables to set.
+        print_environment_info : bool, optional
+            Whether to print the environment information before starting each job.
 
         Returns
         -------
@@ -372,6 +375,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
                 ((self._run, self._init_kwargs, c, args), {})
                 for c, args in resolved_runs
             ],
+            print_environment_info=print_environment_info,
         )
 
         # Resolve all session names
@@ -820,6 +824,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         snapshot: bool | SnapshotConfig = False,
         reset_id: bool = False,
         activate_conda: bool = True,
+        print_environment_info: bool = True,
         env: Mapping[str, str] | None = None,
         **job_kwargs: Unpack[unified.GenericJobKwargs],
     ):
@@ -838,6 +843,8 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
             Whether to reset the id of the runs before launching them.
         activate_conda : bool, optional
             Whether to activate the conda environment before running the jobs.
+        print_environment_info : bool, optional
+            Whether to print the environment information before starting each job.
         env : Mapping[str, str], optional
             Additional environment variables to set.
         job_kwargs : dict
@@ -898,6 +905,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
             base_path,
             _runner_main,
             map_array_args,
+            print_environment_info=print_environment_info,
             **job_kwargs,
         )
         print("Please run the following command to submit the jobs:")

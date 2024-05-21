@@ -495,6 +495,7 @@ def to_array_batch_script(
     args_list: Sequence[tuple[Unpack[TArgs]]],
     /,
     job_index_variable: str = "SLURM_ARRAY_TASK_ID",
+    print_environment_info: bool = True,
     **kwargs: Unpack[SlurmJobKwargs],
 ) -> SubmitOutput:
     """
@@ -516,6 +517,7 @@ def to_array_batch_script(
         callable,
         [(args, {}) for args in args_list],
         start_idx=1,  # Slurm job indices are 1-based
+        print_environment_info=print_environment_info,
     ).to_bash_command(job_index_variable)
     command = " ".join(command)
 

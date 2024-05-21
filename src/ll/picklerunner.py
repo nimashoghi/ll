@@ -67,6 +67,7 @@ class SerializedMultiFunction(PathLike):
     base_dir: Path
     functions: Sequence[SerializedFunction]
     _additional_command_parts: Sequence[str] = ()
+    print_environment_info: bool = True
 
     def to_bash_command(
         self,
@@ -82,6 +83,10 @@ class SerializedMultiFunction(PathLike):
         command.append(python_executable)
         command.append("-m")
         command.append(__name__)
+        if self.print_environment_info:
+            command.append("--print-environment-info")
+        else:
+            command.append("--no-print-environment-info")
         command.append(
             f'"{str(self.base_dir.absolute())}/${{{job_index_variable}}}.pkl"'
         )
@@ -141,6 +146,7 @@ def serialize_many(
     args_and_kwargs_list: Sequence[tuple[Sequence[Any], Mapping[str, Any]]],
     start_idx: int = 0,
     additional_command_parts: Sequence[str] = (),
+    print_environment_info: bool = True,
 ):
     serialized_list: list[SerializedFunction] = []
 
@@ -214,16 +220,55 @@ def _parse_args():
         action=argparse.BooleanOptionalAction,
         help="Unset the CUDA_VISIBLE_DEVICES environment variable",
     )
+    parser.add_argument(
+        "--use-rich-log-handler",
+        action=argparse.BooleanOptionalAction,
+        help="Use the RichLogHandler (if available) instead of the default logging handler",
+        default=True,
+    )
+    parser.add_argument(
+        "--print-environment-info",
+        action=argparse.BooleanOptionalAction,
+        help="Print the environment information before starting the session",
+        default=True,
+    )
 
     args = parser.parse_args()
     return args
 
 
 def picklerunner_main():
-    logging.basicConfig(level=logging.INFO)
+    logging.basicConfig(level=logging.INFO, format="%(message)s", datefmt="[%X]")
     log = logging.getLogger(__name__)
-
     args = _parse_args()
+
+    # Set up the logging handler if requested.
+    if args.use_rich_log_handler:
+        try:
+            from rich.logging import RichHandler
+        except ImportError:
+            pass
+        else:
+            log.addHandler(RichHandler())
+
+    # Print the environment information if requested.
+    if args.print_environment_info:
+        log.critical("Python executable: " + sys.executable)
+        log.critical("Python version: " + sys.version)
+        log.critical("Python prefix: " + sys.prefix)
+        log.critical("Python path:")
+        for path in sys.path:
+            log.critical(f"  {path}")
+
+        log.critical("Environment variables:")
+        for key, value in os.environ.items():
+            log.critical(f"  {key}={value}")
+
+        log.critical("Command line arguments:")
+        for i, arg in enumerate(sys.argv):
+            log.critical(f"  {i}: {arg}")
+
+    # Unset the CUDA_VISIBLE_DEVICES environment variable if requested.
     if args.unset_cuda:
         log.critical("Unsetting CUDA_VISIBLE_DEVICES...")
         os.environ.pop("CUDA_VISIBLE_DEVICES", None)
