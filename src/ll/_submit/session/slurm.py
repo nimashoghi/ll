@@ -308,10 +308,16 @@ def _write_batch_script_to_file(
     logs_base.mkdir(exist_ok=True)
 
     if kwargs.get("output_file") is None:
-        kwargs["output_file"] = logs_base / "output_%j.out"
+        if job_array_n_jobs is None:
+            kwargs["output_file"] = logs_base / "output_%j.out"
+        else:
+            kwargs["output_file"] = logs_base / "output_%j_%a.out"
 
     if kwargs.get("error_file") is None:
-        kwargs["error_file"] = logs_base / "error_%j.err"
+        if job_array_n_jobs is None:
+            kwargs["error_file"] = logs_base / "error_%j.err"
+        else:
+            kwargs["error_file"] = logs_base / "error_%j_%a.err"
 
     with path.open("w") as f:
         f.write("#!/bin/bash\n")
