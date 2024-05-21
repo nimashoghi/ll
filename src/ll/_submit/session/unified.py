@@ -30,6 +30,13 @@ class GenericJobKwargs(TypedDict, total=False):
     queue: str
     """The queue to submit the job to. Same as `partition`."""
 
+    qos: str
+    """
+    The quality of service to submit the job to.
+
+    This corresponds to the "--qos" option in sbatch (only for Slurm).
+    """
+
     account: str
     """The account (or project) to charge the job to. Same as `project`."""
 
@@ -180,6 +187,8 @@ def _to_slurm(kwargs: GenericJobKwargs) -> slurm.SlurmJobKwargs:
         )
     ) is not None:
         slurm_kwargs["partition"] = partition
+    if (qos := kwargs.get("qos")) is not None:
+        slurm_kwargs["qos"] = qos
     if (output_file := kwargs.get("output_file")) is not None:
         slurm_kwargs["output_file"] = output_file
     if (error_file := kwargs.get("error_file")) is not None:

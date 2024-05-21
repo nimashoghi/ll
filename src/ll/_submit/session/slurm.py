@@ -60,6 +60,13 @@ class SlurmJobKwargs(TypedDict, total=False):
     Multiple partitions can be specified, and they will be combined using logical OR.
     """
 
+    qos: str
+    """
+    The quality of service to submit the job to.
+
+    This corresponds to the "--qos" option in sbatch.
+    """
+
     output_file: _Path
     """
     The file to write the job output to.
@@ -362,6 +369,9 @@ def _write_batch_script_to_file(
             if isinstance(partition, str):
                 partition = [partition]
             f.write(f"#SBATCH --partition={','.join(partition)}\n")
+
+        if (qos := kwargs.get("qos")) is not None:
+            f.write(f"#SBATCH --qos={qos}\n")
 
         if (memory_mb := kwargs.get("memory_mb")) is not None:
             f.write(f"#SBATCH --mem={memory_mb}\n")
