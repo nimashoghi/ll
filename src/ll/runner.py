@@ -494,6 +494,11 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
                 f.write(f'echo "Activating conda environment {sys.prefix}"\n')
                 f.write(f"conda activate {sys.prefix}\n\n")
 
+            # Print the environment information
+            if print_environment_info:
+                f.write('echo "Environment information"\n')
+                f.write("python -m ll._submit.print_environment_info\n\n")
+
             # Launch the sessions
             for command in commands:
                 f.write(f"{command}\n")
@@ -823,7 +828,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         scheduler: unified.Scheduler | Literal["auto"] = "auto",
         snapshot: bool | SnapshotConfig = False,
         reset_id: bool = False,
-        activate_conda: bool = True,
+        activate_venv: bool = True,
         print_environment_info: bool = True,
         env: Mapping[str, str] | None = None,
         **job_kwargs: Unpack[unified.GenericJobKwargs],
@@ -841,8 +846,8 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
             The base path to save snapshots to. If `True`, a default path will be used.
         reset_id : bool, optional
             Whether to reset the id of the runs before launching them.
-        activate_conda : bool, optional
-            Whether to activate the conda environment before running the jobs.
+        activate_venv : bool, optional
+            Whether to activate the virtual environment before running the jobs.
         print_environment_info : bool, optional
             Whether to print the environment information before starting each job.
         env : Mapping[str, str], optional
@@ -870,11 +875,16 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
             setup_commands.append(f"export PYTHONPATH={snapshot_str}:$PYTHONPATH")
 
         # Conda environment
-        if activate_conda:
+        if activate_venv:
             # Activate the conda environment
             setup_commands.append('eval "$(conda shell.bash hook)"')
             setup_commands.append(f"echo 'Activating conda environment {sys.prefix}'")
             setup_commands.append(f"conda activate {sys.prefix}")
+
+        # Print the environment information
+        if print_environment_info:
+            setup_commands.append("echo 'Environment information:'")
+            setup_commands.append("python -m ll._submit.print_environment_info")
 
         job_kwargs["environment"] = {
             **self.env,

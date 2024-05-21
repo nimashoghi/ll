@@ -253,20 +253,9 @@ def picklerunner_main():
 
     # Print the environment information if requested.
     if args.print_environment_info:
-        log.critical("Python executable: " + sys.executable)
-        log.critical("Python version: " + sys.version)
-        log.critical("Python prefix: " + sys.prefix)
-        log.critical("Python path:")
-        for path in sys.path:
-            log.critical(f"  {path}")
+        from ._submit.print_environment_info import print_environment_info
 
-        log.critical("Environment variables:")
-        for key, value in os.environ.items():
-            log.critical(f"  {key}={value}")
-
-        log.critical("Command line arguments:")
-        for i, arg in enumerate(sys.argv):
-            log.critical(f"  {i}: {arg}")
+        print_environment_info(log)
 
     # Unset the CUDA_VISIBLE_DEVICES environment variable if requested.
     if args.unset_cuda:
