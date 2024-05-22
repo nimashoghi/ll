@@ -3,22 +3,10 @@ import os
 import sys
 
 
-def print_environment_info(
-    log: logging.Logger | None = None,
-    use_rich_log_handler: bool = True,
-):
+def print_environment_info(log: logging.Logger | None = None):
     if log is None:
-        logging.basicConfig(level=logging.INFO, format="%(message)s", datefmt="[%X]")
+        logging.basicConfig(level=logging.INFO)
         log = logging.getLogger(__name__)
-
-        # Set up the logging handler if requested.
-        if use_rich_log_handler:
-            try:
-                from rich.logging import RichHandler
-            except ImportError:
-                pass
-            else:
-                log.addHandler(RichHandler())
 
     log.critical("Python executable: " + sys.executable)
     log.critical("Python version: " + sys.version)

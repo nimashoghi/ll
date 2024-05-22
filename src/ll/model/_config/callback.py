@@ -1,20 +1,22 @@
 from abc import ABC, abstractmethod
 from collections.abc import Callable
 from logging import getLogger
-from typing import Annotated, Any, Literal
+from typing import TYPE_CHECKING, Annotated, Any, Literal
 
-from lightning.pytorch.callbacks.callback import Callback
-from lightning.pytorch.callbacks.throughput_monitor import ThroughputMonitor
 from typing_extensions import override
 
 from ...config import Field, TypedConfig
+
+if TYPE_CHECKING:
+    from lightning.pytorch.callbacks.callback import Callback
+
 
 log = getLogger(__name__)
 
 
 class CallbackBaseConfig(TypedConfig, ABC):
     @abstractmethod
-    def construct_callback(self) -> Callback: ...
+    def construct_callback(self) -> "Callback": ...
 
 
 class ThroughputMonitorCallbackConfig(CallbackBaseConfig):
@@ -40,6 +42,8 @@ class ThroughputMonitorCallbackConfig(CallbackBaseConfig):
 
     @override
     def construct_callback(self):
+        from lightning.pytorch.callbacks.throughput_monitor import ThroughputMonitor
+
         return ThroughputMonitor(
             batch_size_fn=self.batch_size_fn,
             length_fn=self.length_fn,

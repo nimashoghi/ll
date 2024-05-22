@@ -160,6 +160,7 @@ def serialize_many(
         destdir,
         serialized_list,
         additional_command_parts,
+        print_environment_info=print_environment_info,
     )
 
 
@@ -221,12 +222,6 @@ def _parse_args():
         help="Unset the CUDA_VISIBLE_DEVICES environment variable",
     )
     parser.add_argument(
-        "--use-rich-log-handler",
-        action=argparse.BooleanOptionalAction,
-        help="Use the RichLogHandler (if available) instead of the default logging handler",
-        default=True,
-    )
-    parser.add_argument(
         "--print-environment-info",
         action=argparse.BooleanOptionalAction,
         help="Print the environment information before starting the session",
@@ -238,18 +233,9 @@ def _parse_args():
 
 
 def picklerunner_main():
-    logging.basicConfig(level=logging.INFO, format="%(message)s", datefmt="[%X]")
+    logging.basicConfig(level=logging.INFO)
     log = logging.getLogger(__name__)
     args = _parse_args()
-
-    # Set up the logging handler if requested.
-    if args.use_rich_log_handler:
-        try:
-            from rich.logging import RichHandler
-        except ImportError:
-            pass
-        else:
-            log.addHandler(RichHandler())
 
     # Print the environment information if requested.
     if args.print_environment_info:

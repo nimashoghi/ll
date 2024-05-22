@@ -362,6 +362,7 @@ class Trainer(LightningTrainer):
             "val_check_interval": config.trainer.val_check_interval,
             "check_val_every_n_epoch": config.trainer.check_val_every_n_epoch,
             "num_sanity_val_steps": config.trainer.num_sanity_val_steps,
+            "log_every_n_steps": config.trainer.log_every_n_steps,
             "inference_mode": config.trainer.inference_mode,
             "callbacks": [],
             "plugins": [],

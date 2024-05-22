@@ -1561,6 +1561,11 @@ class TrainerConfig(TypedConfig):
     Default: ``2``.
     """
 
+    log_every_n_steps: int | None = None
+    """How often to log within steps.
+    Default: ``50``.
+    """
+
     inference_mode: bool = True
     """Whether to use :func:`torch.inference_mode` (if `True`) or :func:`torch.no_grad` (if `False`) during evaluation (``validate``/``test``/``predict``).
     Default: ``True``.
@@ -1780,13 +1785,43 @@ class BaseConfig(TypedConfig):
         self,
         *,
         id: bool = True,
+        basic: bool = True,
         project_root: bool = True,
+        environment: bool = True,
+        meta: bool = True,
     ):
+        """
+        Reset the configuration object to its initial state.
+
+        Parameters:
+        - id (bool): If True, generate a new ID for the configuration object.
+        - basic (bool): If True, reset basic attributes like name, project, tags, and notes.
+        - project_root (bool): If True, reset the directory configuration to its initial state.
+        - environment (bool): If True, reset the environment configuration to its initial state.
+        - meta (bool): If True, reset the meta dictionary to an empty dictionary.
+
+        Returns:
+        - self: The updated configuration object.
+
+        """
         if id:
             self.id = self.generate_id()
 
+        if basic:
+            self.name = None
+            self.name_parts = []
+            self.project = None
+            self.tags = []
+            self.notes = []
+
         if project_root:
             self.directory = DirectoryConfig()
+
+        if environment:
+            self.environment = EnvironmentConfig()
+
+        if meta:
+            self.meta = {}
 
         return self
 
