@@ -8,20 +8,23 @@ def print_environment_info(log: logging.Logger | None = None):
         logging.basicConfig(level=logging.INFO)
         log = logging.getLogger(__name__)
 
-    log.critical("Python executable: " + sys.executable)
-    log.critical("Python version: " + sys.version)
-    log.critical("Python prefix: " + sys.prefix)
-    log.critical("Python path:")
+    log_message_lines: list[str] = []
+    log_message_lines.append("Python executable: " + sys.executable)
+    log_message_lines.append("Python version: " + sys.version)
+    log_message_lines.append("Python prefix: " + sys.prefix)
+    log_message_lines.append("Python path:")
     for path in sys.path:
-        log.critical(f"  {path}")
+        log_message_lines.append(f"  {path}")
 
-    log.critical("Environment variables:")
+    log_message_lines.append("Environment variables:")
     for key, value in os.environ.items():
-        log.critical(f"  {key}={value}")
+        log_message_lines.append(f"  {key}={value}")
 
-    log.critical("Command line arguments:")
+    log_message_lines.append("Command line arguments:")
     for i, arg in enumerate(sys.argv):
-        log.critical(f"  {i}: {arg}")
+        log_message_lines.append(f"  {i}: {arg}")
+
+    log.critical("\n".join(log_message_lines))
 
 
 if __name__ == "__main__":
