@@ -2,6 +2,7 @@ from . import actsave as actsave
 from . import model as model
 from . import nn as nn
 from . import typecheck as typecheck
+from ._snoop import snoop as snoop
 from .actsave import ActLoad as ActLoad
 from .actsave import ActSave as ActSave
 from .config import MISSING as MISSING
