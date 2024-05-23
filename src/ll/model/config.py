@@ -1548,7 +1548,7 @@ class TrainerConfig(TypedConfig):
     Default: ``1.0``.
     """
 
-    check_val_every_n_epoch: int | None = None
+    check_val_every_n_epoch: int | None = 1
     """Perform a validation loop every after every `N` training epochs. If ``None``,
     validation will be done solely based on the number of training batches, requiring ``val_check_interval``
     to be an integer value.

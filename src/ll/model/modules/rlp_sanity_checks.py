@@ -18,6 +18,10 @@ log = getLogger(__name__)
 
 
 def _on_train_start_callback(trainer: Trainer, pl_module: LightningModule):
+    # If we're in PL's "sanity check" mode, we don't need to run this check
+    if trainer.sanity_checking:
+        return
+
     config = cast(BaseConfig, pl_module.hparams)
     if config.trainer.reduce_lr_on_plateau_sanity_checks == "disable":
         return
