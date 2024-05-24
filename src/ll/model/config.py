@@ -22,6 +22,7 @@ from typing import (
 )
 
 import numpy as np
+import torch
 from lightning.fabric.plugins import CheckpointIO, ClusterEnvironment
 from lightning.fabric.plugins.precision.precision import _PRECISION_INPUT
 from lightning.pytorch.accelerators.accelerator import Accelerator
@@ -1885,3 +1886,13 @@ class BaseConfig(TypedConfig):
         BaseConfig._rng = np.random.default_rng(seed)
 
     # endregion
+
+    @classmethod
+    def from_checkpoint(cls, path: str | Path):
+        ckpt = torch.load(path)
+        if (hparams := ckpt.get("hyper_parameters")) is None:
+            raise ValueError(
+                "The checkpoint does not contain the hyper_parameters attribute. "
+                "Are you sure this is a valid Lightning checkpoint?"
+            )
+        return cls.from_dict(hparams)
