@@ -1,6 +1,7 @@
-from typing import Annotated, Literal, TypeAlias
+from collections.abc import Iterable
+from typing import Annotated, Any, Literal, TypeAlias
 
-import torch
+import torch.nn as nn
 
 from .config import Field, TypedConfig
 
@@ -27,7 +28,10 @@ class AdamWConfig(TypedConfig):
     amsgrad: bool = False
     """Whether to use the AMSGrad variant of this algorithm."""
 
-    def create_optimizer(self, parameters: torch.optim.optimizer.ParamsT):
+    def create_optimizer(
+        self,
+        parameters: Iterable[nn.Parameter] | Iterable[dict[str, Any]],
+    ):
         from torch.optim import AdamW
 
         return AdamW(
