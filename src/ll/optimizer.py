@@ -1,4 +1,4 @@
-from typing import Annotated, Literal
+from typing import Annotated, Literal, TypeAlias
 
 import torch
 
@@ -40,7 +40,7 @@ class AdamWConfig(TypedConfig):
         )
 
 
-OptimizerConfig: Annotated[
+OptimizerConfig: TypeAlias = Annotated[
     AdamWConfig,
     Field(discriminator="name"),
 ]
