@@ -775,10 +775,11 @@ class DirectoryConfig(TypedConfig):
     def resolve_subdirectory(
         self,
         run_id: str,
-        subdirectory: Literal["log", "stdio", "checkpoint", "activation", "profile"],
+        # subdirectory: Literal["log", "stdio", "checkpoint", "activation", "profile"],
+        subdirectory: str,
     ) -> Path:
         # The subdir will be $CWD/lltrainer/{id}/{log, stdio, checkpoint, activation}/
-        if (subdir := getattr(self, subdirectory)) is not None:
+        if (subdir := getattr(self, subdirectory, None)) is not None:
             assert isinstance(
                 subdir, Path
             ), f"Expected a Path for {subdirectory}, got {type(subdir)}"
@@ -1751,6 +1752,9 @@ class BaseConfig(TypedConfig):
         if with_new_id:
             c.id = BaseConfig.generate_id()
         return c
+
+    def subdirectory(self, subdirectory: str) -> Path:
+        return self.directory.resolve_subdirectory(self.id, subdirectory)
 
     # region Helper methods
     def with_project_root_(self, project_root: str | Path | os.PathLike) -> Self:
