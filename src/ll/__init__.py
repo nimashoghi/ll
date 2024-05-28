@@ -2,6 +2,7 @@ from . import actsave as actsave
 from . import callbacks as callbacks
 from . import model as model
 from . import nn as nn
+from . import optimizer as optimizer
 from . import typecheck as typecheck
 from ._snoop import snoop as snoop
 from .actsave import ActLoad as ActLoad
@@ -49,6 +50,7 @@ from .model import TrainerConfig as TrainerConfig
 from .model import WandbWatchConfig as WandbWatchConfig
 from .nn import TypedModuleDict as TypedModuleDict
 from .nn import TypedModuleList as TypedModuleList
+from .optimizer import OptimizerConfig as OptimizerConfig
 from .runner import Runner as Runner
 from .runner import SnapshotConfig as SnapshotConfig
 from .trainer import Trainer as Trainer
