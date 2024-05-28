@@ -5,7 +5,6 @@ from lightning.fabric.utilities.imports import _TORCH_GREATER_EQUAL_2_1
 
 
 def measure_flops(
-    model: torch.nn.Module,
     forward_fn: Callable[[], torch.Tensor],
     loss_fn: Callable[[torch.Tensor], torch.Tensor] | None = None,
     display: bool = True,
@@ -37,7 +36,7 @@ def measure_flops(
         raise ImportError("`measure_flops` requires PyTorch >= 2.1.")
     from .flop_counter import FlopCounterMode
 
-    flop_counter = FlopCounterMode(model, display=display)
+    flop_counter = FlopCounterMode(display=display)
     with flop_counter:
         if loss_fn is None:
             forward_fn()

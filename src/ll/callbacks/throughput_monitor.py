@@ -1,7 +1,9 @@
+import time
 from abc import ABC, abstractmethod
 from logging import getLogger
 from typing import TYPE_CHECKING, Any, Literal, Protocol, cast, runtime_checkable
 
+import torch
 from lightning.pytorch.callbacks.throughput_monitor import (
     ThroughputMonitor as _ThroughputMonitor,
 )
@@ -24,12 +26,6 @@ class CallbackBaseConfig(TypedConfig, ABC):
 
 
 @runtime_checkable
-class ThroughputMonitorableModule(Protocol):
-    @property
-    def flops_per_batch(self) -> int: ...
-
-
-@runtime_checkable
 class ThroughputMonitorableWithBatchSizeFnModule(Protocol):
     def throughput_monitor_compute_batch_size(self, batch: Any) -> int: ...
 
@@ -46,13 +42,6 @@ class ThroughputMonitorCallback(_ThroughputMonitor):
         self, trainer: "Trainer", pl_module: "LightningModule", stage: str
     ) -> None:
         super().setup(trainer, pl_module, stage)
-
-        # Make sure that the module implements the necessary methods.
-        if not isinstance(pl_module, ThroughputMonitorableModule):
-            raise ValueError(
-                f"Module {type(pl_module)} does not implement flops_per_batch. "
-                "See the ThroughputMonitorableModule protocol."
-            )
 
         # If batch_size_fn is not provided, we can use the default one.
         if self.batch_size_fn is None:
@@ -74,6 +63,48 @@ class ThroughputMonitorCallback(_ThroughputMonitor):
                 )
             else:
                 self.length_fn = pl_module.throughput_monitor_compute_length
+
+    @override
+    def _update(
+        self,
+        trainer: "Trainer",
+        pl_module: "LightningModule",
+        batch: Any,
+        iter_num: int,
+    ) -> None:
+        stage = trainer.state.stage
+        assert stage is not None
+        throughput = self._throughputs[stage]
+
+        if trainer.strategy.root_device.type == "cuda":
+            # required or else perf_counter() won't be correct
+            torch.cuda.synchronize()
+
+        elapsed = time.perf_counter() - self._t0s[stage]
+        if self.length_fn is not None:
+            with torch.inference_mode():
+                length = self.length_fn(batch)
+            self._lengths[stage] += length
+
+        if hasattr(pl_module, "flops_per_batch"):
+            flops_per_batch = pl_module.flops_per_batch
+        else:
+            rank_zero_warn(
+                "When using the `ThroughputMonitor`, you need to define a `flops_per_batch` attribute or property"
+                f" in {type(pl_module).__name__} to compute the FLOPs."
+            )
+            flops_per_batch = None
+
+        with torch.inference_mode():
+            batch_size = self.batch_size_fn(batch)
+        throughput.update(
+            time=elapsed,
+            batches=iter_num,
+            # this assumes that all iterations used the same batch size
+            samples=iter_num * batch_size,
+            lengths=None if self.length_fn is None else self._lengths[stage],
+            flops=flops_per_batch,
+        )
 
 
 class ThroughputMonitorConfig(CallbackBaseConfig):
