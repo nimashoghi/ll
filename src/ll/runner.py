@@ -486,7 +486,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
             # Let's detect the environment: If we're in a pixi environment,
             #   use pixi's shell hook instead.
             if "/.pixi/" in sys.prefix:
-                f.write('eval "$(pixi shell-hook)"\n')
+                f.write('eval "$(pixi shell-hook --shell bash)"\n')
                 f.write(f'echo "Activating pixi environment {sys.prefix}"\n\n')
             else:
                 # Otherwise, assume we're in a conda environment.
