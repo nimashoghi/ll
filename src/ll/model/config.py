@@ -38,9 +38,9 @@ from pydantic import DirectoryPath
 from typing_extensions import Self, TypedDict, TypeVar, override
 
 from ..actsave import ActSaveConfig
+from ..callbacks import CallbackConfig
 from ..config import Field, TypedConfig
 from ..util.slurm import parse_slurm_node_list
-from ._config.callback import CallbackConfig
 
 log = getLogger(__name__)
 

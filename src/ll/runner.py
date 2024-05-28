@@ -718,11 +718,12 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
                 return_value = self.local([(config, *args)], env=env, reset_id=True)
                 return_values.extend(return_value)
             except BaseException as e:
-                # print full traceback
                 log.critical(f"Error in run with {run_id=} ({run_name=}): {e}")
-                traceback.print_exc()
                 if stop_on_error:
                     raise
+                else:
+                    # print full traceback
+                    traceback.print_exc()
             finally:
                 # After each run, we should reset memory/caches
                 if reset_memory_caches:
