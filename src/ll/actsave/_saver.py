@@ -20,11 +20,15 @@ from ._config import ActSaveAsyncSaverConfig, ActSaveConfig, ActSaveSyncSaverCon
 
 log = getLogger(__name__)
 
-Value: TypeAlias = int | float | complex | bool | str | np.ndarray | torch.Tensor
-ValueOrLambda = Value | Callable[..., Value]
+Value: TypeAlias = int | float | complex | bool | str | np.ndarray | torch.Tensor | None
+ValueOrLambda: TypeAlias = Value | Callable[..., Value]
 
 
 def _to_numpy(activation: Value) -> np.ndarray:
+    # At this point, the activation should not be `None`
+    if activation is None:
+        raise ValueError("Activation should not be `None`")
+
     if isinstance(activation, np.ndarray):
         return activation
     if isinstance(activation, torch.Tensor):
@@ -76,7 +80,7 @@ class Activation:
         # Update the `name` to replace `/` with `::`
         self.name = self.name.replace("/", "::")
 
-    def __call__(self) -> np.ndarray:
+    def __call__(self) -> np.ndarray | None:
         # If we have a transformed value, we return it
         if self.transformed is not None:
             return self.transformed
@@ -89,6 +93,11 @@ class Activation:
         activation = unrwapped_ref
         if callable(unrwapped_ref):
             activation = unrwapped_ref()
+
+        # If `None`, we return here
+        if activation is None:
+            return None
+
         activation = apply_to_collection(activation, torch.Tensor, _to_numpy)
         activation = _to_numpy(activation)
 
@@ -111,7 +120,7 @@ class Activation:
         return [cls.from_value_or_lambda(k, v) for k, v in d.items()]
 
 
-Transform = Callable[[Activation], Mapping[str, ValueOrLambda]]
+Transform: TypeAlias = Callable[[Activation], Mapping[str, ValueOrLambda]]
 
 
 def _ensure_supported():
@@ -186,13 +195,21 @@ class _SaverBase(ABC):
         save_dir: Path,
     ) -> Path: ...
 
-    def on_new_step(self):
+    def write(self, verbose: bool = False):
         if self.actsave_config.write_mode != "explicit":
+            if verbose:
+                log.info(
+                    f"{self.actsave_config.write_mode=} is not 'explicit'. Skipping write."
+                )
             return
 
         try:
             # Write all activations to disk
             for activation, save_dir in self._acts_to_save:
+                if verbose:
+                    # Get the path relative to `self._save_dir`
+                    rel_path = save_dir.relative_to(self._save_dir)
+                    log.info(f"Writing activation to {str(rel_path)}")
                 self.save_to_file(activation, save_dir)
         finally:
             # Clear the activations
@@ -205,19 +222,24 @@ class _SaverBase(ABC):
         save_dir = self._save_dir / file_name
         save_dir.mkdir(exist_ok=True, parents=True)
 
+        # Run the activation's `__call__` method to get the activation
+        # Return early if the activation is `None`
+        if (activation_value := activation()) is None:
+            return
+
         # We condition on the write mode
         match self.actsave_config.write_mode:
             case "implicit":
                 # This mode automatically saves all logged activations immediately after they are logged using `ActSave({...})`.
                 # Save the activation to a file
-                self.save_to_file(activation(), save_dir)
+                self.save_to_file(activation_value, save_dir)
             case "explicit":
                 # This mode stores activations in memory until they are explicitly saved using `ActSave.write()`.
                 # If the activations are not explicitly saved by the beginning of the next step, they are discarded. They can
                 # also be discarded explicitly using `ActSave.discard()`. This mode is useful for saving activations only when,
                 # e.g. when the training loss ends up being too high or the gradient explodes. This mode is the recommended
                 # mode for saving activations.
-                self._acts_to_save.append((activation(), save_dir))
+                self._acts_to_save.append((activation_value, save_dir))
             case _:
                 assert_never(self.actsave_config.write_mode)
 
@@ -237,10 +259,13 @@ class _SaverBase(ABC):
 
         for activation in activations:
             # Make sure name matches at least one filter if filters are specified
-            if self._filters is None or any(
-                fnmatch.fnmatch(activation.name, f) for f in self._filters
+            if self._filters is not None and all(
+                not fnmatch.fnmatch(activation.name, f) for f in self._filters
             ):
-                self._save_activation(activation)
+                continue
+
+            # Save the current activation
+            self._save_activation(activation)
 
             # If we have any transforms, we need to apply them
             if self._transforms:
@@ -355,6 +380,15 @@ class ActSaveProvider:
         filters: list[str] | None = None,
         transforms: list[tuple[str, Transform]] | None = None,
     ):
+        """
+        Initializes the saver with the given configuration and save directory.
+
+        Args:
+            config (ActSaveConfig): The configuration for actsave.
+            save_dir (Path): The directory where the saved files will be stored.
+            filters (list[str] | None, optional): A list of filters to apply to the saved data. Defaults to None.
+            transforms (list[tuple[str, Transform]] | None, optional): A list of transforms to apply to the saved data. Defaults to None.
+        """
         if self._saver is None:
             # Create the actsave directory
             save_dir.mkdir(parents=True, exist_ok=True)
@@ -383,6 +417,16 @@ class ActSaveProvider:
         filters: list[str] | None = None,
         transforms: list[tuple[str, Transform]] | None = None,
     ):
+        """
+        Context manager that enables the actsave functionality with the specified configuration.
+
+        Args:
+            config (ActSaveConfig): The configuration for actsave.
+            save_dir (Path): The directory where the saved files will be stored.
+            filters (list[str] | None, optional): A list of filters to apply to the saved data. Defaults to None.
+            transforms (list[tuple[str, Transform]] | None, optional): A list of transforms to apply to the saved data. Defaults to None.
+
+        """
         prev = self._saver
         self.initialize(config, save_dir, filters=filters, transforms=transforms)
         try:
@@ -399,6 +443,12 @@ class ActSaveProvider:
 
     @contextlib.contextmanager
     def context(self, label: str):
+        """
+        A context manager that adds a label to the current context.
+
+        Args:
+            label (str): The label for the context.
+        """
         if torch.jit.is_scripting():
             yield
             return
@@ -428,10 +478,32 @@ class ActSaveProvider:
         acts: dict[str, ValueOrLambda] | None = None,
         /,
         **kwargs: ValueOrLambda,
-    ): ...
+    ):
+        """
+        Saves the activations to disk.
+
+        Args:
+            acts (dict[str, ValueOrLambda] | None, optional): A dictionary of acts. Defaults to None.
+            **kwargs (ValueOrLambda): Additional keyword arguments.
+
+        Returns:
+            None
+
+        """
+        ...
 
     @overload
-    def __call__(self, acts: Callable[[], dict[str, ValueOrLambda]], /): ...
+    def __call__(self, acts: Callable[[], dict[str, ValueOrLambda]], /):
+        """
+        Perform the specified actions and save the results.
+
+        Args:
+            acts: A callable that returns a dictionary of actions to be performed.
+
+        Returns:
+            None
+        """
+        ...
 
     def __call__(
         self,
@@ -453,12 +525,15 @@ class ActSaveProvider:
 
     save = __call__
 
-    def _start_stage(self):
+    def write(self, verbose: bool = False):
         # If we have a saver, we should alert it that we're starting a new stage.
         if (saver := self._saver) is None:
             return
 
-        saver.on_new_step()
+        saver.write(verbose=verbose)
+
+    def _start_stage(self):
+        self.write()
 
 
 ActSave = ActSaveProvider()
