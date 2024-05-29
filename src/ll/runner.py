@@ -488,7 +488,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
             # Activate the environment
             if activate_venv:
                 f.write("echo 'Activating environment'\n")
-                f.write('eval "$(python -m ll._submit.shell_hook)"\n')
+                f.write(_shell_hook())
 
             # Print the environment information
             if print_environment_info:
@@ -883,7 +883,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         if activate_venv:
             # Activate the conda environment
             setup_commands.append("echo 'Activating environment'")
-            setup_commands.append('eval "$(python -m ll._submit.shell_hook)"')
+            setup_commands.append(_shell_hook())
 
         # Print the environment information
         if print_environment_info:
@@ -940,3 +940,13 @@ def _runner_main(
     return_values = runner.local([(config, *args)])
     assert len(return_values) == 1
     return return_values[0]
+
+
+def _shell_hook():
+    # Let's detect the environment: If we're in a pixi environment,
+    #   use pixi's shell hook instead.
+    if "/.pixi/" in sys.prefix:
+        return 'eval "$(pixi shell-hook --shell bash)"'
+
+    # Otherwise, assume we're in a conda environment.
+    return f'eval "$(conda shell.bash hook)" && conda activate {sys.prefix}'
