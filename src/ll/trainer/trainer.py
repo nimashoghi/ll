@@ -574,10 +574,7 @@ class Trainer(LightningTrainer):
             return
 
         # Enter actsave context
-        with ActSave.enabled(
-            actsave_config,
-            actsave_config.resolve_save_dir(hparams),
-        ):
+        with ActSave.enabled(actsave_config.resolve_save_dir(hparams)):
             yield
 
     @override

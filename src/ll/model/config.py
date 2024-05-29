@@ -37,7 +37,6 @@ from lightning.pytorch.strategies.strategy import Strategy
 from pydantic import DirectoryPath
 from typing_extensions import Self, TypedDict, TypeVar, override
 
-from ..actsave import ActSaveConfig
 from ..callbacks import CallbackConfig
 from ..config import Field, TypedConfig
 from ..util.slurm import parse_slurm_node_list
@@ -1417,6 +1416,26 @@ class EarlyStoppingConfig(TypedConfig):
             min_lr=self.min_lr,
             strict=self.strict,
         )
+
+
+class ActSaveConfig(TypedConfig):
+    enabled: bool = True
+    """Enable activation saving."""
+
+    auto_save_logged_metrics: bool = False
+    """If enabled, will automatically save logged metrics (using `LightningModule.log`) as activations."""
+
+    save_dir: Path | None = None
+    """Directory to save activations to. If None, will use the activation directory set in `config.directory`."""
+
+    def __bool__(self):
+        return self.enabled
+
+    def resolve_save_dir(self, root_config: "BaseConfig"):
+        if self.save_dir is not None:
+            return self.save_dir
+
+        return root_config.directory.resolve_subdirectory(root_config.id, "activation")
 
 
 class TrainerConfig(TypedConfig):

@@ -1,12 +1,9 @@
 from typing_extensions import TypeAlias
 
-from ..actsave._config import ActSaveAsyncSaverConfig as ActSaveAsyncSaverConfig
-from ..actsave._config import ActSaveConfig as ActSaveConfig
-from ..actsave._config import ActSaveSyncSaverConfig as ActSaveSyncSaverConfig
-from ..actsave._config import ActSaveTransformConfig as ActSaveTransformConfig
 from .base import Base as Base
 from .base import LightningDataModuleBase as LightningDataModuleBase
 from .base import LightningModuleBase as LightningModuleBase
+from .config import ActSaveConfig as ActSaveConfig
 from .config import BaseConfig as BaseConfig
 from .config import BaseLoggerConfig as BaseLoggerConfig
 from .config import BaseProfilerConfig as BaseProfilerConfig
