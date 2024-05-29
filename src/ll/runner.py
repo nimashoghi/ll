@@ -304,6 +304,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         delete_run_script_after_launch: bool = False,
         prologue: Sequence[str] | None = None,
         env: Mapping[str, str] | None = None,
+        activate_venv: bool = True,
         print_environment_info: bool = True,
     ):
         """
@@ -329,6 +330,8 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
             A list of commands to run at the beginning of the shell script.
         env : Mapping[str, str], optional
             Additional environment variables to set.
+        activate_venv : bool, optional
+            Whether to activate the virtual environment before running the jobs.
         print_environment_info : bool, optional
             Whether to print the environment information before starting each job.
 
@@ -483,16 +486,9 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
                 f.write(f"export {self.SNAPSHOT_ENV_NAME}={snapshot_str}\n\n")
 
             # Activate the environment
-            # Let's detect the environment: If we're in a pixi environment,
-            #   use pixi's shell hook instead.
-            if "/.pixi/" in sys.prefix:
-                f.write('eval "$(pixi shell-hook --shell bash)"\n')
-                f.write(f'echo "Activating pixi environment {sys.prefix}"\n\n')
-            else:
-                # Otherwise, assume we're in a conda environment.
-                f.write('eval "$(conda shell.bash hook)"\n')
-                f.write(f'echo "Activating conda environment {sys.prefix}"\n')
-                f.write(f"conda activate {sys.prefix}\n\n")
+            if activate_venv:
+                f.write("echo 'Activating environment'\n")
+                f.write('eval "$(python -m ll._submit.shell_hook)"\n')
 
             # Print the environment information
             if print_environment_info:
@@ -544,6 +540,8 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         env: Mapping[str, str] | None = None,
         separate_session_per_task: bool = True,
         throw_on_gpu_index_error: bool = True,
+        activate_venv: bool = True,
+        print_environment_info: bool = True,
     ):
         """
         Launches len(sessions) local runs in different environments using `screen`.
@@ -574,6 +572,10 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
             If `True`, each GPU task will be run in a separate screen session with the `LOCAL_RANK` environment variable set to the task index.
         throw_on_gpu_index_error: bool, optional
             If `True`, an error will be raised if an invalid GPU index is provided.
+        activate_venv : bool, optional
+            Whether to activate the virtual environment before running the jobs.
+        print_environment_info : bool, optional
+            Whether to print the environment information before starting each job.
 
         Returns
         -------
@@ -658,6 +660,8 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
             snapshot=snapshot,
             prologue=prologue,
             env=env,
+            activate_venv=activate_venv,
+            print_environment_info=print_environment_info,
         )
 
     @staticmethod
@@ -878,9 +882,8 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         # Conda environment
         if activate_venv:
             # Activate the conda environment
-            setup_commands.append('eval "$(conda shell.bash hook)"')
-            setup_commands.append(f"echo 'Activating conda environment {sys.prefix}'")
-            setup_commands.append(f"conda activate {sys.prefix}")
+            setup_commands.append("echo 'Activating environment'")
+            setup_commands.append('eval "$(python -m ll._submit.shell_hook)"')
 
         # Print the environment information
         if print_environment_info:
