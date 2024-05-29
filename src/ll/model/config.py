@@ -25,7 +25,7 @@ import numpy as np
 import torch
 from lightning.fabric.plugins import CheckpointIO, ClusterEnvironment
 from lightning.fabric.plugins.precision.precision import _PRECISION_INPUT
-from lightning.pytorch.accelerators.accelerator import Accelerator
+from lightning.pytorch.accelerators import Accelerator
 from lightning.pytorch.callbacks.callback import Callback
 from lightning.pytorch.callbacks.checkpoint import Checkpoint
 from lightning.pytorch.loggers import Logger
@@ -683,9 +683,18 @@ class PluginConfigProtocol(Protocol[TPlugin]):
 
 
 @runtime_checkable
+class AcceleratorConfigProtocol(Protocol):
+    def construct_accelerator(self) -> Accelerator: ...
+
+
+@runtime_checkable
 class StrategyConfigProtocol(Protocol):
     def construct_strategy(self) -> Strategy: ...
 
+
+AcceleratorLiteral: TypeAlias = Literal[
+    "cpu", "gpu", "tpu", "ipu", "hpu", "mps", "auto"
+]
 
 StrategyLiteral: TypeAlias = Literal[
     "auto",
@@ -1582,6 +1591,12 @@ class TrainerConfig(TypedConfig):
     sampler was already added, Lightning will not replace the existing one. For iterable-style datasets,
     we don't do this automatically.
     Default: ``True``.
+    """
+
+    accelerator: AcceleratorConfigProtocol | AcceleratorLiteral | None = None
+    """Supports passing different accelerator types ("cpu", "gpu", "tpu", "ipu", "hpu", "mps", "auto")
+    as well as custom accelerator instances.
+    Default: ``"auto"``.
     """
 
     strategy: StrategyConfigProtocol | StrategyLiteral | None = None

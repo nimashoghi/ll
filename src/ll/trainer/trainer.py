@@ -22,6 +22,7 @@ from typing_extensions import Unpack, assert_never, override
 
 from ..actsave import ActSave, ActSaveCallback
 from ..model.config import (
+    AcceleratorConfigProtocol,
     BaseConfig,
     BaseProfilerConfig,
     CheckpointLoadingConfig,
@@ -443,6 +444,11 @@ class Trainer(LightningTrainer):
             use_distributed_sampler := config.trainer.use_distributed_sampler
         ) is not None:
             _update_kwargs(use_distributed_sampler=use_distributed_sampler)
+
+        if (accelerator := config.trainer.accelerator) is not None:
+            if isinstance(accelerator, AcceleratorConfigProtocol):
+                accelerator = accelerator.construct_accelerator()
+            _update_kwargs(accelerator=accelerator)
 
         if (strategy := config.trainer.strategy) is not None:
             if isinstance(strategy, StrategyConfigProtocol):
