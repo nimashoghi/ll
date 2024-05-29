@@ -1,4 +1,5 @@
 import argparse
+import contextlib
 import logging
 import os
 import sys
@@ -227,51 +228,78 @@ def _parse_args():
         help="Print the environment information before starting the session",
         default=True,
     )
+    parser.add_argument(
+        "--env",
+        "-e",
+        help="Set the environment variable. Format: KEY=VALUE",
+        action="append",
+    )
 
     args = parser.parse_args()
     return args
 
 
+@contextlib.contextmanager
+def _set_env(key: str, value: str):
+    original_value = os.environ.get(key)
+    os.environ[key] = value
+    try:
+        yield
+    finally:
+        if original_value is not None:
+            os.environ[key] = original_value
+        else:
+            del os.environ[key]
+
+
 def picklerunner_main():
-    logging.basicConfig(level=logging.INFO)
-    log = logging.getLogger(__name__)
-    args = _parse_args()
+    with contextlib.ExitStack() as stack:
+        logging.basicConfig(level=logging.INFO)
+        log = logging.getLogger(__name__)
+        args = _parse_args()
 
-    # Print the environment information if requested.
-    if args.print_environment_info:
-        from ._submit.print_environment_info import print_environment_info
+        # Print the environment information if requested.
+        if args.print_environment_info:
+            from ._submit.print_environment_info import print_environment_info
 
-        print_environment_info(log)
+            print_environment_info(log)
 
-    # Unset the CUDA_VISIBLE_DEVICES environment variable if requested.
-    if args.unset_cuda:
-        log.critical("Unsetting CUDA_VISIBLE_DEVICES...")
-        os.environ.pop("CUDA_VISIBLE_DEVICES", None)
-        for i in range(40):
-            os.environ.pop(f"CUDA_VISIBLE_DEVICES{i}", None)
+        # Set the environment variables if requested.
+        if args.env:
+            for env in args.env:
+                key, value = env.split("=", 1)
+                log.critical(f"Setting {key}={value}...")
+                stack.enter_context(_set_env(key, value))
 
-    paths = list(_resolve_paths(args.paths))
-    if not paths:
-        raise ValueError("No paths provided")
+        # Unset the CUDA_VISIBLE_DEVICES environment variable if requested.
+        if args.unset_cuda:
+            log.critical("Unsetting CUDA_VISIBLE_DEVICES...")
+            os.environ.pop("CUDA_VISIBLE_DEVICES", None)
+            for i in range(40):
+                os.environ.pop(f"CUDA_VISIBLE_DEVICES{i}", None)
 
-    # Sort by the job index.
-    paths = sorted(paths, key=lambda path: int(path.stem))
+        paths = list(_resolve_paths(args.paths))
+        if not paths:
+            raise ValueError("No paths provided")
 
-    # Make sure all paths exist
-    for path in paths:
-        if not path.exists():
-            raise FileNotFoundError(f"Path {path} does not exist")
+        # Sort by the job index.
+        paths = sorted(paths, key=lambda path: int(path.stem))
 
-    for i, path in enumerate(paths):
-        log.critical(f"Executing #{i}: {path=}...")
-        # The result should be saved to {path_without_extension}.result.pkl
-        result = execute_single(path)
-        result_path = path.with_suffix(".result.pkl")
-        log.critical(f"Saving result to {result_path}...")
-        with result_path.open("wb") as file:
-            pickle.dump(result, file)
+        # Make sure all paths exist
+        for path in paths:
+            if not path.exists():
+                raise FileNotFoundError(f"Path {path} does not exist")
 
-    log.critical("Done!")
+        for i, path in enumerate(paths):
+            log.critical(f"Executing #{i}: {path=}...")
+            # The result should be saved to {path_without_extension}.result.pkl
+            result = execute_single(path)
+            result_path = path.with_suffix(".result.pkl")
+            log.critical(f"Saving result to {result_path}...")
+            with result_path.open("wb") as file:
+                pickle.dump(result, file)
+
+        log.critical("Done!")
 
 
 if __name__ == "__main__":
