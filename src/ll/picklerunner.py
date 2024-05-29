@@ -73,8 +73,8 @@ class SerializedMultiFunction(PathLike):
     def to_bash_command(
         self,
         job_index_variable: str,
-        environment: Mapping[str, str] | None = None,
         python_executable: str | None = None,
+        environment: Mapping[str, str] | None = None,
     ) -> list[str]:
         if python_executable is None:
             python_executable = sys.executable

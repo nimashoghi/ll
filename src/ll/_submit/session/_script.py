@@ -21,21 +21,19 @@ def write_helper_script(
         if python_executable is None:
             python_executable = sys.executable
 
-        command_parts: list[str] = []
+        if environment:
+            for key, value in environment.items():
+                f.write(f"export {key}={value}\n")
+            f.write("\n")
 
         if setup_commands:
             for setup_command in setup_commands:
                 f.write(f"{setup_command}\n")
+            f.write("\n")
 
-        command_parts.extend(
-            function.to_bash_command(
-                job_index_variable,
-                environment,
-                python_executable,
-            )
+        command = " ".join(
+            function.to_bash_command(job_index_variable, python_executable)
         )
-
-        command = " ".join(command_parts)
         f.write(f"{command}\n")
 
     if chmod:
