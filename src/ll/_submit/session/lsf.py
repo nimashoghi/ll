@@ -9,6 +9,7 @@ from typing import Any
 from typing_extensions import TypeAlias, TypedDict, TypeVarTuple, Unpack
 
 from ._output import SubmitOutput
+from ._script import helper_script_to_command, write_helper_script
 
 log = getLogger(__name__)
 
@@ -164,6 +165,13 @@ class LSFJobKwargs(TypedDict, total=False):
     A command to prefix the job command with.
 
     This is used to add commands like `jsrun` to the job command.
+    """
+
+    helper_script_execute_command_template: str
+    """
+    The template for the command to execute the helper script.
+
+    Default: `bash {/path/to/helper.sh}`.
     """
 
     # Our own custom options
@@ -365,17 +373,6 @@ def _write_batch_script_to_file(
 
         f.write("\n")
 
-        for key, value in kwargs.get("environment", {}).items():
-            f.write(f"export {key}={value}\n")
-
-        f.write("\n")
-
-        setup_commands: list[str] = []
-        setup_commands.extend(kwargs.get("setup_commands", []))
-        setup_commands.extend(_unset_cuda_visible_devices_setup_commands(kwargs))
-        for setup_command in setup_commands:
-            f.write(f"{setup_command}\n")
-
         if kwargs.get("load_job_step_viewer", False):
             f.write("\n")
             f.write("module load job-step-viewer\n")
@@ -438,15 +435,25 @@ def to_array_batch_script(
     if kwargs.get("unset_cuda_visible_devices", False):
         additional_command_parts.append("--unset-cuda")
 
-    command = serialize_many(
+    serialized_command = serialize_many(
         destdir,
         callable,
         [(args, {}) for args in args_list],
         start_idx=1,  # LSF job indices are 1-based
         additional_command_parts=additional_command_parts,
         print_environment_info=print_environment_info,
-    ).to_bash_command(job_index_variable)
-    command = " ".join(command)
+    )
+    helper_path = write_helper_script(
+        destdir,
+        serialized_command,
+        kwargs.get("environment", {}),
+        kwargs.get("setup_commands", []),
+        job_index_variable,
+        None,
+    )
+    command = helper_script_to_command(
+        helper_path, kwargs.get("helper_script_execute_command_template")
+    )
 
     script_path = _write_batch_script_to_file(
         dest / "launch.sh",

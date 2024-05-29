@@ -10,6 +10,7 @@ from typing import Any, Literal
 from typing_extensions import TypeAlias, TypedDict, TypeVarTuple, Unpack
 
 from ._output import SubmitOutput
+from ._script import helper_script_to_command, write_helper_script
 
 log = getLogger(__name__)
 
@@ -233,6 +234,13 @@ class SlurmJobKwargs(TypedDict, total=False):
     This is used to add commands like `srun` to the job command.
     """
 
+    helper_script_execute_command_template: str
+    """
+    The template for the command to execute the helper script.
+
+    Default: `bash {/path/to/helper.sh}`.
+    """
+
     srun_flags: str | Sequence[str]
     """
     The flags to pass to the `srun` command.
@@ -416,18 +424,6 @@ def _write_batch_script_to_file(
 
         f.write("\n")
 
-        for key, value in kwargs.get("environment", {}).items():
-            f.write(f"export {key}={value}\n")
-
-        f.write("\n")
-
-        setup_commands: list[str] = []
-        setup_commands.extend(kwargs.get("setup_commands", []))
-        for setup_command in setup_commands:
-            f.write(f"{setup_command}\n")
-
-        f.write("\n")
-
         if (command_prefix := kwargs.get("command_prefix")) is not None:
             command = " ".join(
                 x_stripped
@@ -515,14 +511,24 @@ def to_array_batch_script(
     destdir = dest / "fns"
     destdir.mkdir(exist_ok=True)
 
-    command = serialize_many(
+    serialized_command = serialize_many(
         destdir,
         callable,
         [(args, {}) for args in args_list],
         start_idx=1,  # Slurm job indices are 1-based
         print_environment_info=print_environment_info,
-    ).to_bash_command(job_index_variable)
-    command = " ".join(command)
+    )
+    helper_path = write_helper_script(
+        destdir,
+        serialized_command,
+        kwargs.get("environment", {}),
+        kwargs.get("setup_commands", []),
+        job_index_variable,
+        None,
+    )
+    command = helper_script_to_command(
+        helper_path, kwargs.get("helper_script_execute_command_template")
+    )
 
     script_path = _write_batch_script_to_file(
         dest / "launch.sh",

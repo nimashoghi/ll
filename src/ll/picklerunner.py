@@ -73,6 +73,7 @@ class SerializedMultiFunction(PathLike):
     def to_bash_command(
         self,
         job_index_variable: str,
+        environment: Mapping[str, str] | None = None,
         python_executable: str | None = None,
     ) -> list[str]:
         if python_executable is None:
@@ -84,6 +85,10 @@ class SerializedMultiFunction(PathLike):
         command.append(python_executable)
         command.append("-m")
         command.append(__name__)
+        if environment:
+            for key, value in environment.items():
+                command.append("--env")
+                command.append(f"{key}={value}")
         if self.print_environment_info:
             command.append("--print-environment-info")
         else:
@@ -102,6 +107,7 @@ class SerializedMultiFunction(PathLike):
         num_workers: int,
         worker_id: int,
         python_executable: str,
+        environment: Mapping[str, str] | None = None,
     ) -> list[str]:
         assert 0 <= worker_id < num_workers, f"{worker_id=} {num_workers=}"
 
@@ -116,6 +122,10 @@ class SerializedMultiFunction(PathLike):
         command.append(python_executable)
         command.append("-m")
         command.append(__name__)
+        if environment:
+            for key, value in environment.items():
+                command.append("--env")
+                command.append(f"{key}={value}")
         command.extend(all_files)
 
         if self._additional_command_parts:
@@ -127,12 +137,15 @@ class SerializedMultiFunction(PathLike):
         self,
         num_workers: int,
         python_executable: str | None = None,
+        environment: Mapping[str, str] | None = None,
     ) -> list[list[str]]:
         if python_executable is None:
             python_executable = sys.executable
 
         return [
-            self._to_bash_command_sequential_worker(num_workers, i, python_executable)
+            self._to_bash_command_sequential_worker(
+                num_workers, i, python_executable, environment
+            )
             for i in range(num_workers)
         ]
 

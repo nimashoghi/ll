@@ -110,6 +110,13 @@ class GenericJobKwargs(TypedDict, total=False):
     signal: signal.Signals
     """The signal that will be sent to the job when it is time to stop it."""
 
+    helper_script_execute_command_template: str
+    """
+    The template for the command to execute the helper script.
+
+    Default: `bash {/path/to/helper.sh}`.
+    """
+
     additional_slurm_options: slurm.SlurmJobKwargs
     """Additional keyword arguments for Slurm jobs."""
 
