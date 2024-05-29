@@ -21,7 +21,7 @@ from lightning.pytorch.utilities.types import _EVALUATE_OUTPUT, _PREDICT_OUTPUT
 from typing_extensions import Unpack, assert_never, override
 
 from ..actsave import ActSave, ActSaveCallback
-from ..log import init_logging
+from ..log import init_python_logging
 from ..model.config import (
     AcceleratorConfigProtocol,
     BaseConfig,
@@ -86,7 +86,7 @@ class Trainer(LightningTrainer):
         """
         config = root_config.trainer.python_logging
 
-        return init_logging(
+        return init_python_logging(
             lovely_tensors=config.lovely_tensors,
             lovely_numpy=config.lovely_numpy,
             rich=config.rich,

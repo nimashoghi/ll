@@ -11,7 +11,7 @@ def _default_log_handlers(log_save_dir: Path):
     return logging.FileHandler(log_file)
 
 
-def init_logging(
+def init_python_logging(
     *,
     lovely_tensors: bool = False,
     lovely_numpy: bool = False,
@@ -58,4 +58,20 @@ def init_logging(
         format="%(message)s",
         datefmt="[%X]",
         handlers=log_handlers,
+    )
+
+
+def pretty(
+    *,
+    lovely_tensors: bool = True,
+    lovely_numpy: bool = True,
+    log_level: int | str | None = logging.INFO,
+    log_save_dir: Path | None = None,
+):
+    init_python_logging(
+        lovely_tensors=lovely_tensors,
+        lovely_numpy=lovely_numpy,
+        rich=True,
+        log_level=log_level,
+        log_save_dir=log_save_dir,
     )
