@@ -16,6 +16,7 @@ from .config import PrivateAttr as PrivateAttr
 from .config import TypedConfig as TypedConfig
 from .data import dataset_transform as dataset_transform
 from .exception import SkipBatch as SkipBatch
+from .log import init_logging as init_logging
 from .model import ActSaveConfig as ActSaveConfig
 from .model import Base as Base
 from .model import BaseConfig as BaseConfig

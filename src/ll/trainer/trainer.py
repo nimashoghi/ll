@@ -21,13 +21,13 @@ from lightning.pytorch.utilities.types import _EVALUATE_OUTPUT, _PREDICT_OUTPUT
 from typing_extensions import Unpack, assert_never, override
 
 from ..actsave import ActSave, ActSaveCallback
+from ..log import init_logging
 from ..model.config import (
     AcceleratorConfigProtocol,
     BaseConfig,
     BaseProfilerConfig,
     CheckpointLoadingConfig,
     LightningTrainerKwargs,
-    RunnerOutputSaveConfig,
     StrategyConfigProtocol,
 )
 from ..util import seed
@@ -48,20 +48,10 @@ def _finalize_loggers(loggers: Sequence[Logger]):
         logger.finish()
 
 
-def _stdio_log_dir(
-    root_config: BaseConfig,
-    config: RunnerOutputSaveConfig,
-):
-    """
-    Save the output directory for the runner.
+def _stdio_log_dir(root_config: BaseConfig):
+    if (config := root_config.runner.save_output) is None or not config.enabled:
+        return None
 
-    Args:
-        root_config (BaseConfig): The root configuration object.
-        config (RunnerOutputSaveConfig): The configuration object for saving the output.
-
-    Returns:
-        Path: The resolved output directory path.
-    """
     if not (dirpath := config.dirpath):
         dirpath = root_config.directory.resolve_subdirectory(root_config.id, "stdio")
 
@@ -71,30 +61,6 @@ def _stdio_log_dir(
     dirpath.mkdir(parents=True, exist_ok=True)
 
     return dirpath
-
-
-def _default_log_handlers(root_config: BaseConfig):
-    """
-    Returns a generator of log handlers based on the provided root configuration.
-
-    Args:
-        root_config (BaseConfig): The root configuration object.
-
-    Yields:
-        logging.Handler: A log handler object.
-
-    """
-    # Implementation goes here
-    if (config := root_config.runner.save_output) is None or not config.enabled:
-        return
-
-    # Get the directory path
-    dirpath = _stdio_log_dir(root_config, config)
-
-    # Capture the logs to `dirpath`/log.log
-    log_file = dirpath / "log.log"
-    log_file.touch(exist_ok=True)
-    yield logging.FileHandler(log_file)
 
 
 class Trainer(LightningTrainer):
@@ -120,42 +86,12 @@ class Trainer(LightningTrainer):
         """
         config = root_config.trainer.python_logging
 
-        if config.lovely_tensors:
-            try:
-                import lovely_tensors
-
-                lovely_tensors.monkey_patch()
-            except ImportError:
-                log.warning(
-                    "Failed to import lovely-tensors. Ignoring pretty PyTorch tensor formatting"
-                )
-
-        if config.lovely_numpy:
-            try:
-                import lovely_numpy
-
-                lovely_numpy.set_config(repr=lovely_numpy.lovely)
-            except ImportError:
-                log.warning(
-                    "Failed to import lovely-numpy. Ignoring pretty numpy array formatting"
-                )
-
-        log_handlers: list[logging.Handler] = [*_default_log_handlers(root_config)]
-        if config.rich:
-            try:
-                from rich.logging import RichHandler  # type: ignore
-
-                log_handlers.append(RichHandler())
-            except ImportError:
-                log.warning(
-                    "Failed to import rich. Falling back to default Python logging."
-                )
-
-        logging.basicConfig(
-            level=config.log_level,
-            format="%(message)s",
-            datefmt="[%X]",
-            handlers=log_handlers,
+        return init_logging(
+            lovely_tensors=config.lovely_tensors,
+            lovely_numpy=config.lovely_numpy,
+            rich=config.rich,
+            log_level=config.log_level,
+            log_save_dir=_stdio_log_dir(root_config),
         )
 
     @classmethod
