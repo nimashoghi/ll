@@ -74,8 +74,8 @@ class Activation:
     transformed: np.ndarray | None = None
 
     def __post_init__(self):
-        # Update the `name` to replace `/` with `::`
-        self.name = self.name.replace("/", "::")
+        # Update the `name` to replace `/` with `.`
+        self.name = self.name.replace("/", ".")
 
     def __call__(self) -> np.ndarray | None:
         # If we have a transformed value, we return it

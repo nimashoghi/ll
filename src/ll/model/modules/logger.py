@@ -129,7 +129,7 @@ class LoggerModuleMixin(mixin_base_type(LightningModule)):
 
         ActSave.save(
             {
-                f"logger::{name}": lambda: value.compute()
+                f"logger.{name}": lambda: value.compute()
                 if isinstance(value, torchmetrics.Metric)
                 else value
             }

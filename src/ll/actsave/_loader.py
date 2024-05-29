@@ -1,3 +1,4 @@
+import pprint
 from dataclasses import dataclass, field
 from functools import cached_property
 from logging import getLogger
@@ -69,6 +70,10 @@ class LoadedActivation:
     def all_activations(self):
         return [self[i] for i in range(self.num_activations)]
 
+    @override
+    def __repr__(self):
+        return f"<LoadedActivation {self.name} ({self.num_activations} activations)>"
+
 
 class ActLoad:
     @classmethod
@@ -123,9 +128,14 @@ class ActLoad:
 
     @override
     def __repr__(self):
-        return (
-            f"ActLoad(dir={self._dir}, activations={list(self.activations.values())})"
+        acts_str = pprint.pformat(
+            {
+                name: f"<{activation.num_activations} activations>"
+                for name, activation in self.activations.items()
+            }
         )
+        acts_str = acts_str.replace("'<", "<").replace(">'", ">")
+        return f"ActLoad({acts_str})"
 
     def get(self, name: str, /, default: T) -> LoadedActivation | T:
         return self.activations.get(name, default)
