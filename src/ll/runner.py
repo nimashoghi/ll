@@ -488,7 +488,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
             # Activate the environment
             if activate_venv:
                 f.write("echo 'Activating environment'\n")
-                f.write(_shell_hook())
+                f.write(f"{_shell_hook()}\n\n")
 
             # Print the environment information
             if print_environment_info:
