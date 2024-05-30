@@ -53,10 +53,14 @@ class TypedConfig(BaseModel, _MutableMappingBase):
         # so we need to disable that warning (beacuse "model_" is a popular prefix for ML).
         protected_namespaces=(),
         validate_assignment=True,
+        validate_return=True,
+        validate_default=True,
         strict=True,
         revalidate_instances="always",
         arbitrary_types_allowed=True,
-        extra="ignore",
+        extra="forbid",
+        validation_error_cause=True,
+        use_attribute_docstrings=True,
     )
 
     def __draft_pre_init__(self):
