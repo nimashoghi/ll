@@ -14,6 +14,20 @@ def write_helper_script(
     python_executable: str | None = None,
     chmod: bool = True,
 ):
+    """
+    Creates a helper bash script for running the given function.
+
+    The core idea: The helper script is essentially one additional layer of indirection
+    that allows us to encapsulates the environment setup and the actual function call
+    in a single bash script (that does not require properly set up Python environment).
+
+    In effect, this allows us to, for example:
+    - Easily run the function in the correct environment
+        (without having to deal with shell hooks)
+        using `conda run -n myenv bash /path/to/helper.sh`.
+    - Easily run the function in a Singularity container
+        using `singularity exec my_container.sif bash /path/to/helper.sh`.
+    """
     with (out_path := (base_dir / "helper.sh")).open("w") as f:
         f.write("#!/bin/bash\n\n")
         f.write("set -e\n\n")
@@ -43,13 +57,15 @@ def write_helper_script(
     return out_path
 
 
-DEFAULT_TEMPLATE = "bash {helper_script}"
+DEFAULT_TEMPLATE = "bash {script}"
 
 
-def helper_script_to_command(
-    helper_script: Path,
-    template: str | None,
-) -> str:
+def helper_script_to_command(script: Path, template: str | None) -> str:
     if not template:
         template = DEFAULT_TEMPLATE
-    return template.format(helper_script=str(helper_script.absolute()))
+
+    # Make sure the template has '{script}' in it
+    if "{script}" not in template:
+        raise ValueError(f"Template must contain '{{script}}'. Got: {template!r}")
+
+    return template.format(script=str(script.absolute()))

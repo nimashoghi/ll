@@ -167,7 +167,7 @@ class LSFJobKwargs(TypedDict, total=False):
     This is used to add commands like `jsrun` to the job command.
     """
 
-    helper_script_execute_command_template: str
+    command_template: str
     """
     The template for the command to execute the helper script.
 
@@ -451,9 +451,7 @@ def to_array_batch_script(
         job_index_variable,
         None,
     )
-    command = helper_script_to_command(
-        helper_path, kwargs.get("helper_script_execute_command_template")
-    )
+    command = helper_script_to_command(helper_path, kwargs.get("command_template"))
 
     script_path = _write_batch_script_to_file(
         dest / "launch.sh",
