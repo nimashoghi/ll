@@ -538,7 +538,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         snapshot: bool | SnapshotConfig = False,
         prologue: list[str] | None = None,
         env: Mapping[str, str] | None = None,
-        separate_session_per_task: bool = True,
+        separate_session_per_task: bool = False,
         throw_on_gpu_index_error: bool = True,
         activate_venv: bool = True,
         print_environment_info: bool = True,
