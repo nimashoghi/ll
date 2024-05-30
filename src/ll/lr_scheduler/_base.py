@@ -14,7 +14,6 @@ from ..config import TypedConfig
 
 if TYPE_CHECKING:
     from ..model.base import LightningModuleBase
-    from ..model.config import BaseConfig
 
 
 class LRSchedulerMetadata(TypedDict):
@@ -48,14 +47,14 @@ class LRSchedulerConfigBase(TypedConfig, ABC):
     def create_scheduler_impl(
         self,
         optimizer: Optimizer,
-        lightning_module: "LightningModuleBase[BaseConfig]",
+        lightning_module: "LightningModuleBase",
         lr: float,
     ) -> LRSchedulerTypeUnion | LRSchedulerConfigType: ...
 
     def create_scheduler(
         self,
         optimizer: Optimizer,
-        lightning_module: "LightningModuleBase[BaseConfig]",
+        lightning_module: "LightningModuleBase",
         lr: float,
     ) -> LRSchedulerConfigType:
         # Create the scheduler.
@@ -92,7 +91,7 @@ class LRSchedulerConfigBase(TypedConfig, ABC):
         return scheduler
 
     def compute_num_steps_per_epoch(
-        self, lightning_module: "LightningModuleBase[BaseConfig]"
+        self, lightning_module: "LightningModuleBase"
     ) -> int:
         trainer = lightning_module.trainer
         # Use the Lightning trainer to convert the epoch-based values to step-based values
