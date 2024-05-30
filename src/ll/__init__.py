@@ -1,6 +1,7 @@
 from . import _experimental as _experimental
 from . import actsave as actsave
 from . import callbacks as callbacks
+from . import lr_scheduler as lr_scheduler
 from . import model as model
 from . import nn as nn
 from . import optimizer as optimizer
@@ -18,6 +19,7 @@ from .data import dataset_transform as dataset_transform
 from .exception import SkipBatch as SkipBatch
 from .log import init_python_logging as init_python_logging
 from .log import pretty as pretty
+from .lr_scheduler import LRSchedulerConfig as LRSchedulerConfig
 from .model import ActSaveConfig as ActSaveConfig
 from .model import Base as Base
 from .model import BaseConfig as BaseConfig

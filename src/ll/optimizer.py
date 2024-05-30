@@ -1,12 +1,23 @@
+from abc import ABC, abstractmethod
 from collections.abc import Iterable
 from typing import Annotated, Any, Literal, TypeAlias
 
 import torch.nn as nn
+from torch.optim import Optimizer
+from typing_extensions import override
 
 from .config import Field, TypedConfig
 
 
-class AdamWConfig(TypedConfig):
+class OptimizerConfigBase(TypedConfig, ABC):
+    @abstractmethod
+    def create_optimizer(
+        self,
+        parameters: Iterable[nn.Parameter] | Iterable[dict[str, Any]],
+    ) -> Optimizer: ...
+
+
+class AdamWConfig(OptimizerConfigBase):
     name: Literal["adamw"] = "adamw"
 
     lr: float
@@ -28,6 +39,7 @@ class AdamWConfig(TypedConfig):
     amsgrad: bool = False
     """Whether to use the AMSGrad variant of this algorithm."""
 
+    @override
     def create_optimizer(
         self,
         parameters: Iterable[nn.Parameter] | Iterable[dict[str, Any]],
