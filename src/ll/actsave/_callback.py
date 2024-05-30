@@ -1,9 +1,8 @@
 import contextlib
-from typing import TYPE_CHECKING, Any, Literal, cast
+from typing import TYPE_CHECKING, Literal, cast
 
 from lightning.pytorch import LightningModule, Trainer
 from lightning.pytorch.callbacks.callback import Callback
-from lightning.pytorch.utilities.types import STEP_OUTPUT
 from typing_extensions import TypeAlias, override
 
 from ._saver import ActSave

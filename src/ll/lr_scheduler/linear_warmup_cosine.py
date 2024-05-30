@@ -11,6 +11,8 @@ from ._base import LRSchedulerConfigBase
 
 
 class LinearWarmupCosineAnnealingLR(LRScheduler):
+    _get_lr_called_within_step: bool
+
     def __init__(
         self,
         optimizer: Optimizer,
@@ -30,7 +32,7 @@ class LinearWarmupCosineAnnealingLR(LRScheduler):
         super().__init__(optimizer, last_epoch)
 
     @override
-    def get_lr(self) -> list[float]:
+    def get_lr(self) -> list[float]:  # pyright: ignore[reportIncompatibleMethodOverride]
         if not self._get_lr_called_within_step:
             warnings.warn(
                 "To get the last learning rate computed by the scheduler, "

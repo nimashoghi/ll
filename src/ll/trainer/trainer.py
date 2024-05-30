@@ -110,12 +110,10 @@ class Trainer(LightningTrainer):
             with Trainer.output_save_context(root_config):
                 # Code block where the output logs will be saved
         """
-        if (config := root_config.runner.save_output) is None or not config.enabled:
+        # Get the directory path
+        if (dirpath := _stdio_log_dir(root_config)) is None:
             yield
             return
-
-        # Get the directory path
-        dirpath = _stdio_log_dir(root_config, config)
 
         # Capture the stdout and stderr logs to `dirpath`/stdout.log and `dirpath`/stderr.log
         stdout_log = dirpath / "stdout.log"

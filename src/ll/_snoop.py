@@ -25,10 +25,11 @@ try:
         try:
             formatted = str(lt.lovely(x))
             return formatted
-        except:
+        except BaseException:
             return str(x.shape)
 
-    default_numpy_format = lambda x: str(lo.lovely(x))
+    def default_numpy_format(x):
+        return str(lo.lovely(x))
 
     class TorchSnooper(pysnooper.tracer.Tracer):
         def __init__(
@@ -174,7 +175,7 @@ try:
 
     snoop = _Snoop()
 
-except ImportError as e:
+except ImportError:
     from contextlib import nullcontext
 
     snoop = nullcontext
