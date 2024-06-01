@@ -1,3 +1,20 @@
+from typing import Any, Protocol, cast
+
+from typing_extensions import TypeVar
+
+T = TypeVar("T", infer_variance=True)
+
+
+class Snooper(Protocol):
+    def __call__(self, func: T) -> T: ...
+
+
+class SnoopConstructor(Protocol):
+    def __call__(self, *args, **kwargs) -> Snooper: ...
+
+    def disable(self) -> Snooper: ...
+
+
 try:
     import warnings
     from contextlib import nullcontext
@@ -173,9 +190,30 @@ try:
         disable = nullcontext
         __call__ = TorchSnooper
 
-    snoop = _Snoop()
+    snoop: SnoopConstructor = cast(Any, _Snoop())
 
 except ImportError:
+    import warnings
     from contextlib import nullcontext
 
-    snoop = nullcontext
+    from typing_extensions import override
+
+    _has_warned = False
+
+    class _snoop_cls(nullcontext):
+        @classmethod
+        def disable(cls):
+            return nullcontext()
+
+        @override
+        def __enter__(self):
+            global _has_warned
+            if not _has_warned:
+                warnings.warn(
+                    "snoop is not installed, please install it to enable snoop"
+                )
+                _has_warned = True
+
+            return super().__enter__()
+
+    snoop: SnoopConstructor = cast(Any, _snoop_cls)
