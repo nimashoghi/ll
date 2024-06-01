@@ -259,7 +259,6 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         self,
         runs: Sequence[TConfig] | Sequence[tuple[TConfig, Unpack[TArguments]]],
         env: Mapping[str, str] | None = None,
-        reset_id: bool = False,
     ):
         """
         Runs a list of configs locally.
@@ -270,12 +269,10 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
             A sequence of runs to submit.
         env : Mapping[str, str], optional
             Additional environment variables to set.
-        reset_id : bool, optional
-            Whether to reset the id of the runs before launching them.
         """
         return_values: list[TReturn] = []
         for run in runs:
-            config, args = _resolve_run(run, reset_id=reset_id)
+            config, args = _resolve_run(run)
             with self._with_env(env or {}):
                 return_value = self._run_fn(config, *args)
                 return_values.append(return_value)
@@ -301,34 +298,6 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
             *session_command,
         ]
 
-    def _create_launch_script_for_command(
-        self,
-        commands: Sequence[str],
-        script_path: Path,
-        *,
-        delete_run_script_after_launch: bool,
-    ):
-        # Create a shell script to launch all sessions
-        with script_path.open("w") as f:
-            f.write("#!/bin/bash\n\n")
-
-            # Enable error checking
-            f.write("set -e\n\n")
-
-            # Launch the sessions
-            for command in commands:
-                f.write(f"{command}\n")
-
-            # Delete the script after launching the sessions
-            if delete_run_script_after_launch:
-                f.write(f"\nrm {script_path}\n")
-
-        # Make the script executable
-        script_path.chmod(0o755)
-
-        # Print the full command so the user can copy-paste it
-        return script_path
-
     def session(
         self,
         runs: Sequence[TConfig] | Sequence[tuple[TConfig, Unpack[TArguments]]],
@@ -336,13 +305,11 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         id: str | None = None,
         name: str = "ll",
         env: Mapping[str, str] | None = None,
-        reset_id: bool = False,
         snapshot: bool | SnapshotConfig = False,
-        delete_run_script_after_launch: bool = False,
         setup_commands: Sequence[str] | None = None,
         activate_venv: bool = True,
         print_environment_info: bool = False,
-    ) -> Path:
+    ):
         """
         Launches len(sessions) local runs in different environments using `screen`.
 
@@ -356,23 +323,14 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
             The name of this job. This name is pre-pended to the `screen` session names.
         env : Mapping[str, str], optional
             Environment variables to set for the session.
-        reset_id : bool, optional
-            Whether to reset the id of the runs before launching them.
         snapshot : bool | SnapshotConfig
             Whether to snapshot the environment before launching the sessions.
-        delete_run_script_after_launch : bool, optional
-            Whether to delete the run shell script after launching the sessions.
         setup_commands : Sequence[str], optional
             A list of commands to run at the beginning of the shell script.
         activate_venv : bool, optional
             Whether to activate the virtual environment before running the jobs.
         print_environment_info : bool, optional
             Whether to print the environment information before starting each job.
-
-        Returns
-        -------
-        Path
-            The path to the shell script that launches the session.
         """
 
         # Generate a random ID for the job.
@@ -382,7 +340,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
             id = str(uuid.uuid4())
 
         # Resolve all runs
-        resolved_runs = _resolve_runs(runs, reset_id=reset_id)
+        resolved_runs = _resolve_runs(runs)
         _validate_runs(resolved_runs)
         local_data_path = self._local_data_path(id, resolved_runs)
 
@@ -425,7 +383,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
 
         # Create the launcher script
         launcher_path = launcher_from_command(
-            config_pickle_save_path / "launcher_script.sh",
+            config_pickle_save_path / "launcher.sh",
             serialized.bash_command_sequential(),
             env,
             setup_commands,
@@ -434,31 +392,10 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
 
         # Get the screen session command
         command = self._launch_session(launcher_command, config_pickle_save_path, name)
-
-        # Create a shell script to launch all sessions
-        script_path = config_pickle_save_path / "launch.sh"
-        with script_path.open("w") as f:
-            f.write("#!/bin/bash\n\n")
-
-            # Enable error checking
-            f.write("set -e\n\n")
-
-            # Launch the sessions
-            f.write(f"{command}\n")
-
-            # Delete the script after launching the sessions
-            if delete_run_script_after_launch:
-                f.write(f"\nrm {script_path}\n")
-
-        # Make the script executable
-        script_path.chmod(0o755)
+        command = " ".join(command)
 
         # Print the full command so the user can copy-paste it
-        print(
-            f"Run the following command to launch the session:\n\n{script_path.resolve()}"
-        )
-
-        return script_path
+        print(f"Run the following command to launch the session:\n\n{command}")
 
     @deprecated("Use `session` instead.")
     def local_sessions(
@@ -858,10 +795,11 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
     def fast_dev_run(
         self,
         runs: Sequence[TConfig] | Sequence[tuple[TConfig, Unpack[TArguments]]],
-        env: Mapping[str, str] | None = None,
         n_batches: int = 1,
+        env: Mapping[str, str] | None = None,
         stop_on_error: bool = True,
         reset_memory_caches: bool = True,
+        reset_ids: bool = True,
     ):
         """
         Runs a list of configs locally with `LightningTrainer.fast_dev_run = True`.
@@ -870,37 +808,40 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         ----------
         runs : Sequence[TConfig] | Sequence[tuple[TConfig, Unpack[TArguments]]]
             A sequence of runs to submit.
-        env : Mapping[str, str], optional
-            Additional environment variables to set.
         n_batches : int, optional
             The number of batches to run for `fast_dev_run`.
+        env : Mapping[str, str], optional
+            Additional environment variables to set.
         stop_on_error : bool, optional
             Whether to stop on error.
         reset_memory_caches : bool, optional
             Whether to reset memory caches after each run.
+        reset_ids : bool, optional
+            Whether to reset the id of the runs before running them. This prevents the
+            dev runs' logs from overwriting the main runs' logs.
         """
-        resolved_runs = _resolve_runs(runs, copy_config=True)
+        resolved_runs = _resolve_runs(runs, copy_config=True, reset_id=reset_ids)
         _validate_runs(resolved_runs)
 
         return_values: list[TReturn] = []
-        for config, args in tqdm(resolved_runs, desc="Fast dev run"):
-            run_id = config.id
-            run_name = config.run_name
-            try:
-                config.trainer.fast_dev_run = n_batches
-                return_value = self.local([(config, *args)], env=env, reset_id=True)
-                return_values.extend(return_value)
-            except BaseException as e:
-                log.critical(f"Error in run with {run_id=} ({run_name=}): {e}")
-                if stop_on_error:
-                    raise
-                else:
-                    # print full traceback
-                    traceback.print_exc()
-            finally:
-                # After each run, we should reset memory/caches
-                if reset_memory_caches:
-                    self._reset_memory_caches()
+        with self._with_env(env or {}):
+            for config, args in tqdm(resolved_runs, desc="Fast dev run"):
+                run_id = config.id
+                run_name = config.run_name
+                try:
+                    config.trainer.fast_dev_run = n_batches
+                    return_values.append(self._run_fn(config, *args))
+                except BaseException as e:
+                    log.critical(f"Error in run with {run_id=} ({run_name=}): {e}")
+                    if stop_on_error:
+                        raise
+                    else:
+                        # Print full traceback
+                        traceback.print_exc()
+                finally:
+                    # After each run, we should reset memory/caches
+                    if reset_memory_caches:
+                        self._reset_memory_caches()
 
         return return_values
 
