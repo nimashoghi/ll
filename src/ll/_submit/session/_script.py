@@ -5,8 +5,8 @@ from pathlib import Path
 from ...picklerunner import SerializedMultiFunction
 
 
-def launcher_from_command(
-    base_dir: Path,
+def create_launcher_script_file(
+    script_path: Path,
     original_command: str | Iterable[str],
     environment: Mapping[str, str],
     setup_commands: Sequence[str],
@@ -26,7 +26,7 @@ def launcher_from_command(
     - Easily run the function in a Singularity container
         using `singularity exec my_container.sif bash /path/to/helper.sh`.
     """
-    with (out_path := (base_dir / "helper.sh")).open("w") as f:
+    with script_path.open("w") as f:
         f.write("#!/bin/bash\n\n")
         f.write("set -e\n\n")
 
@@ -46,9 +46,7 @@ def launcher_from_command(
 
     if chmod:
         # Make the script executable
-        out_path.chmod(0o755)
-
-    return out_path
+        script_path.chmod(0o755)
 
 
 def write_helper_script(
@@ -78,13 +76,15 @@ def write_helper_script(
     if python_executable is None:
         python_executable = sys.executable
 
-    return launcher_from_command(
-        base_dir,
+    out_path = base_dir / "helper.sh"
+    create_launcher_script_file(
+        out_path,
         function.to_bash_command(job_index_variable, python_executable),
         environment,
         setup_commands,
         chmod,
     )
+    return out_path
 
 
 DEFAULT_TEMPLATE = "bash {script}"

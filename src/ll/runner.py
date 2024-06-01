@@ -24,7 +24,7 @@ from typing_extensions import (
 )
 
 from ._submit.session import unified
-from ._submit.session._script import launcher_from_command
+from ._submit.session._script import create_launcher_script_file
 from .model.config import BaseConfig
 from .trainer import Trainer
 from .util.environment import (
@@ -382,8 +382,9 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         )
 
         # Create the launcher script
-        launcher_path = launcher_from_command(
-            config_pickle_save_path / "launcher.sh",
+        launcher_path = config_pickle_save_path / "launcher.sh"
+        create_launcher_script_file(
+            launcher_path,
             serialized.bash_command_sequential(),
             env,
             setup_commands,
