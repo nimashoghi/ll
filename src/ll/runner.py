@@ -14,7 +14,14 @@ from pathlib import Path
 from typing import Any, Generic, Literal, Protocol, TypeAlias, cast, runtime_checkable
 
 from tqdm.auto import tqdm
-from typing_extensions import TypedDict, TypeVar, TypeVarTuple, Unpack, override
+from typing_extensions import (
+    TypedDict,
+    TypeVar,
+    TypeVarTuple,
+    Unpack,
+    deprecated,
+    override,
+)
 
 from ._submit.session import unified
 from ._submit.session._script import launcher_from_command
@@ -299,10 +306,6 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         commands: Sequence[str],
         script_path: Path,
         *,
-        setup_commands: Sequence[str],
-        snapshot_path: Path | None,
-        activate_venv: bool,
-        print_environment_info: bool,
         delete_run_script_after_launch: bool,
     ):
         # Create a shell script to launch all sessions
@@ -311,30 +314,6 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
 
             # Enable error checking
             f.write("set -e\n\n")
-
-            # If a setup_commands is provided, run it
-            if setup_commands:
-                f.write("# Prologue\n")
-                for command in setup_commands:
-                    f.write(f"{command}\n")
-                f.write("\n")
-
-            # If we're in a snapshot, we need to activate the snapshot before launching the sessions
-            if snapshot_path:
-                snapshot_str = str(snapshot_path.resolve().absolute())
-                f.write('echo "Activating snapshot"\n')
-                f.write(f"export PYTHONPATH={snapshot_str}:$PYTHONPATH\n")
-                f.write(f"export {self.SNAPSHOT_ENV_NAME}={snapshot_str}\n\n")
-
-            # Activate the environment
-            if activate_venv:
-                f.write("echo 'Activating environment'\n")
-                f.write(f"{_shell_hook()}\n\n")
-
-            # Print the environment information
-            if print_environment_info:
-                f.write('echo "Environment information"\n')
-                f.write("python -m ll._submit.print_environment_info\n\n")
 
             # Launch the sessions
             for command in commands:
@@ -362,7 +341,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         delete_run_script_after_launch: bool = False,
         setup_commands: Sequence[str] | None = None,
         activate_venv: bool = True,
-        print_environment_info: bool = True,
+        print_environment_info: bool = False,
     ) -> Path:
         """
         Launches len(sessions) local runs in different environments using `screen`.
@@ -407,8 +386,9 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         _validate_runs(resolved_runs)
         local_data_path = self._local_data_path(id, resolved_runs)
 
-        # Setup commands
+        # Setup commands and env
         setup_commands = list(setup_commands or [])
+        env = {**self.env, **(env or {})}
 
         # Handle snapshot
         snapshot_path = self._snapshot(snapshot, resolved_runs, local_data_path)
@@ -447,7 +427,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         launcher_path = launcher_from_command(
             config_pickle_save_path / "launcher_script.sh",
             serialized.bash_command_sequential(),
-            env or {},
+            env,
             setup_commands,
         )
         launcher_command = ["bash", str(launcher_path)]
@@ -456,15 +436,22 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         command = self._launch_session(launcher_command, config_pickle_save_path, name)
 
         # Create a shell script to launch all sessions
-        script_path = self._create_launch_script_for_command(
-            command,
-            config_pickle_save_path / "launch.sh",
-            setup_commands=setup_commands,
-            snapshot_path=snapshot_path,
-            activate_venv=activate_venv,
-            print_environment_info=print_environment_info,
-            delete_run_script_after_launch=delete_run_script_after_launch,
-        )
+        script_path = config_pickle_save_path / "launch.sh"
+        with script_path.open("w") as f:
+            f.write("#!/bin/bash\n\n")
+
+            # Enable error checking
+            f.write("set -e\n\n")
+
+            # Launch the sessions
+            f.write(f"{command}\n")
+
+            # Delete the script after launching the sessions
+            if delete_run_script_after_launch:
+                f.write(f"\nrm {script_path}\n")
+
+        # Make the script executable
+        script_path.chmod(0o755)
 
         # Print the full command so the user can copy-paste it
         print(
@@ -473,6 +460,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
 
         return script_path
 
+    @deprecated("Use `session` instead.")
     def local_sessions(
         self,
         runs: Sequence[TConfig] | Sequence[tuple[TConfig, Unpack[TArguments]]],
@@ -707,6 +695,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
 
         return list(range(torch.cuda.device_count()))
 
+    @deprecated("Use `session` instead.")
     def local_session_per_gpu(
         self,
         runs: Sequence[TConfig] | Sequence[tuple[TConfig, Unpack[TArguments]]],
