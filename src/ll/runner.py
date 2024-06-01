@@ -17,6 +17,7 @@ from tqdm.auto import tqdm
 from typing_extensions import TypedDict, TypeVar, TypeVarTuple, Unpack, override
 
 from ._submit.session import unified
+from ._submit.session._script import launcher_from_command
 from .model.config import BaseConfig
 from .trainer import Trainer
 from .util.environment import (
@@ -292,6 +293,185 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
             "-U",
             *session_command,
         ]
+
+    def _create_launch_script_for_command(
+        self,
+        commands: Sequence[str],
+        script_path: Path,
+        *,
+        setup_commands: Sequence[str],
+        snapshot_path: Path | None,
+        activate_venv: bool,
+        print_environment_info: bool,
+        delete_run_script_after_launch: bool,
+    ):
+        # Create a shell script to launch all sessions
+        with script_path.open("w") as f:
+            f.write("#!/bin/bash\n\n")
+
+            # Enable error checking
+            f.write("set -e\n\n")
+
+            # If a setup_commands is provided, run it
+            if setup_commands:
+                f.write("# Prologue\n")
+                for command in setup_commands:
+                    f.write(f"{command}\n")
+                f.write("\n")
+
+            # If we're in a snapshot, we need to activate the snapshot before launching the sessions
+            if snapshot_path:
+                snapshot_str = str(snapshot_path.resolve().absolute())
+                f.write('echo "Activating snapshot"\n')
+                f.write(f"export PYTHONPATH={snapshot_str}:$PYTHONPATH\n")
+                f.write(f"export {self.SNAPSHOT_ENV_NAME}={snapshot_str}\n\n")
+
+            # Activate the environment
+            if activate_venv:
+                f.write("echo 'Activating environment'\n")
+                f.write(f"{_shell_hook()}\n\n")
+
+            # Print the environment information
+            if print_environment_info:
+                f.write('echo "Environment information"\n')
+                f.write("python -m ll._submit.print_environment_info\n\n")
+
+            # Launch the sessions
+            for command in commands:
+                f.write(f"{command}\n")
+
+            # Delete the script after launching the sessions
+            if delete_run_script_after_launch:
+                f.write(f"\nrm {script_path}\n")
+
+        # Make the script executable
+        script_path.chmod(0o755)
+
+        # Print the full command so the user can copy-paste it
+        return script_path
+
+    def session(
+        self,
+        runs: Sequence[TConfig] | Sequence[tuple[TConfig, Unpack[TArguments]]],
+        *,
+        id: str | None = None,
+        name: str = "ll",
+        env: Mapping[str, str] | None = None,
+        reset_id: bool = False,
+        snapshot: bool | SnapshotConfig = False,
+        delete_run_script_after_launch: bool = False,
+        setup_commands: Sequence[str] | None = None,
+        activate_venv: bool = True,
+        print_environment_info: bool = True,
+    ) -> Path:
+        """
+        Launches len(sessions) local runs in different environments using `screen`.
+
+        Parameters
+        ----------
+        runs : Sequence[TConfig] | Sequence[tuple[TConfig, Unpack[TArguments]]]
+            A sequence of runs to launch.
+        id : str, optional
+            The ID of the session. If `None`, a random ID will be generated.
+        name : str, optional
+            The name of this job. This name is pre-pended to the `screen` session names.
+        env : Mapping[str, str], optional
+            Environment variables to set for the session.
+        reset_id : bool, optional
+            Whether to reset the id of the runs before launching them.
+        snapshot : bool | SnapshotConfig
+            Whether to snapshot the environment before launching the sessions.
+        delete_run_script_after_launch : bool, optional
+            Whether to delete the run shell script after launching the sessions.
+        setup_commands : Sequence[str], optional
+            A list of commands to run at the beginning of the shell script.
+        activate_venv : bool, optional
+            Whether to activate the virtual environment before running the jobs.
+        print_environment_info : bool, optional
+            Whether to print the environment information before starting each job.
+
+        Returns
+        -------
+        Path
+            The path to the shell script that launches the session.
+        """
+
+        # Generate a random ID for the job.
+        # We'll use this ID for snapshotting, as well as for
+        #   defining the name of the shell script that will launch the sessions.
+        if not id:
+            id = str(uuid.uuid4())
+
+        # Resolve all runs
+        resolved_runs = _resolve_runs(runs, reset_id=reset_id)
+        _validate_runs(resolved_runs)
+        local_data_path = self._local_data_path(id, resolved_runs)
+
+        # Setup commands
+        setup_commands = list(setup_commands or [])
+
+        # Handle snapshot
+        snapshot_path = self._snapshot(snapshot, resolved_runs, local_data_path)
+        if snapshot_path:
+            snapshot_str = str(snapshot_path.resolve().absolute())
+            setup_commands.append(f"export {self.SNAPSHOT_ENV_NAME}={snapshot_str}")
+            setup_commands.append(f"export PYTHONPATH={snapshot_str}:$PYTHONPATH")
+
+        # Conda environment
+        if activate_venv:
+            # Activate the conda environment
+            setup_commands.append("echo 'Activating environment'")
+            setup_commands.append(_shell_hook())
+
+        # Print the environment information
+        if print_environment_info:
+            setup_commands.append("echo 'Environment information:'")
+            setup_commands.append("python -m ll._submit.print_environment_info")
+
+        # Save all configs to pickle files
+        from .picklerunner import serialize_many
+
+        config_pickle_save_path = local_data_path / "sessions"
+        config_pickle_save_path.mkdir(exist_ok=True)
+        serialized = serialize_many(
+            config_pickle_save_path,
+            _runner_main,
+            [
+                ((self._run, self._init_kwargs, c, args), {})
+                for c, args in resolved_runs
+            ],
+            print_environment_info=print_environment_info,
+        )
+
+        # Create the launcher script
+        launcher_path = launcher_from_command(
+            config_pickle_save_path / "launcher_script.sh",
+            serialized.bash_command_sequential(),
+            env or {},
+            setup_commands,
+        )
+        launcher_command = ["bash", str(launcher_path)]
+
+        # Get the screen session command
+        command = self._launch_session(launcher_command, config_pickle_save_path, name)
+
+        # Create a shell script to launch all sessions
+        script_path = self._create_launch_script_for_command(
+            command,
+            config_pickle_save_path / "launch.sh",
+            setup_commands=setup_commands,
+            snapshot_path=snapshot_path,
+            activate_venv=activate_venv,
+            print_environment_info=print_environment_info,
+            delete_run_script_after_launch=delete_run_script_after_launch,
+        )
+
+        # Print the full command so the user can copy-paste it
+        print(
+            f"Run the following command to launch the session:\n\n{script_path.resolve()}"
+        )
+
+        return script_path
 
     def local_sessions(
         self,

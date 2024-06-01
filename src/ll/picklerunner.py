@@ -102,6 +102,32 @@ class SerializedMultiFunction(PathLike):
             command.extend(self._additional_command_parts)
         return command
 
+    def bash_command_sequential(
+        self,
+        python_executable: str | None = None,
+        environment: Mapping[str, str] | None = None,
+    ) -> list[str]:
+        if python_executable is None:
+            python_executable = sys.executable
+
+        all_files = [f'"{str(fn.path.absolute())}"' for fn in self.functions]
+
+        command: list[str] = []
+        # command = f"{python_executable} -m {__name__} {all_files}"
+        command.append(python_executable)
+        command.append("-m")
+        command.append(__name__)
+        if environment:
+            for key, value in environment.items():
+                command.append("--env")
+                command.append(f"{key}={value}")
+        command.extend(all_files)
+
+        if self._additional_command_parts:
+            # command += " " + " ".join(self._additional_command_parts)
+            command.extend(self._additional_command_parts)
+        return command
+
     def _to_bash_command_sequential_worker(
         self,
         num_workers: int,
