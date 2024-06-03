@@ -303,7 +303,6 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         runs: Sequence[TConfig] | Sequence[tuple[TConfig, Unpack[TArguments]]],
         *,
         snapshot: bool | SnapshotConfig,
-        id: str | None = None,
         name: str = "ll",
         env: Mapping[str, str] | None = None,
         setup_commands: Sequence[str] | None = None,
@@ -317,8 +316,6 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         ----------
         runs : Sequence[TConfig] | Sequence[tuple[TConfig, Unpack[TArguments]]]
             A sequence of runs to launch.
-        id : str, optional
-            The ID of the session. If `None`, a random ID will be generated.
         name : str, optional
             The name of this job. This name is pre-pended to the `screen` session names.
         env : Mapping[str, str], optional
@@ -333,11 +330,10 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
             Whether to print the environment information before starting each job.
         """
 
-        # Generate a random ID for the job.
+        # Generate a random ID for the session.
         # We'll use this ID for snapshotting, as well as for
         #   defining the name of the shell script that will launch the sessions.
-        if not id:
-            id = str(uuid.uuid4())
+        id = str(uuid.uuid4())
 
         # Resolve all runs
         resolved_runs = _resolve_runs(runs)
