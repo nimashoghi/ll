@@ -9,8 +9,10 @@ from .linear_warmup_cosine import (
 from .linear_warmup_cosine import (
     LinearWarmupCosineDecayLRSchedulerConfig as LinearWarmupCosineDecayLRSchedulerConfig,
 )
+from .reduce_lr_on_plateau import ReduceLROnPlateau as ReduceLROnPlateau
+from .reduce_lr_on_plateau import ReduceLROnPlateauConfig as ReduceLROnPlateauConfig
 
 LRSchedulerConfig: TypeAlias = Annotated[
-    LinearWarmupCosineDecayLRSchedulerConfig,
+    LinearWarmupCosineDecayLRSchedulerConfig | ReduceLROnPlateauConfig,
     Field(discriminator="name"),
 ]
