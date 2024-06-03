@@ -45,6 +45,7 @@ from .model import GradientSkippingConfig as GradientSkippingConfig
 from .model import LightningDataModuleBase as LightningDataModuleBase
 from .model import LightningModuleBase as LightningModuleBase
 from .model import LoggingConfig as LoggingConfig
+from .model import MetricConfig as MetricConfig
 from .model import OptimizationConfig as OptimizationConfig
 from .model import PrimaryMetricConfig as PrimaryMetricConfig
 from .model import PythonLogging as PythonLogging

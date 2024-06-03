@@ -1703,7 +1703,7 @@ class RunnerConfig(TypedConfig):
     """Submission configuration options for submitting the run to a cluster scheduler (e.g., SLURM, LSF)."""
 
 
-class PrimaryMetricConfig(TypedConfig):
+class MetricConfig(TypedConfig):
     name: str
     """The name of the primary metric."""
 
@@ -1730,6 +1730,9 @@ class PrimaryMetricConfig(TypedConfig):
     @classmethod
     def loss(cls, mode: Literal["min", "max"] = "min"):
         return cls(name="loss", mode=mode)
+
+
+PrimaryMetricConfig: TypeAlias = MetricConfig
 
 
 class BaseConfig(TypedConfig):

@@ -28,6 +28,7 @@ from .config import (
     LatestEpochCheckpointCallbackConfig as LatestEpochCheckpointCallbackConfig,
 )
 from .config import LoggingConfig as LoggingConfig
+from .config import MetricConfig as MetricConfig
 from .config import ModelCheckpointCallbackConfig as ModelCheckpointCallbackConfig
 from .config import (
     OnExceptionCheckpointCallbackConfig as OnExceptionCheckpointCallbackConfig,
