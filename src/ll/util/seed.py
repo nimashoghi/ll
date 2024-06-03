@@ -1,7 +1,7 @@
 from contextlib import contextmanager
 from logging import getLogger
 
-import lightning_fabric.utilities.seed as LS
+import lightning.fabric.utilities.seed as LS
 
 log = getLogger(__name__)
 
