@@ -1754,10 +1754,7 @@ class BaseConfig(TypedConfig):
 
     debug: bool = False
     """Whether to run in debug mode. This will enable debug logging and enable debug code paths."""
-    environment: EnvironmentConfig = Field(
-        default_factory=lambda: EnvironmentConfig(),
-        repr=False,
-    )
+    environment: Annotated[EnvironmentConfig, Field(repr=False)] = EnvironmentConfig()
     """A snapshot of the current environment information (e.g. python version, slurm info, etc.). This is automatically populated by the run script."""
 
     directory: DirectoryConfig = DirectoryConfig()
@@ -1870,6 +1867,23 @@ class BaseConfig(TypedConfig):
 
         return self
 
+    def concise_repr(self) -> str:
+        """Get a concise representation of the configuration object."""
+
+        def _truncate(s: str, max_len: int = 50):
+            return s if len(s) <= max_len else f"{s[:max_len - 3]}..."
+
+        cls_name = self.__class__.__name__
+
+        parts: list[str] = []
+        parts.append(f"id={self.id}")
+        if self.name:
+            parts.append(f"name={_truncate(self.name)}")
+        if self.project:
+            parts.append(f"project={_truncate(self.project)}")
+
+        return f"{cls_name}({', '.join(parts)})"
+
     # endregion
 
     # region Seeding
@@ -1932,11 +1946,16 @@ class BaseConfig(TypedConfig):
     # endregion
 
     @classmethod
-    def from_checkpoint(cls, path: str | Path):
+    def from_checkpoint(
+        cls,
+        path: str | Path,
+        *,
+        hparams_key: str = "hyper_parameters",
+    ):
         ckpt = torch.load(path)
-        if (hparams := ckpt.get("hyper_parameters")) is None:
+        if (hparams := ckpt.get(hparams_key)) is None:
             raise ValueError(
-                "The checkpoint does not contain the hyper_parameters attribute. "
+                f"The checkpoint does not contain the `{hparams_key}` attribute. "
                 "Are you sure this is a valid Lightning checkpoint?"
             )
         return cls.from_dict(hparams)

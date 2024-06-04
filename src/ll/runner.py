@@ -98,9 +98,11 @@ def _validate_runs(runs: list[tuple[TConfig, tuple[Unpack[TArguments]]]]):
 
     # Make sure there are no duplicate ids
     id_counter = Counter(config.id for config, _ in runs if config.id is not None)
-    for id, count in id_counter.items():
-        if count > 1:
-            raise ValueError(f"Duplicate id {id=}")
+    duplicate_ids = {id for id, count in id_counter.items() if count > 1}
+    if duplicate_ids:
+        raise ValueError(
+            f"Duplicate run IDs found: {duplicate_ids}. Each run must have a unique ID."
+        )
 
 
 @runtime_checkable

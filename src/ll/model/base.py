@@ -162,6 +162,12 @@ class LightningModuleBase(  # pyright: ignore[reportIncompatibleMethodOverride]
     ABC,
     Generic[THparams],
 ):
+    # Our own custom __repr__ method.
+    # Torch's __repr__ method is too verbose and doesn't provide any useful information.
+    @override
+    def __repr__(self):
+        return f"{self.__class__.__name__}({self.hparams.concise_repr()})"
+
     @classmethod
     def _validate_class_for_ckpt_loading(cls):
         # Make sure that the `__init__` method takes a single argument, `hparams`.
