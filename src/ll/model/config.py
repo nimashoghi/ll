@@ -360,6 +360,9 @@ class WandbWatchConfig(TypedConfig):
     log_graph: bool = True
     log_freq: int = 100
 
+    def __bool__(self):
+        return self.enabled
+
 
 def _wandb_available():
     try:
