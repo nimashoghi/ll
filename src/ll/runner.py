@@ -948,9 +948,9 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
     def submit(
         self,
         runs: Sequence[TConfig] | Sequence[tuple[TConfig, Unpack[TArguments]]],
+        scheduler: Literal["auto"] = "auto",
         *,
         snapshot: bool | SnapshotConfig,
-        scheduler: Literal["auto"] = "auto",
         reset_id: bool = False,
         activate_venv: bool = True,
         print_environment_info: bool = True,
@@ -962,9 +962,9 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
     def submit(
         self,
         runs: Sequence[TConfig] | Sequence[tuple[TConfig, Unpack[TArguments]]],
+        scheduler: Literal["slurm"],
         *,
         snapshot: bool | SnapshotConfig,
-        scheduler: Literal["slurm"],
         reset_id: bool = False,
         activate_venv: bool = True,
         print_environment_info: bool = True,
@@ -976,9 +976,9 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
     def submit(
         self,
         runs: Sequence[TConfig] | Sequence[tuple[TConfig, Unpack[TArguments]]],
+        scheduler: Literal["lsf"],
         *,
         snapshot: bool | SnapshotConfig,
-        scheduler: Literal["lsf"],
         reset_id: bool = False,
         activate_venv: bool = True,
         print_environment_info: bool = True,
@@ -992,9 +992,9 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
     def submit(
         self,
         runs: Sequence[TConfig] | Sequence[tuple[TConfig, Unpack[TArguments]]],
+        scheduler: unified.Scheduler | Literal["auto"] = "auto",
         *,
         snapshot: bool | SnapshotConfig,
-        scheduler: unified.Scheduler | Literal["auto"] = "auto",
         reset_id: bool = False,
         activate_venv: bool = True,
         print_environment_info: bool = True,
@@ -1008,10 +1008,10 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         ----------
         runs : Sequence[TConfig] | Sequence[tuple[TConfig, Unpack[TArguments]]]
             A sequence of runs to submit.
-        snapshot : bool | Path
-            The base path to save snapshots to. If `True`, a default path will be used.
         scheduler : str, optional
             The scheduler to use. If `auto`, the scheduler will be inferred.
+        snapshot : bool | Path
+            The base path to save snapshots to. If `True`, a default path will be used.
         reset_id : bool, optional
             Whether to reset the id of the runs before launching them.
         activate_venv : bool, optional
