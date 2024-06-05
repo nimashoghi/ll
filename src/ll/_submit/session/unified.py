@@ -163,7 +163,7 @@ def _to_slurm(kwargs: GenericJobKwargs) -> slurm.SlurmJobKwargs:
     if (error_file := kwargs.get("error_file")) is not None:
         slurm_kwargs["error_file"] = error_file
     if (walltime := kwargs.get("walltime")) is not None:
-        slurm_kwargs["time"] = walltime
+        slurm_kwargs["walltime"] = walltime
     if (memory_mb := kwargs.get("memory_mb")) is not None:
         slurm_kwargs["memory_mb"] = memory_mb
     if (nodes := kwargs.get("nodes")) is not None:
