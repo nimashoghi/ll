@@ -1043,7 +1043,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         activate_venv: bool = True,
         print_environment_info: bool = True,
         env: Mapping[str, str] | None = None,
-        **kwargs: Unpack[slurm.SlurmJobKwargs],
+        **kwargs: Unpack[unified.GenericJobKwargs],
     ):
         """
         Submits a list of runs to a SLURM cluster.
@@ -1075,7 +1075,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
             activate_venv=activate_venv,
             print_environment_info=print_environment_info,
             env=env,
-            additional_slurm_options=kwargs,
+            **kwargs,
         )
 
     def submit_lsf(
@@ -1087,7 +1087,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         activate_venv: bool = True,
         print_environment_info: bool = True,
         env: Mapping[str, str] | None = None,
-        **kwargs: Unpack[lsf.LSFJobKwargs],
+        **kwargs: Unpack[unified.GenericJobKwargs],
     ):
         """
         Submits a list of runs to an LSF cluster.
@@ -1119,7 +1119,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
             activate_venv=activate_venv,
             print_environment_info=print_environment_info,
             env=env,
-            additional_lsf_options=kwargs,
+            **kwargs,
         )
 
 
