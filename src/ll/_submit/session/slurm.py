@@ -78,7 +78,7 @@ class SlurmJobKwargs(TypedDict, total=False):
     This corresponds to the "-e" option in sbatch. If not specified, the errors will be written to the default error file.
     """
 
-    walltime: timedelta | Literal[0]
+    time: timedelta | Literal[0]
     """
     The maximum time for the job.
 
@@ -254,7 +254,7 @@ class SlurmJobKwargs(TypedDict, total=False):
 DEFAULT_KWARGS: SlurmJobKwargs = {
     "name": "ll",
     "nodes": 1,
-    # "walltime": timedelta(hours=2),
+    # "time": timedelta(hours=2),
     "signal": signal.SIGUSR1,
     "open_mode": "append",
 }
@@ -339,22 +339,20 @@ def _write_batch_script_to_file(
         if (account := kwargs.get("account")) is not None:
             f.write(f"#SBATCH --account={account}\n")
 
-        if (walltime := kwargs.get("walltime")) is not None:
+        if (time := kwargs.get("time")) is not None:
             # A time limit of zero requests that no time limit be imposed. Acceptable time formats include "minutes", "minutes:seconds", "hours:minutes:seconds", "days-hours", "days-hours:minutes" and "days-hours:minutes:seconds".
-            if walltime == 0:
-                walltime_str = "0"
+            if time == 0:
+                time_str = "0"
             else:
-                total_seconds = walltime.total_seconds()
+                total_seconds = time.total_seconds()
                 hours, remainder = divmod(total_seconds, 3600)
                 minutes, seconds = divmod(remainder, 60)
                 if hours > 24:
                     days, hours = divmod(hours, 24)
-                    walltime_str = f"{int(days)}-{int(hours):02d}:{int(minutes):02d}"
+                    time_str = f"{int(days)}-{int(hours):02d}:{int(minutes):02d}"
                 else:
-                    walltime_str = (
-                        f"{int(hours):02d}:{int(minutes):02d}:{int(seconds):02d}"
-                    )
-            f.write(f"#SBATCH --time={walltime_str}\n")
+                    time_str = f"{int(hours):02d}:{int(minutes):02d}:{int(seconds):02d}"
+            f.write(f"#SBATCH --time={time_str}\n")
 
         if (nodes := kwargs.get("nodes")) is not None:
             f.write(f"#SBATCH --nodes={nodes}\n")

@@ -163,7 +163,7 @@ def _to_slurm(kwargs: GenericJobKwargs) -> slurm.SlurmJobKwargs:
     if (error_file := kwargs.get("error_file")) is not None:
         slurm_kwargs["error_file"] = error_file
     if (walltime := kwargs.get("walltime")) is not None:
-        slurm_kwargs["walltime"] = walltime
+        slurm_kwargs["time"] = walltime
     if (memory_mb := kwargs.get("memory_mb")) is not None:
         slurm_kwargs["memory_mb"] = memory_mb
     if (nodes := kwargs.get("nodes")) is not None:
@@ -199,6 +199,15 @@ def _to_slurm(kwargs: GenericJobKwargs) -> slurm.SlurmJobKwargs:
         slurm_kwargs["command_prefix"] = command_prefix
     if (additional_kwargs := kwargs.get("additional_slurm_options")) is not None:
         slurm_kwargs.update(additional_kwargs)
+
+    # Make sure rs_per_node is set so that we can properly
+    # schedule the total number of tasks (world size).
+    if not slurm_kwargs.get("ntasks_per_node"):
+        raise ValueError(
+            "Number of tasks per node (`tasks_per_node` or `ntasks_per_node`) must be set for LSF jobs.\n"
+            "This is because the total number of tasks is used to compute the world size "
+            "for distributed training jobs."
+        )
 
     return slurm_kwargs
 
@@ -254,6 +263,15 @@ def _to_lsf(kwargs: GenericJobKwargs) -> lsf.LSFJobKwargs:
         lsf_kwargs["command_prefix"] = command_prefix
     if (additional_kwargs := kwargs.get("additional_lsf_options")) is not None:
         lsf_kwargs.update(additional_kwargs)
+
+    # Make sure rs_per_node is set so that we can properly
+    # schedule the total number of tasks (world size).
+    if not lsf_kwargs.get("rs_per_node"):
+        raise ValueError(
+            "Number of tasks per node (`tasks_per_node` or `rs_per_node`) must be set for LSF jobs.\n"
+            "This is because the total number of tasks is used to compute the world size "
+            "for distributed training jobs."
+        )
 
     return lsf_kwargs
 
