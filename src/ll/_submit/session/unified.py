@@ -1,3 +1,4 @@
+import copy
 import os
 import signal
 import subprocess
@@ -7,7 +8,14 @@ from logging import getLogger
 from pathlib import Path
 from typing import Any, Literal
 
-from typing_extensions import TypeAlias, TypedDict, TypeVar, TypeVarTuple, Unpack
+from typing_extensions import (
+    TypeAlias,
+    TypedDict,
+    TypeVar,
+    TypeVarTuple,
+    Unpack,
+    assert_never,
+)
 
 from . import lsf, slurm
 from ._output import SubmitOutput
@@ -281,6 +289,16 @@ def _to_lsf(kwargs: GenericJobKwargs) -> lsf.LSFJobKwargs:
     return lsf_kwargs
 
 
+def validate_kwargs(scheduler: Scheduler, kwargs: GenericJobKwargs) -> None:
+    match scheduler:
+        case "slurm":
+            _to_slurm(copy.deepcopy(kwargs))
+        case "lsf":
+            _to_lsf(copy.deepcopy(kwargs))
+        case _:
+            assert_never(scheduler)
+
+
 def to_array_batch_script(
     scheduler: Scheduler,
     dest: Path,
@@ -315,6 +333,8 @@ def to_array_batch_script(
                 print_environment_info=print_environment_info,
                 **lsf_kwargs,
             )
+        case _:
+            assert_never(scheduler)
 
 
 def infer_current_scheduler() -> Scheduler:

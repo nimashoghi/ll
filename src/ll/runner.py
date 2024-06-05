@@ -988,6 +988,9 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
             **(env or {}),
         }
 
+        # Validate the submit options before proceeding
+        unified.validate_kwargs(scheduler, kwargs)
+
         # Setup commands
         setup_commands = list(kwargs.get("setup_commands", []))
 
