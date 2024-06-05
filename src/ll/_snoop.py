@@ -1,3 +1,4 @@
+import contextlib
 from typing import Any, Protocol, cast
 
 from typing_extensions import TypeVar
@@ -5,14 +6,10 @@ from typing_extensions import TypeVar
 T = TypeVar("T", infer_variance=True)
 
 
-class Snooper(Protocol):
-    def __call__(self, func: T) -> T: ...
-
-
 class SnoopConstructor(Protocol):
-    def __call__(self, *args, **kwargs) -> Snooper: ...
+    def __call__(self, *args, **kwargs) -> contextlib.AbstractContextManager: ...
 
-    def disable(self) -> Snooper: ...
+    def disable(self) -> contextlib.AbstractContextManager: ...
 
 
 try:
