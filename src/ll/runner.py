@@ -346,26 +346,28 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         local_data_path = self._local_data_path(id, resolved_runs)
 
         # Setup commands and env
-        setup_commands = list(setup_commands or [])
+        setup_commands_pre: list[str] = []
         env = {**self.env, **(env or {})}
 
         # Handle snapshot
         snapshot_path = self._snapshot(snapshot, resolved_runs, local_data_path)
         if snapshot_path:
             snapshot_str = str(snapshot_path.resolve().absolute())
-            setup_commands.append(f"export {self.SNAPSHOT_ENV_NAME}={snapshot_str}")
-            setup_commands.append(f"export PYTHONPATH={snapshot_str}:$PYTHONPATH")
+            setup_commands_pre.append(f"export {self.SNAPSHOT_ENV_NAME}={snapshot_str}")
+            setup_commands_pre.append(f"export PYTHONPATH={snapshot_str}:$PYTHONPATH")
 
         # Conda environment
         if activate_venv:
             # Activate the conda environment
-            setup_commands.append("echo 'Activating environment'")
-            setup_commands.append(_shell_hook())
+            setup_commands_pre.append("echo 'Activating environment'")
+            setup_commands_pre.append(_shell_hook())
 
         # Print the environment information
         if print_environment_info:
-            setup_commands.append("echo 'Environment information:'")
-            setup_commands.append("python -m ll._submit.print_environment_info")
+            setup_commands_pre.append("echo 'Environment information:'")
+            setup_commands_pre.append("python -m ll._submit.print_environment_info")
+
+        setup_commands = setup_commands_pre + list(setup_commands or [])
 
         # Save all configs to pickle files
         from .picklerunner import serialize_many
@@ -992,27 +994,29 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         unified.validate_kwargs(scheduler, kwargs)
 
         # Setup commands
-        setup_commands = list(kwargs.get("setup_commands", []))
+        setup_commands_pre: list[str] = []
 
         # Handle snapshot
         snapshot_path = self._snapshot(snapshot, resolved_runs, local_data_path)
         if snapshot_path:
             snapshot_str = str(snapshot_path.resolve().absolute())
-            setup_commands.append(f"export {self.SNAPSHOT_ENV_NAME}={snapshot_str}")
-            setup_commands.append(f"export PYTHONPATH={snapshot_str}:$PYTHONPATH")
+            setup_commands_pre.append(f"export {self.SNAPSHOT_ENV_NAME}={snapshot_str}")
+            setup_commands_pre.append(f"export PYTHONPATH={snapshot_str}:$PYTHONPATH")
 
         # Conda environment
         if activate_venv:
             # Activate the conda environment
-            setup_commands.append("echo 'Activating environment'")
-            setup_commands.append(_shell_hook())
+            setup_commands_pre.append("echo 'Activating environment'")
+            setup_commands_pre.append(_shell_hook())
 
         # Print the environment information
         if print_environment_info:
-            setup_commands.append("echo 'Environment information:'")
-            setup_commands.append("python -m ll._submit.print_environment_info")
+            setup_commands_pre.append("echo 'Environment information:'")
+            setup_commands_pre.append("python -m ll._submit.print_environment_info")
 
-        kwargs["setup_commands"] = setup_commands
+        kwargs["setup_commands"] = setup_commands_pre + list(
+            kwargs.get("setup_commands", [])
+        )
 
         base_path = local_data_path / "submit"
         base_path.mkdir(exist_ok=True, parents=True)
