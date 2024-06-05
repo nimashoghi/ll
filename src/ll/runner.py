@@ -412,7 +412,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         prologue: Sequence[str] | None = None,
         env: Mapping[str, str] | None = None,
         activate_venv: bool = True,
-        print_environment_info: bool = True,
+        print_environment_info: bool = False,
     ):
         """
         Launches len(sessions) local runs in different environments using `screen`.
@@ -648,7 +648,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         separate_session_per_task: bool = False,
         throw_on_gpu_index_error: bool = True,
         activate_venv: bool = True,
-        print_environment_info: bool = True,
+        print_environment_info: bool = False,
     ):
         """
         Launches len(sessions) local runs in different environments using `screen`.
@@ -946,7 +946,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         snapshot: bool | SnapshotConfig,
         reset_id: bool = False,
         activate_venv: bool = True,
-        print_environment_info: bool = True,
+        print_environment_info: bool = False,
         env: Mapping[str, str] | None = None,
         **kwargs: Unpack[unified.GenericJobKwargs],
     ):
@@ -1031,7 +1031,6 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
             base_path,
             _runner_main,
             map_array_args,
-            print_environment_info=print_environment_info,
             **kwargs,
         )
         print("Please run the following command to submit the jobs:")
@@ -1044,7 +1043,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         snapshot: bool | SnapshotConfig,
         reset_id: bool = False,
         activate_venv: bool = True,
-        print_environment_info: bool = True,
+        print_environment_info: bool = False,
         env: Mapping[str, str] | None = None,
         **kwargs: Unpack[unified.GenericJobKwargs],
     ):
@@ -1088,7 +1087,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         snapshot: bool | SnapshotConfig,
         reset_id: bool = False,
         activate_venv: bool = True,
-        print_environment_info: bool = True,
+        print_environment_info: bool = False,
         env: Mapping[str, str] | None = None,
         **kwargs: Unpack[unified.GenericJobKwargs],
     ):

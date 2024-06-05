@@ -68,7 +68,7 @@ class SerializedMultiFunction(PathLike):
     base_dir: Path
     functions: Sequence[SerializedFunction]
     _additional_command_parts: Sequence[str] = ()
-    print_environment_info: bool = True
+    print_environment_info: bool = False
 
     def to_bash_command(
         self,
@@ -186,7 +186,7 @@ def serialize_many(
     args_and_kwargs_list: Sequence[tuple[Sequence[Any], Mapping[str, Any]]],
     start_idx: int = 0,
     additional_command_parts: Sequence[str] = (),
-    print_environment_info: bool = True,
+    print_environment_info: bool = False,
 ):
     serialized_list: list[SerializedFunction] = []
 

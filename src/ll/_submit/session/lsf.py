@@ -417,7 +417,7 @@ def to_array_batch_script(
     args_list: Sequence[tuple[Unpack[TArgs]]],
     /,
     job_index_variable: str = "LSB_JOBINDEX",
-    print_environment_info: bool = True,
+    print_environment_info: bool = False,
     **kwargs: Unpack[LSFJobKwargs],
 ) -> SubmitOutput:
     """
