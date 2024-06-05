@@ -11,16 +11,7 @@ from dataclasses import dataclass, replace
 from functools import wraps
 from logging import getLogger
 from pathlib import Path
-from typing import (
-    Any,
-    Generic,
-    Literal,
-    Protocol,
-    TypeAlias,
-    cast,
-    overload,
-    runtime_checkable,
-)
+from typing import Any, Generic, Literal, Protocol, TypeAlias, cast, runtime_checkable
 
 from tqdm.auto import tqdm
 from typing_extensions import (
@@ -139,7 +130,7 @@ SessionGPUIndex: TypeAlias = int | tuple[int, ...]
 
 
 class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
-    DEFAULT_ENV = {}
+    DEFAULT_ENV: dict[str, str] = {}
     SNAPSHOT_ENV_NAME = "LL_SNAPSHOT"
 
     @classmethod
@@ -191,7 +182,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
             "validate_config_before_run": validate_config_before_run,
             "validate_strict": validate_strict,
         }
-        self.env = {
+        self.env: dict[str, str] = {
             **self.DEFAULT_ENV,
             **(env or {}),
         }
@@ -944,62 +935,20 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         snapshot_path = snapshot_modules(snapshot_dir, list(snapshot_modules_set))
         return snapshot_path.absolute()
 
-    @overload
-    def submit(
-        self,
-        runs: Sequence[TConfig] | Sequence[tuple[TConfig, Unpack[TArguments]]],
-        scheduler: Literal["auto"] = "auto",
-        *,
-        snapshot: bool | SnapshotConfig,
-        reset_id: bool = False,
-        activate_venv: bool = True,
-        print_environment_info: bool = True,
-        env: Mapping[str, str] | None = None,
-        **kwargs: Unpack[unified.GenericJobKwargs],
-    ): ...
-
-    @overload
-    def submit(
-        self,
-        runs: Sequence[TConfig] | Sequence[tuple[TConfig, Unpack[TArguments]]],
-        scheduler: Literal["slurm"],
-        *,
-        snapshot: bool | SnapshotConfig,
-        reset_id: bool = False,
-        activate_venv: bool = True,
-        print_environment_info: bool = True,
-        env: Mapping[str, str] | None = None,
-        **kwargs: Unpack[slurm.SlurmJobKwargs],
-    ): ...
-
-    @overload
-    def submit(
-        self,
-        runs: Sequence[TConfig] | Sequence[tuple[TConfig, Unpack[TArguments]]],
-        scheduler: Literal["lsf"],
-        *,
-        snapshot: bool | SnapshotConfig,
-        reset_id: bool = False,
-        activate_venv: bool = True,
-        print_environment_info: bool = True,
-        env: Mapping[str, str] | None = None,
-        **kwargs: Unpack[lsf.LSFJobKwargs],
-    ): ...
-
     @remove_lsf_environment_variables()
     @remove_slurm_environment_variables()
     @remove_wandb_environment_variables()
     def submit(
         self,
         runs: Sequence[TConfig] | Sequence[tuple[TConfig, Unpack[TArguments]]],
-        scheduler: unified.Scheduler | Literal["auto"] = "auto",
         *,
+        scheduler: unified.Scheduler | Literal["auto"] = "auto",
         snapshot: bool | SnapshotConfig,
         reset_id: bool = False,
         activate_venv: bool = True,
         print_environment_info: bool = True,
         env: Mapping[str, str] | None = None,
-        **kwargs: Any,
+        **kwargs: Unpack[unified.GenericJobKwargs],
     ):
         """
         Submits a list of runs to a cluster (SLURM or LSF).
@@ -1032,17 +981,15 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         resolved_runs = _resolve_runs(runs, reset_id=reset_id, validate=True)
         local_data_path = self._local_data_path(id, resolved_runs)
 
-        job_kwargs = cast(unified.GenericJobKwargs, kwargs)
-
         # Environment variables
-        job_kwargs["environment"] = {
+        kwargs["environment"] = {
             **self.env,
-            **job_kwargs.get("environment", {}),
+            **kwargs.get("environment", {}),
             **(env or {}),
         }
 
         # Setup commands
-        setup_commands = list(job_kwargs.get("setup_commands", []))
+        setup_commands = list(kwargs.get("setup_commands", []))
 
         # Handle snapshot
         snapshot_path = self._snapshot(snapshot, resolved_runs, local_data_path)
@@ -1062,7 +1009,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
             setup_commands.append("echo 'Environment information:'")
             setup_commands.append("python -m ll._submit.print_environment_info")
 
-        job_kwargs["setup_commands"] = setup_commands
+        kwargs["setup_commands"] = setup_commands
 
         base_path = local_data_path / "submit"
         base_path.mkdir(exist_ok=True, parents=True)
@@ -1082,10 +1029,98 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
             _runner_main,
             map_array_args,
             print_environment_info=print_environment_info,
-            **job_kwargs,
+            **kwargs,
         )
         print("Please run the following command to submit the jobs:")
         print(submission.submission_command_str)
+
+    def submit_slurm(
+        self,
+        runs: Sequence[TConfig] | Sequence[tuple[TConfig, Unpack[TArguments]]],
+        *,
+        snapshot: bool | SnapshotConfig,
+        reset_id: bool = False,
+        activate_venv: bool = True,
+        print_environment_info: bool = True,
+        env: Mapping[str, str] | None = None,
+        **kwargs: Unpack[slurm.SlurmJobKwargs],
+    ):
+        """
+        Submits a list of runs to a SLURM cluster.
+
+        Parameters
+        ----------
+        runs : Sequence[TConfig] | Sequence[tuple[TConfig, Unpack[TArguments]]]
+            A sequence of runs to submit.
+        scheduler : str, optional
+            The scheduler to use. If `auto`, the scheduler will be inferred.
+        snapshot : bool | Path
+            The base path to save snapshots to. If `True`, a default path will be used.
+        reset_id : bool, optional
+            Whether to reset the id of the runs before launching them.
+        activate_venv : bool, optional
+            Whether to activate the virtual environment before running the jobs.
+        print_environment_info : bool, optional
+            Whether to print the environment information before starting each job.
+        env : Mapping[str, str], optional
+            Additional environment variables to set.
+        kwargs : dict
+            Additional keyword arguments to pass to the job submission script.
+        """
+        return self.submit(
+            runs,
+            scheduler="slurm",
+            snapshot=snapshot,
+            reset_id=reset_id,
+            activate_venv=activate_venv,
+            print_environment_info=print_environment_info,
+            env=env,
+            additional_slurm_options=kwargs,
+        )
+
+    def submit_lsf(
+        self,
+        runs: Sequence[TConfig] | Sequence[tuple[TConfig, Unpack[TArguments]]],
+        *,
+        snapshot: bool | SnapshotConfig,
+        reset_id: bool = False,
+        activate_venv: bool = True,
+        print_environment_info: bool = True,
+        env: Mapping[str, str] | None = None,
+        **kwargs: Unpack[lsf.LSFJobKwargs],
+    ):
+        """
+        Submits a list of runs to an LSF cluster.
+
+        Parameters
+        ----------
+        runs : Sequence[TConfig] | Sequence[tuple[TConfig, Unpack[TArguments]]]
+            A sequence of runs to submit.
+        scheduler : str, optional
+            The scheduler to use. If `auto`, the scheduler will be inferred.
+        snapshot : bool | Path
+            The base path to save snapshots to. If `True`, a default path will be used.
+        reset_id : bool, optional
+            Whether to reset the id of the runs before launching them.
+        activate_venv : bool, optional
+            Whether to activate the virtual environment before running the jobs.
+        print_environment_info : bool, optional
+            Whether to print the environment information before starting each job.
+        env : Mapping[str, str], optional
+            Additional environment variables to set.
+        kwargs : dict
+            Additional keyword arguments to pass to the job submission script.
+        """
+        return self.submit(
+            runs,
+            scheduler="lsf",
+            snapshot=snapshot,
+            reset_id=reset_id,
+            activate_venv=activate_venv,
+            print_environment_info=print_environment_info,
+            env=env,
+            additional_lsf_options=kwargs,
+        )
 
 
 # First, let's create the function that's going to be run on the cluster.
