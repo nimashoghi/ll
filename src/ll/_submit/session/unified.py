@@ -218,7 +218,7 @@ def _to_slurm(kwargs: GenericJobKwargs) -> slurm.SlurmJobKwargs:
             raise ValueError(
                 "Number of tasks per node (`tasks_per_node` or `ntasks_per_node`) must be set for LSF jobs.\n"
                 "This is because the total number of tasks is used to compute the world size "
-                "for distributed training jobs. You can set `skip_validation=True` to skip this check."
+                "for distributed training jobs.\nYou can set `skip_validation=True` to skip this check."
             )
 
     return slurm_kwargs
@@ -283,7 +283,7 @@ def _to_lsf(kwargs: GenericJobKwargs) -> lsf.LSFJobKwargs:
             raise ValueError(
                 "Number of tasks per node (`tasks_per_node` or `rs_per_node`) must be set for LSF jobs.\n"
                 "This is because the total number of tasks is used to compute the world size "
-                "for distributed training jobs. You can set `skip_validation=True` to skip this check."
+                "for distributed training jobs.\nYou can set `skip_validation=True` to skip this check."
             )
 
     return lsf_kwargs
