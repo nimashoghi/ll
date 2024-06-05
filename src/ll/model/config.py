@@ -1,7 +1,6 @@
 import copy
 import os
 import re
-import signal
 import socket
 import string
 import time
@@ -1684,11 +1683,6 @@ class RunnerOutputSaveConfig(TypedConfig):
     """Directory path for the output file. If None, will use the current working directory/ll_runner_logs/{id}"""
 
 
-class SubmitConfig(TypedConfig):
-    preempt_signal: signal.Signals | None = None
-    """Signal that should be sent to the process when it is preempted by the scheduler."""
-
-
 class RunnerConfig(TypedConfig):
     auto_call_trainer_init_from_runner: bool = True
     """If enabled, will automatically call the Trainer.runner_init() function from the Runner. Should be `True` most of the time."""
@@ -1701,9 +1695,6 @@ class RunnerConfig(TypedConfig):
         - Run config
         - Full set of environment variables
     """
-
-    submit: SubmitConfig | None = None
-    """Submission configuration options for submitting the run to a cluster scheduler (e.g., SLURM, LSF)."""
 
 
 class MetricConfig(TypedConfig):

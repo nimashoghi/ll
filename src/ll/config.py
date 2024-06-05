@@ -58,7 +58,7 @@ class TypedConfig(BaseModel, _MutableMappingBase):
         strict=True,
         revalidate_instances="always",
         arbitrary_types_allowed=True,
-        extra="forbid",
+        extra="ignore",
         validation_error_cause=True,
         use_attribute_docstrings=True,
     )

@@ -27,7 +27,7 @@ class LSFJobKwargs(TypedDict, total=False):
     This corresponds to the "-J" option in bsub.
     """
 
-    queue: str
+    queue: str | Sequence[str]
     """
     The queue to submit the job to.
 
@@ -345,6 +345,9 @@ def _write_batch_script_to_file(
             f.write(f"#BSUB -e {error_file}\n")
 
         if (queue := kwargs.get("queue")) is not None:
+            if isinstance(queue, Sequence):
+                assert len(queue) == 1, "Only one queue can be specified"
+                queue = queue[0]
             f.write(f"#BSUB -q {queue}\n")
 
         if (memory_mb := kwargs.get("memory_mb")) is not None:

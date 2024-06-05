@@ -162,7 +162,7 @@ class SlurmJobKwargs(TypedDict, total=False):
     This corresponds to the "--gpus-per-node" option in sbatch.
     """
 
-    gpus_per_task: int | str
+    gpus_per_task: int
     """
     Specify the number of GPUs required for the job on each task to be spawned in the job's resource allocation. An optional GPU type specification can be supplied.
 
@@ -287,9 +287,6 @@ def _determine_gres(kwargs: SlurmJobKwargs) -> Sequence[str] | None:
             raise ValueError(
                 "Cannot specify `gpus_per_task` without `ntasks_per_node`."
             )
-
-        if isinstance(gpus_per_task, str):
-            gpus_per_task = int(gpus_per_task)
 
         gpus_per_node = ntasks_per_node * gpus_per_task
         return [f"gpu:{gpus_per_node}"]

@@ -11,7 +11,16 @@ from dataclasses import dataclass, replace
 from functools import wraps
 from logging import getLogger
 from pathlib import Path
-from typing import Any, Generic, Literal, Protocol, TypeAlias, cast, runtime_checkable
+from typing import (
+    Any,
+    Generic,
+    Literal,
+    Protocol,
+    TypeAlias,
+    cast,
+    overload,
+    runtime_checkable,
+)
 
 from tqdm.auto import tqdm
 from typing_extensions import (
@@ -23,7 +32,7 @@ from typing_extensions import (
     override,
 )
 
-from ._submit.session import unified
+from ._submit.session import lsf, slurm, unified
 from ._submit.session._script import create_launcher_script_file
 from .model.config import BaseConfig
 from .trainer import Trainer
@@ -62,6 +71,19 @@ TReturn = TypeVar("TReturn", default=None, infer_variance=True)
 TArguments = TypeVarTuple("TArguments", default=Unpack[tuple[()]])
 
 
+def _validate_runs(runs: list[tuple[TConfig, tuple[Unpack[TArguments]]]]):
+    if not runs:
+        raise ValueError("No run configs provided.")
+
+    # Make sure there are no duplicate ids
+    id_counter = Counter(config.id for config, _ in runs if config.id is not None)
+    duplicate_ids = {id for id, count in id_counter.items() if count > 1}
+    if duplicate_ids:
+        raise ValueError(
+            f"Duplicate run IDs found: {duplicate_ids}. Each run must have a unique ID."
+        )
+
+
 def _resolve_run(
     run: TConfig | tuple[TConfig, Unpack[TArguments]],
     copy_config: bool = True,
@@ -84,25 +106,16 @@ def _resolve_runs(
     runs: Sequence[TConfig] | Sequence[tuple[TConfig, Unpack[TArguments]]],
     copy_config: bool = True,
     reset_id: bool = False,
+    validate: bool = False,
 ):
     resolved: list[tuple[TConfig, tuple[Unpack[TArguments]]]] = []
     for run in runs:
         resolved.append(_resolve_run(run, copy_config=copy_config, reset_id=reset_id))
 
+    if validate:
+        _validate_runs(resolved)
+
     return resolved
-
-
-def _validate_runs(runs: list[tuple[TConfig, tuple[Unpack[TArguments]]]]):
-    if not runs:
-        raise ValueError("No run configs provided.")
-
-    # Make sure there are no duplicate ids
-    id_counter = Counter(config.id for config, _ in runs if config.id is not None)
-    duplicate_ids = {id for id, count in id_counter.items() if count > 1}
-    if duplicate_ids:
-        raise ValueError(
-            f"Duplicate run IDs found: {duplicate_ids}. Each run must have a unique ID."
-        )
 
 
 @runtime_checkable
@@ -338,8 +351,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         id = str(uuid.uuid4())
 
         # Resolve all runs
-        resolved_runs = _resolve_runs(runs)
-        _validate_runs(resolved_runs)
+        resolved_runs = _resolve_runs(runs, validate=True)
         local_data_path = self._local_data_path(id, resolved_runs)
 
         # Setup commands and env
@@ -462,8 +474,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         if isinstance(sessions, int):
             sessions = [{} for _ in range(sessions)]
 
-        resolved_runs = _resolve_runs(runs, reset_id=reset_id)
-        _validate_runs(resolved_runs)
+        resolved_runs = _resolve_runs(runs, reset_id=reset_id, validate=True)
         local_data_path = self._local_data_path(id, resolved_runs)
 
         # Take a snapshot of the environment
@@ -819,8 +830,9 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
             Whether to reset the id of the runs before running them. This prevents the
             dev runs' logs from overwriting the main runs' logs.
         """
-        resolved_runs = _resolve_runs(runs, copy_config=True, reset_id=reset_ids)
-        _validate_runs(resolved_runs)
+        resolved_runs = _resolve_runs(
+            runs, copy_config=True, reset_id=reset_ids, validate=True
+        )
 
         return_values: list[TReturn] = []
         with self._with_env(env or {}):
@@ -932,6 +944,48 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         snapshot_path = snapshot_modules(snapshot_dir, list(snapshot_modules_set))
         return snapshot_path.absolute()
 
+    @overload
+    def submit(
+        self,
+        runs: Sequence[TConfig] | Sequence[tuple[TConfig, Unpack[TArguments]]],
+        *,
+        snapshot: bool | SnapshotConfig,
+        scheduler: Literal["auto"] = "auto",
+        reset_id: bool = False,
+        activate_venv: bool = True,
+        print_environment_info: bool = True,
+        env: Mapping[str, str] | None = None,
+        **kwargs: Unpack[unified.GenericJobKwargs],
+    ): ...
+
+    @overload
+    def submit(
+        self,
+        runs: Sequence[TConfig] | Sequence[tuple[TConfig, Unpack[TArguments]]],
+        *,
+        snapshot: bool | SnapshotConfig,
+        scheduler: Literal["slurm"],
+        reset_id: bool = False,
+        activate_venv: bool = True,
+        print_environment_info: bool = True,
+        env: Mapping[str, str] | None = None,
+        **kwargs: Unpack[slurm.SlurmJobKwargs],
+    ): ...
+
+    @overload
+    def submit(
+        self,
+        runs: Sequence[TConfig] | Sequence[tuple[TConfig, Unpack[TArguments]]],
+        *,
+        snapshot: bool | SnapshotConfig,
+        scheduler: Literal["lsf"],
+        reset_id: bool = False,
+        activate_venv: bool = True,
+        print_environment_info: bool = True,
+        env: Mapping[str, str] | None = None,
+        **kwargs: Unpack[lsf.LSFJobKwargs],
+    ): ...
+
     @remove_lsf_environment_variables()
     @remove_slurm_environment_variables()
     @remove_wandb_environment_variables()
@@ -945,7 +999,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         activate_venv: bool = True,
         print_environment_info: bool = True,
         env: Mapping[str, str] | None = None,
-        **job_kwargs: Unpack[unified.GenericJobKwargs],
+        **kwargs: Any,
     ):
         """
         Submits a list of runs to a cluster (SLURM or LSF).
@@ -966,7 +1020,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
             Whether to print the environment information before starting each job.
         env : Mapping[str, str], optional
             Additional environment variables to set.
-        job_kwargs : dict
+        kwargs : dict
             Additional keyword arguments to pass to the job submission script.
         """
         if scheduler == "auto":
@@ -975,10 +1029,19 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
 
         id = str(uuid.uuid4())
 
-        resolved_runs = _resolve_runs(runs, reset_id=reset_id)
-        _validate_runs(resolved_runs)
+        resolved_runs = _resolve_runs(runs, reset_id=reset_id, validate=True)
         local_data_path = self._local_data_path(id, resolved_runs)
 
+        job_kwargs = cast(unified.GenericJobKwargs, kwargs)
+
+        # Environment variables
+        job_kwargs["environment"] = {
+            **self.env,
+            **job_kwargs.get("environment", {}),
+            **(env or {}),
+        }
+
+        # Setup commands
         setup_commands = list(job_kwargs.get("setup_commands", []))
 
         # Handle snapshot
@@ -999,20 +1062,10 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
             setup_commands.append("echo 'Environment information:'")
             setup_commands.append("python -m ll._submit.print_environment_info")
 
-        job_kwargs["environment"] = {
-            **self.env,
-            **job_kwargs.get("environment", {}),
-            **(env or {}),
-        }
         job_kwargs["setup_commands"] = setup_commands
 
         base_path = local_data_path / "submit"
         base_path.mkdir(exist_ok=True, parents=True)
-
-        # Update submission kwargs based on the configs
-        job_kwargs = unified.update_kwargs_from_configs(
-            job_kwargs, [config for config, _ in resolved_runs]
-        )
 
         # Serialize the runs
         map_array_args: list[

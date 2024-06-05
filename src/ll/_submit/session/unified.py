@@ -1,8 +1,7 @@
-import copy
 import os
 import signal
 import subprocess
-from collections.abc import Callable, Iterable, Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from datetime import timedelta
 from logging import getLogger
 from pathlib import Path
@@ -10,7 +9,6 @@ from typing import Any, Literal
 
 from typing_extensions import TypeAlias, TypedDict, TypeVar, TypeVarTuple, Unpack
 
-from ...model.config import BaseConfig
 from . import lsf, slurm
 from ._output import SubmitOutput
 
@@ -24,10 +22,10 @@ class GenericJobKwargs(TypedDict, total=False):
     name: str
     """The name of the job."""
 
-    partition: str
+    partition: str | Sequence[str]
     """The partition or queue to submit the job to. Same as `queue`."""
 
-    queue: str
+    queue: str | Sequence[str]
     """The queue to submit the job to. Same as `partition`."""
 
     qos: str
@@ -102,7 +100,7 @@ class GenericJobKwargs(TypedDict, total=False):
     This is used to add commands like `srun` or `jsrun` to the job command.
     """
 
-    constraint: str
+    constraint: str | Sequence[str]
     """
     The constraint to request for the job. For SLRUM, this corresponds to the `--constraint` option. For LSF, this is unused.
     """
@@ -122,42 +120,6 @@ class GenericJobKwargs(TypedDict, total=False):
 
     additional_lsf_options: lsf.LSFJobKwargs
     """Additional keyword arguments for LSF jobs."""
-
-
-TConfig = TypeVar("TConfig", infer_variance=True)
-TValue = TypeVar("TValue", infer_variance=True)
-
-
-def _get_value(
-    iterable: Iterable[TConfig], fn: Callable[[TConfig], TValue | None]
-) -> TValue | None:
-    value_set = set(value for config in iterable if (value := fn(config)) is not None)
-    # If there is a single value, return it
-    if len(value_set) == 1:
-        return value_set.pop()
-
-    # Otherwise, return None
-    return None
-
-
-def update_kwargs_from_configs(
-    kwargs: GenericJobKwargs,
-    configs: Iterable[BaseConfig],
-):
-    kwargs = copy.deepcopy(kwargs)
-    if (
-        preempt_signal := _get_value(
-            configs,
-            lambda config: (
-                submit_config.preempt_signal
-                if (submit_config := config.runner.submit) is not None
-                else None
-            ),
-        )
-    ) is not None:
-        kwargs["signal"] = preempt_signal
-
-    return kwargs
 
 
 Scheduler: TypeAlias = Literal["slurm", "lsf"]

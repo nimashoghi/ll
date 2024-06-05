@@ -22,7 +22,7 @@ try:
         ThroughputMonitor as _ThroughputMonitor,
     )
 
-    class ThroughputMonitorCallback(_ThroughputMonitor):
+    class ThroughputMonitorCallback(_ThroughputMonitor):  # pyright: ignore[reportRedeclaration]
         @override
         def _update(
             self,
@@ -89,7 +89,6 @@ class ThroughputMonitorConfig(TypedConfig):
     separator: str = "/"
     """Key separator to use when creating per-device and global metrics."""
 
-    @override
     def construct_callback(self):
         return ThroughputMonitorCallback(
             batch_size_fn=lambda _: self.batch_size,
