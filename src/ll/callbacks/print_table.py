@@ -2,6 +2,7 @@ import copy
 import importlib.util
 import logging
 
+import torch
 from lightning.pytorch import LightningModule, Trainer
 from lightning.pytorch.callbacks import Callback
 from typing_extensions import override
@@ -46,7 +47,11 @@ class PrintTableMetricsCallback(Callback):
 
         # Add rows to the table based on the metrics dictionaries
         for metric_dict in self.metrics:
-            values = [str(value) for value in metric_dict.values()]
+            values: list[str] = []
+            for value in metric_dict.values():
+                if torch.is_tensor(value):
+                    value = float(value.item())
+                values.append(str(value))
             table.add_row(*values)
 
         return table
