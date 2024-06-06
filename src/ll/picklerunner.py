@@ -265,7 +265,7 @@ def _parse_args():
         "--print-environment-info",
         action=argparse.BooleanOptionalAction,
         help="Print the environment information before starting the session",
-        default=True,
+        default=False,
     )
     parser.add_argument(
         "--env",
