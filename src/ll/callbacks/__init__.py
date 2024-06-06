@@ -10,8 +10,9 @@ from .interval import StepIntervalCallback as StepIntervalCallback
 from .latest_epoch_checkpoint import LatestEpochCheckpoint as LatestEpochCheckpoint
 from .on_exception_checkpoint import OnExceptionCheckpoint as OnExceptionCheckpoint
 from .throughput_monitor import ThroughputMonitorConfig as ThroughputMonitorConfig
+from .timer import TimerConfig as TimerConfig
 
 CallbackConfig = Annotated[
-    ThroughputMonitorConfig,
+    ThroughputMonitorConfig | TimerConfig,
     Field(discriminator="name"),
 ]
