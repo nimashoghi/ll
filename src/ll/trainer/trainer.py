@@ -439,6 +439,10 @@ class Trainer(LightningTrainer):
                 callbacks=[callback.construct_callback() for callback in callbacks]
             )
 
+        # Additional callbacks from the logging config
+        if callbacks := config.trainer.logging.construct_callbacks():
+            _update_kwargs(callbacks=callbacks)
+
         if plugin_configs := config.trainer.plugins:
             _update_kwargs(
                 plugins=[

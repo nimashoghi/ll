@@ -552,6 +552,9 @@ class LoggingConfig(TypedConfig):
     log_epoch: bool = True
     """If enabled, will log the fractional epoch number to the logger."""
 
+    print_metrics_table: bool = True
+    """If enabled, will print a table of metrics to the console after each epoch."""
+
     @property
     def wandb(self) -> WandbLoggerConfig | None:
         return next(
@@ -603,6 +606,30 @@ class LoggingConfig(TypedConfig):
                 continue
             loggers.append(logger)
         return loggers
+
+    def construct_callbacks(self):
+        callbacks: list[Callback] = []
+
+        if self.log_lr:
+            from lightning.pytorch.callbacks import LearningRateMonitor
+
+            logging_interval: str | None = None
+            if isinstance(self.log_lr, str):
+                logging_interval = self.log_lr
+
+            callbacks.append(LearningRateMonitor(logging_interval=logging_interval))
+
+        if self.log_epoch:
+            from ..callbacks.log_epoch import LogEpochCallback
+
+            callbacks.append(LogEpochCallback())
+
+        if self.print_metrics_table:
+            from ..callbacks.print_table import PrintTableMetricsCallback
+
+            callbacks.append(PrintTableMetricsCallback())
+
+        return callbacks
 
 
 class GradientClippingConfig(TypedConfig):
@@ -677,13 +704,15 @@ class PythonLogging(TypedConfig):
         torch: bool = True,
         numpy: bool = True,
         rich: bool = True,
-        progress: bool = True,
+        rich_tracebacks: bool = True,
+        rich_progress_bar: bool = False,
     ):
         self.log_level = log_level
         self.lovely_tensors = torch
         self.lovely_numpy = numpy
         self.rich = rich
-        self.use_rich_progress_bar = progress
+        self.rich_tracebacks = rich_tracebacks
+        self.use_rich_progress_bar = rich_progress_bar
 
 
 TPlugin = TypeVar(

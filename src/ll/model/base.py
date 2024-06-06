@@ -31,9 +31,7 @@ from .modules.debug import DebugModuleMixin
 from .modules.distributed import DistributedMixin
 from .modules.finite_checks import FiniteChecksModuleMixin
 from .modules.log_dir import LogDirMixin
-from .modules.log_epoch import LogEpochMixin
 from .modules.logger import LoggerModuleMixin
-from .modules.lr_monitor import LRMonitorMixin
 from .modules.optimizer import OptimizerModuleMixin
 from .modules.parameter_hooks import ParameterHookModuleMixin
 from .modules.profiler import ProfilerMixin
@@ -149,9 +147,7 @@ class LightningModuleBase(  # pyright: ignore[reportIncompatibleMethodOverride]
     WandbWrapperMixin,
     OptimizerModuleMixin,
     RLPSanityCheckModuleMixin,
-    LogEpochMixin,
     LoggerModuleMixin,
-    LRMonitorMixin,
     FiniteChecksModuleMixin,
     SharedParametersModuleMixin,
     ParameterHookModuleMixin,
