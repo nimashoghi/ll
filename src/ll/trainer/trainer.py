@@ -14,13 +14,12 @@ from lightning.fabric.plugins.environments.slurm import SLURMEnvironment
 from lightning.fabric.plugins.precision.precision import _PRECISION_INPUT
 from lightning.pytorch import LightningDataModule, LightningModule
 from lightning.pytorch import Trainer as LightningTrainer
-from lightning.pytorch.callbacks import RichProgressBar
 from lightning.pytorch.loggers import Logger
 from lightning.pytorch.profilers import Profiler
 from lightning.pytorch.utilities.types import _EVALUATE_OUTPUT, _PREDICT_OUTPUT
 from typing_extensions import Unpack, assert_never, override
 
-from ..actsave import ActSave, ActSaveCallback
+from ..actsave import ActSave
 from ..log import init_python_logging
 from ..model.config import (
     AcceleratorConfigProtocol,

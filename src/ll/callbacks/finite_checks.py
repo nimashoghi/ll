@@ -1,13 +1,16 @@
 from logging import getLogger
+from typing import Literal
 
 import torch
 from lightning.pytorch import Callback, LightningModule, Trainer
 from typing_extensions import override
 
+from .base import CallbackConfigBase
+
 log = getLogger(__name__)
 
 
-def print_bad_gradients(
+def finite_checks(
     module: LightningModule,
     nonfinite_grads: bool = True,
     none_grads: bool = False,
@@ -34,12 +37,12 @@ def print_bad_gradients(
         log.critical(f"{name} ({param.shape}) has {kinds} gradients")
 
 
-class PrintBadGradientsCallback(Callback):
+class FiniteChecksCallback(Callback):
     def __init__(
         self,
         *,
         nonfinite_grads: bool = True,
-        none_grads: bool = False,
+        none_grads: bool = True,
     ):
         super().__init__()
 
@@ -48,8 +51,25 @@ class PrintBadGradientsCallback(Callback):
 
     @override
     def on_after_backward(self, trainer: Trainer, pl_module: LightningModule):
-        print_bad_gradients(
+        finite_checks(
             pl_module,
             nonfinite_grads=self._nonfinite_grads,
             none_grads=self._none_grads,
+        )
+
+
+class FiniteChecksConfig(CallbackConfigBase):
+    name: Literal["finite_checks"] = "finite_checks"
+
+    nonfinite_grads: bool = True
+    """Whether to check for non-finite (i.e. NaN or Inf) gradients"""
+
+    none_grads: bool = True
+    """Whether to check for None gradients"""
+
+    @override
+    def construct_callbacks(self, root_config):
+        yield FiniteChecksCallback(
+            nonfinite_grads=self.nonfinite_grads,
+            none_grads=self.none_grads,
         )

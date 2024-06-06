@@ -642,11 +642,6 @@ class GradientSkippingConfig(TypedConfig):
 
 
 class OptimizationConfig(TypedConfig):
-    grad_finite_checks: bool = False
-    """If enabled, will check that the gradients are finite after each backward pass."""
-    grad_none_checks: bool = False
-    """If enabled, will check that the gradients are not None after each backward pass."""
-
     log_grad_norm: bool | str | float = False
     """If enabled, will log the gradient norm (averaged across all model parameters) to the logger."""
     log_grad_norm_per_param: bool | str | float = False

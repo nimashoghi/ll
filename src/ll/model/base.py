@@ -29,7 +29,6 @@ from .config import (
 from .modules.callback import CallbackModuleMixin, CallbackRegistrarModuleMixin
 from .modules.debug import DebugModuleMixin
 from .modules.distributed import DistributedMixin
-from .modules.finite_checks import FiniteChecksModuleMixin
 from .modules.log_dir import LogDirMixin
 from .modules.logger import LoggerModuleMixin
 from .modules.optimizer import OptimizerModuleMixin
@@ -148,7 +147,6 @@ class LightningModuleBase(  # pyright: ignore[reportIncompatibleMethodOverride]
     OptimizerModuleMixin,
     RLPSanityCheckModuleMixin,
     LoggerModuleMixin,
-    FiniteChecksModuleMixin,
     SharedParametersModuleMixin,
     ParameterHookModuleMixin,
     DistributedMixin,
