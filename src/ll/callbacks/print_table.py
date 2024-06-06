@@ -2,6 +2,7 @@ import copy
 import fnmatch
 import importlib.util
 import logging
+from typing import Literal
 
 import torch
 from lightning.pytorch import LightningModule, Trainer
@@ -75,6 +76,8 @@ class PrintTableMetricsCallback(Callback):
 
 class PrintTableMetricsConfig(CallbackConfigBase):
     """Configuration class for PrintTableMetricsCallback."""
+
+    name: Literal["print_table_metrics"] = "print_table_metrics"
 
     enabled: bool = True
     """Whether to enable the callback or not."""
