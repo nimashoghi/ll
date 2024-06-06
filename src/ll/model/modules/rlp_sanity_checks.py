@@ -23,7 +23,7 @@ def _on_train_start_callback(trainer: Trainer, pl_module: LightningModule):
         return
 
     config = cast(BaseConfig, pl_module.hparams)
-    if config.trainer.reduce_lr_on_plateau_sanity_checks == "disable":
+    if config.trainer.sanity_checking.reduce_lr_on_plateau == "disable":
         return
 
     # if no lr schedulers, return
@@ -32,7 +32,7 @@ def _on_train_start_callback(trainer: Trainer, pl_module: LightningModule):
 
     errors: list[str] = []
     disable_message = (
-        "Otherwise, set `config.trainer.reduce_lr_on_plateau_sanity_checks='disable'` "
+        "Otherwise, set `config.trainer.sanity_checking.reduce_lr_on_plateau='disable'` "
         "to disable this sanity check."
     )
 
@@ -118,7 +118,7 @@ def _on_train_start_callback(trainer: Trainer, pl_module: LightningModule):
         "ReduceLRPlateau sanity checks failed with the following errors:\n"
         + "\n".join(errors)
     )
-    match config.trainer.reduce_lr_on_plateau_sanity_checks:
+    match config.trainer.sanity_checking.reduce_lr_on_plateau:
         case "warn":
             log.warning(message)
         case "error":

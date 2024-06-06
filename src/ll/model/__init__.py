@@ -37,6 +37,7 @@ from .config import PythonLogging as PythonLogging
 from .config import ReproducibilityConfig as ReproducibilityConfig
 from .config import RunnerConfig as RunnerConfig
 from .config import RunnerOutputSaveConfig as RunnerOutputSaveConfig
+from .config import SanityCheckingConfig as SanityCheckingConfig
 from .config import SeedEverythingConfig as SeedEverythingConfig
 from .config import TrainerConfig as TrainerConfig
 from .config import WandbWatchConfig as WandbWatchConfig

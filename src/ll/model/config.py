@@ -1453,6 +1453,16 @@ class ActSaveConfig(CallbackConfigBase):
         return [ActSaveCallback()]
 
 
+class SanityCheckingConfig(TypedConfig):
+    reduce_lr_on_plateau: Literal["disable", "error", "warn"] = "error"
+    """
+    If enabled, will do some sanity checks if the `ReduceLROnPlateau` scheduler is used:
+        - If the `interval` is step, it makes sure that validation is called every `frequency` steps.
+        - If the `interval` is epoch, it makes sure that validation is called every `frequency` epochs.
+    Valid values are: "disable", "warn", "error".
+    """
+
+
 class TrainerConfig(TypedConfig):
     checkpoint_loading: CheckpointLoadingConfig = CheckpointLoadingConfig()
     """Checkpoint loading configuration options."""
@@ -1471,6 +1481,9 @@ class TrainerConfig(TypedConfig):
 
     reproducibility: ReproducibilityConfig = ReproducibilityConfig()
     """Reproducibility configuration options."""
+
+    sanity_checking: SanityCheckingConfig = SanityCheckingConfig()
+    """Sanity checking configuration options."""
 
     actsave: ActSaveConfig | None = ActSaveConfig(enabled=False)
     """Activation saving configuration options."""
@@ -1658,13 +1671,6 @@ class TrainerConfig(TypedConfig):
     """If enabled, the model supports registering parameter hooks using `LightningModuleBase.register_parameter_hook(...)`"""
     log_batch_info_on_error: bool = False
     """If enabled, will log the batch info (e.g. batch index, batch object, etc.) when an exception is thrown during training."""
-    reduce_lr_on_plateau_sanity_checks: Literal["disable", "error", "warn"] = "error"
-    """
-    If enabled, will do some sanity checks if the `ReduceLROnPlateau` scheduler is used:
-        - If the `interval` is step, it makes sure that validation is called every `frequency` steps.
-        - If the `interval` is epoch, it makes sure that validation is called every `frequency` epochs.
-    Valid values are: "disable", "warn", "error".
-    """
 
     lightning_kwargs: LightningTrainerKwargs = LightningTrainerKwargs()
     """
