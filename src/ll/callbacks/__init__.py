@@ -2,6 +2,7 @@ from typing import Annotated
 
 from ..config import Field
 from .bad_gradients import PrintBadGradientsCallback as PrintBadGradientsCallback
+from .base import CallbackConfigBase as CallbackConfigBase
 from .early_stopping import EarlyStopping as EarlyStopping
 from .ema import EMA as EMA
 from .interval import EpochIntervalCallback as EpochIntervalCallback
@@ -11,11 +12,12 @@ from .latest_epoch_checkpoint import LatestEpochCheckpoint as LatestEpochCheckpo
 from .log_epoch import LogEpochCallback as LogEpochCallback
 from .on_exception_checkpoint import OnExceptionCheckpoint as OnExceptionCheckpoint
 from .print_table import PrintTableMetricsCallback as PrintTableMetricsCallback
+from .print_table import PrintTableMetricsConfig as PrintTableMetricsConfig
 from .throughput_monitor import ThroughputMonitorConfig as ThroughputMonitorConfig
 from .timer import EpochTimer as EpochTimer
 from .timer import EpochTimerConfig as EpochTimerConfig
 
 CallbackConfig = Annotated[
-    ThroughputMonitorConfig | EpochTimerConfig,
+    ThroughputMonitorConfig | EpochTimerConfig | PrintTableMetricsConfig,
     Field(discriminator="name"),
 ]

@@ -7,7 +7,7 @@ from lightning.fabric.utilities.rank_zero import rank_zero_warn
 from lightning.pytorch.callbacks.callback import Callback
 from typing_extensions import override
 
-from ..config import TypedConfig
+from .base import CallbackConfigBase
 
 if TYPE_CHECKING:
     from lightning.pytorch import LightningModule, Trainer
@@ -74,7 +74,7 @@ except ImportError:
             )
 
 
-class ThroughputMonitorConfig(TypedConfig):
+class ThroughputMonitorConfig(CallbackConfigBase):
     name: Literal["throughput_monitor"] = "throughput_monitor"
 
     batch_size: int
@@ -89,8 +89,9 @@ class ThroughputMonitorConfig(TypedConfig):
     separator: str = "/"
     """Key separator to use when creating per-device and global metrics."""
 
-    def construct_callback(self):
-        return ThroughputMonitorCallback(
+    @override
+    def construct_callbacks(self, root_config):
+        yield ThroughputMonitorCallback(
             batch_size_fn=lambda _: self.batch_size,
             length_fn=(lambda _: l) if (l := self.length) is not None else None,
             window_size=self.window_size,

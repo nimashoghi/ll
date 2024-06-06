@@ -209,29 +209,6 @@ class Trainer(LightningTrainer):
             yield
 
     @classmethod
-    def ll_default_callbacks(cls, config: BaseConfig):
-        """
-        Returns a generator of default callbacks for the LL trainer, based on the provided configuration.
-
-        Args:
-            config (BaseConfig): The configuration object.
-
-        Yields:
-            Callback: The default callbacks for the LL trainer.
-        """
-        if config.trainer.actsave:
-            yield ActSaveCallback()
-
-        if config.trainer.early_stopping is not None:
-            yield config.trainer.early_stopping.construct_callback(config)
-
-        if config.trainer.checkpoint_saving.should_save_checkpoints(config):
-            yield from config.trainer.checkpoint_saving.construct_callbacks(config)
-
-        if config.trainer.python_logging.use_rich_progress_bar:
-            yield RichProgressBar()
-
-    @classmethod
     @contextlib.contextmanager
     def context(cls, config: BaseConfig):
         with contextlib.ExitStack() as stack:
@@ -434,13 +411,7 @@ class Trainer(LightningTrainer):
             # kwargs["profiler"] = profiler
             _update_kwargs(profiler=profiler)
 
-        if callbacks := config.trainer.callbacks:
-            _update_kwargs(
-                callbacks=[callback.construct_callback() for callback in callbacks]
-            )
-
-        # Additional callbacks from the logging config
-        if callbacks := config.trainer.logging.construct_callbacks():
+        if callbacks := list(config._ll_resolve_all_callbacks()):
             _update_kwargs(callbacks=callbacks)
 
         if plugin_configs := config.trainer.plugins:
@@ -478,9 +449,6 @@ class Trainer(LightningTrainer):
         _update_kwargs(**cast(Any, config.trainer.additional_trainer_kwargs))
         _update_kwargs(**config.trainer.lightning_kwargs)
         _update_kwargs(**kwargs_ctor)
-
-        # Set the callbacks
-        _update_kwargs(callbacks=[*cls.ll_default_callbacks(config)])
 
         return kwargs
 

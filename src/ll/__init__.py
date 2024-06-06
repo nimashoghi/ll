@@ -25,7 +25,6 @@ from .model import Base as Base
 from .model import BaseConfig as BaseConfig
 from .model import BaseLoggerConfig as BaseLoggerConfig
 from .model import BaseProfilerConfig as BaseProfilerConfig
-from .model import CheckpointCallbackBaseConfig as CheckpointCallbackBaseConfig
 from .model import CheckpointLoadingConfig as CheckpointLoadingConfig
 from .model import CheckpointSavingConfig as CheckpointSavingConfig
 from .model import ConfigList as ConfigList

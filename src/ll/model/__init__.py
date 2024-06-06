@@ -7,7 +7,6 @@ from .config import ActSaveConfig as ActSaveConfig
 from .config import BaseConfig as BaseConfig
 from .config import BaseLoggerConfig as BaseLoggerConfig
 from .config import BaseProfilerConfig as BaseProfilerConfig
-from .config import CheckpointCallbackBaseConfig as CheckpointCallbackBaseConfig
 from .config import CheckpointLoadingConfig as CheckpointLoadingConfig
 from .config import CheckpointSavingConfig as CheckpointSavingConfig
 from .config import DirectoryConfig as DirectoryConfig

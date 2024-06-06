@@ -26,7 +26,6 @@ from lightning.fabric.plugins import CheckpointIO, ClusterEnvironment
 from lightning.fabric.plugins.precision.precision import _PRECISION_INPUT
 from lightning.pytorch.accelerators import Accelerator
 from lightning.pytorch.callbacks.callback import Callback
-from lightning.pytorch.callbacks.checkpoint import Checkpoint
 from lightning.pytorch.loggers import Logger
 from lightning.pytorch.plugins import _PLUGIN_INPUT
 from lightning.pytorch.plugins.layer_sync import LayerSync
@@ -37,6 +36,7 @@ from pydantic import DirectoryPath
 from typing_extensions import Self, TypedDict, TypeVar, override
 
 from ..callbacks import CallbackConfig
+from ..callbacks.base import CallbackConfigBase
 from ..config import Field, TypedConfig
 from ..util.slurm import parse_slurm_node_list
 
@@ -536,7 +536,7 @@ LoggerConfig: TypeAlias = Annotated[
 ]
 
 
-class LoggingConfig(TypedConfig):
+class LoggingConfig(CallbackConfigBase):
     enabled: bool = True
     """Enable experiment tracking."""
 
@@ -551,9 +551,6 @@ class LoggingConfig(TypedConfig):
     """If enabled, will register a `LearningRateMonitor` callback to log the learning rate to the logger."""
     log_epoch: bool = True
     """If enabled, will log the fractional epoch number to the logger."""
-
-    print_metrics_table: bool = True
-    """If enabled, will print a table of metrics to the console after each epoch."""
 
     @property
     def wandb(self) -> WandbLoggerConfig | None:
@@ -607,9 +604,8 @@ class LoggingConfig(TypedConfig):
             loggers.append(logger)
         return loggers
 
-    def construct_callbacks(self):
-        callbacks: list[Callback] = []
-
+    @override
+    def construct_callbacks(self, root_config):
         if self.log_lr:
             from lightning.pytorch.callbacks import LearningRateMonitor
 
@@ -617,19 +613,12 @@ class LoggingConfig(TypedConfig):
             if isinstance(self.log_lr, str):
                 logging_interval = self.log_lr
 
-            callbacks.append(LearningRateMonitor(logging_interval=logging_interval))
+            yield LearningRateMonitor(logging_interval=logging_interval)
 
         if self.log_epoch:
             from ..callbacks.log_epoch import LogEpochCallback
 
-            callbacks.append(LogEpochCallback())
-
-        if self.print_metrics_table:
-            from ..callbacks.print_table import PrintTableMetricsCallback
-
-            callbacks.append(PrintTableMetricsCallback())
-
-        return callbacks
+            yield LogEpochCallback()
 
 
 class GradientClippingConfig(TypedConfig):
@@ -680,7 +669,7 @@ LogLevel: TypeAlias = Literal[
 ]
 
 
-class PythonLogging(TypedConfig):
+class PythonLogging(CallbackConfigBase):
     log_level: LogLevel | None = None
     """Log level to use for the Python logger (or None to use the default)."""
 
@@ -713,6 +702,13 @@ class PythonLogging(TypedConfig):
         self.rich = rich
         self.rich_tracebacks = rich_tracebacks
         self.use_rich_progress_bar = rich_progress_bar
+
+    @override
+    def construct_callbacks(self, root_config):
+        if self.use_rich_progress_bar:
+            from lightning.pytorch.callbacks.progress import RichProgressBar
+
+            yield RichProgressBar()
 
 
 TPlugin = TypeVar(
@@ -882,14 +878,7 @@ class ReproducibilityConfig(TypedConfig):
     """
 
 
-class CheckpointCallbackBaseConfig(TypedConfig, ABC):
-    enabled: bool = True
-
-    @abstractmethod
-    def construct_callback(self, root_config: "BaseConfig") -> Checkpoint: ...
-
-
-class ModelCheckpointCallbackConfig(CheckpointCallbackBaseConfig):
+class ModelCheckpointCallbackConfig(CallbackConfigBase):
     """Arguments for the ModelCheckpoint callback."""
 
     kind: Literal["model_checkpoint"] = "model_checkpoint"
@@ -994,7 +983,7 @@ class ModelCheckpointCallbackConfig(CheckpointCallbackBaseConfig):
         return output_string
 
     @override
-    def construct_callback(self, root_config):
+    def construct_callbacks(self, root_config):
         from lightning.pytorch.callbacks.model_checkpoint import ModelCheckpoint
 
         dirpath = self.dirpath or root_config.directory.resolve_subdirectory(
@@ -1024,7 +1013,7 @@ class ModelCheckpointCallbackConfig(CheckpointCallbackBaseConfig):
             )
             filename = new_filename
 
-        return ModelCheckpoint(
+        yield ModelCheckpoint(
             dirpath=dirpath,
             filename=filename,
             monitor=monitor,
@@ -1042,7 +1031,7 @@ class ModelCheckpointCallbackConfig(CheckpointCallbackBaseConfig):
         )
 
 
-class LatestEpochCheckpointCallbackConfig(CheckpointCallbackBaseConfig):
+class LatestEpochCheckpointCallbackConfig(CallbackConfigBase):
     kind: Literal["latest_epoch_checkpoint"] = "latest_epoch_checkpoint"
 
     dirpath: str | Path | None = None
@@ -1055,21 +1044,21 @@ class LatestEpochCheckpointCallbackConfig(CheckpointCallbackBaseConfig):
     """Whether to save only the model's weights or the entire model object."""
 
     @override
-    def construct_callback(self, root_config):
+    def construct_callbacks(self, root_config):
         from ..callbacks.latest_epoch_checkpoint import LatestEpochCheckpoint
 
         dirpath = self.dirpath or root_config.directory.resolve_subdirectory(
             root_config.id, "checkpoint"
         )
 
-        return LatestEpochCheckpoint(
+        yield LatestEpochCheckpoint(
             dirpath=dirpath,
             filename=self.filename,
             save_weights_only=self.save_weights_only,
         )
 
 
-class OnExceptionCheckpointCallbackConfig(CheckpointCallbackBaseConfig):
+class OnExceptionCheckpointCallbackConfig(CallbackConfigBase):
     kind: Literal["on_exception_checkpoint"] = "on_exception_checkpoint"
 
     dirpath: str | Path | None = None
@@ -1079,7 +1068,7 @@ class OnExceptionCheckpointCallbackConfig(CheckpointCallbackBaseConfig):
     """Checkpoint filename. This must not include the extension. If `None`, `on_exception_{id}_{timestamp}` is used."""
 
     @override
-    def construct_callback(self, root_config):
+    def construct_callbacks(self, root_config):
         from ..callbacks.on_exception_checkpoint import OnExceptionCheckpoint
 
         dirpath = self.dirpath or root_config.directory.resolve_subdirectory(
@@ -1088,7 +1077,7 @@ class OnExceptionCheckpointCallbackConfig(CheckpointCallbackBaseConfig):
 
         if not (filename := self.filename):
             filename = f"on_exception_{root_config.id}"
-        return OnExceptionCheckpoint(dirpath=dirpath, filename=filename)
+        yield OnExceptionCheckpoint(dirpath=dirpath, filename=filename)
 
 
 CheckpointCallbackConfig: TypeAlias = Annotated[
@@ -1099,14 +1088,14 @@ CheckpointCallbackConfig: TypeAlias = Annotated[
 ]
 
 
-class CheckpointSavingConfig(TypedConfig):
+class CheckpointSavingConfig(CallbackConfigBase):
     enabled: bool = True
     """Enable checkpoint saving."""
 
     checkpoint_callbacks: Sequence[CheckpointCallbackConfig] = [
-        ModelCheckpointCallbackConfig(enabled=True),
-        LatestEpochCheckpointCallbackConfig(enabled=True),
-        OnExceptionCheckpointCallbackConfig(enabled=True),
+        ModelCheckpointCallbackConfig(),
+        LatestEpochCheckpointCallbackConfig(),
+        OnExceptionCheckpointCallbackConfig(),
     ]
     """Checkpoint callback configurations."""
 
@@ -1153,16 +1142,13 @@ class CheckpointSavingConfig(TypedConfig):
             ),
         )
 
+    @override
     def construct_callbacks(self, root_config: "BaseConfig"):
         if not self.should_save_checkpoints(root_config):
-            return []
+            return
 
-        callbacks: list[Checkpoint] = []
         for callback_config in self.checkpoint_callbacks:
-            if not callback_config.enabled:
-                continue
-            callbacks.append(callback_config.construct_callback(root_config))
-        return callbacks
+            yield from callback_config.construct_callbacks(root_config)
 
 
 class LightningTrainerKwargs(TypedDict, total=False):
@@ -1403,7 +1389,7 @@ class LightningTrainerKwargs(TypedDict, total=False):
     """
 
 
-class EarlyStoppingConfig(TypedConfig):
+class EarlyStoppingConfig(CallbackConfigBase):
     monitor: str | None = None
     """
     The metric to monitor for early stopping.
@@ -1438,7 +1424,8 @@ class EarlyStoppingConfig(TypedConfig):
     to qualify as an improvement.
     """
 
-    def construct_callback(self, root_config: "BaseConfig"):
+    @override
+    def construct_callbacks(self, root_config: "BaseConfig"):
         from ..callbacks.early_stopping import EarlyStopping
 
         monitor = self.monitor
@@ -1457,17 +1444,19 @@ class EarlyStoppingConfig(TypedConfig):
         if mode is None:
             mode = "min"
 
-        return EarlyStopping(
-            monitor=monitor,
-            mode=mode,
-            patience=self.patience,
-            min_delta=self.min_delta,
-            min_lr=self.min_lr,
-            strict=self.strict,
-        )
+        return [
+            EarlyStopping(
+                monitor=monitor,
+                mode=mode,
+                patience=self.patience,
+                min_delta=self.min_delta,
+                min_lr=self.min_lr,
+                strict=self.strict,
+            )
+        ]
 
 
-class ActSaveConfig(TypedConfig):
+class ActSaveConfig(CallbackConfigBase):
     enabled: bool = True
     """Enable activation saving."""
 
@@ -1485,6 +1474,12 @@ class ActSaveConfig(TypedConfig):
             return self.save_dir
 
         return root_config.directory.resolve_subdirectory(root_config.id, "activation")
+
+    @override
+    def construct_callbacks(self, root_config):
+        from ..actsave import ActSaveCallback
+
+        return [ActSaveCallback()]
 
 
 class TrainerConfig(TypedConfig):
@@ -1997,3 +1992,18 @@ class BaseConfig(TypedConfig):
                 "Are you sure this is a valid Lightning checkpoint?"
             )
         return cls.from_dict(hparams)
+
+    def _ll_resolve_all_callback_configs(self) -> Iterable[CallbackConfigBase | None]:
+        yield self.trainer.actsave
+        yield self.trainer.early_stopping
+        yield self.trainer.checkpoint_saving
+        yield self.trainer.logging
+        yield self.trainer.python_logging
+        yield from self.trainer.callbacks
+
+    def _ll_resolve_all_callbacks(self):
+        for callback_config in self._ll_resolve_all_callback_configs():
+            if not callback_config:
+                continue
+
+            yield from callback_config.construct_callbacks(self)

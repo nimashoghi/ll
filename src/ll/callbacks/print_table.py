@@ -1,4 +1,5 @@
 import copy
+import fnmatch
 import importlib.util
 import logging
 
@@ -7,15 +8,21 @@ from lightning.pytorch import LightningModule, Trainer
 from lightning.pytorch.callbacks import Callback
 from typing_extensions import override
 
+from .base import CallbackConfigBase
+
 log = logging.getLogger(__name__)
 
 
 class PrintTableMetricsCallback(Callback):
     """Prints a table with the metrics in columns on every epoch end."""
 
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        metric_patterns: list[str] | None = None,
+    ) -> None:
         self.metrics: list = []
         self.rich_available = importlib.util.find_spec("rich") is not None
+        self.metric_patterns = metric_patterns
 
         if not self.rich_available:
             log.warning(
@@ -28,6 +35,15 @@ class PrintTableMetricsCallback(Callback):
             return
 
         metrics_dict = copy.copy(trainer.callback_metrics)
+        # Filter metrics based on the patterns
+        if self.metric_patterns is not None:
+            metrics_dict = {
+                key: value
+                for key, value in metrics_dict.items()
+                if any(
+                    fnmatch.fnmatch(key, pattern) for pattern in self.metric_patterns
+                )
+            }
         self.metrics.append(metrics_dict)
 
         from rich.console import Console
@@ -55,3 +71,17 @@ class PrintTableMetricsCallback(Callback):
             table.add_row(*values)
 
         return table
+
+
+class PrintTableMetricsConfig(CallbackConfigBase):
+    """Configuration class for PrintTableMetricsCallback."""
+
+    enabled: bool = True
+    """Whether to enable the callback or not."""
+
+    metric_patterns: list[str] | None = None
+    """List of patterns to filter the metrics to be displayed. If None, all metrics are displayed."""
+
+    @override
+    def construct_callbacks(self, root_config):
+        yield PrintTableMetricsCallback(metric_patterns=self.metric_patterns)

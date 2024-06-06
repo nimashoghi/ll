@@ -7,7 +7,7 @@ from lightning.pytorch.callbacks import Callback
 from lightning.pytorch.utilities.types import STEP_OUTPUT
 from typing_extensions import override
 
-from ..config import TypedConfig
+from .base import CallbackConfigBase
 
 log = logging.getLogger(__name__)
 
@@ -149,8 +149,9 @@ class EpochTimer(Callback):
         self._total_batches = state_dict["total_batches"]
 
 
-class EpochTimerConfig(TypedConfig):
+class EpochTimerConfig(CallbackConfigBase):
     name: Literal["epoch_timer"] = "epoch_timer"
 
-    def construct_callback(self):
-        return EpochTimer()
+    @override
+    def construct_callbacks(self, root_config):
+        yield EpochTimer()
