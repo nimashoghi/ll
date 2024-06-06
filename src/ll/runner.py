@@ -290,10 +290,11 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         session_command: list[str],
         config_base_path: Path,
         session_name: str,
+        attach: bool = False,
     ):
         return [
             "screen",
-            "-dmS",
+            "-dmS" if not attach else "-S",
             session_name,
             # Save the logs to a file
             "-L",
@@ -314,6 +315,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         setup_commands: Sequence[str] | None = None,
         activate_venv: bool = True,
         print_environment_info: bool = False,
+        attach: bool = False,
     ):
         """
         Launches len(sessions) local runs in different environments using `screen`.
@@ -334,6 +336,8 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
             Whether to activate the virtual environment before running the jobs.
         print_environment_info : bool, optional
             Whether to print the environment information before starting each job.
+        attach : bool, optional
+            Whether to attach to the screen session after launching it.
         """
 
         # Generate a random ID for the session.
@@ -381,7 +385,6 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
                 ((self._run, self._init_kwargs, c, args), {})
                 for c, args in resolved_runs
             ],
-            print_environment_info=print_environment_info,
         )
 
         # Create the launcher script
@@ -395,7 +398,12 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         launcher_command = ["bash", str(launcher_path)]
 
         # Get the screen session command
-        command = self._launch_session(launcher_command, config_pickle_save_path, name)
+        command = self._launch_session(
+            launcher_command,
+            config_pickle_save_path,
+            name,
+            attach=attach,
+        )
         command = " ".join(command)
 
         # Print the full command so the user can copy-paste it
