@@ -1907,9 +1907,7 @@ class BaseConfig(TypedConfig):
         cls_name = self.__class__.__name__
 
         parts: list[str] = []
-        parts.append(f"id={self.id}")
-        if self.name:
-            parts.append(f"name={_truncate(self.name)}")
+        parts.append(f"name={self.run_name}")
         if self.project:
             parts.append(f"project={_truncate(self.project)}")
 

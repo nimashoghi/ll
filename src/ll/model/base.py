@@ -158,7 +158,14 @@ class LightningModuleBase(  # pyright: ignore[reportIncompatibleMethodOverride]
     # Torch's __repr__ method is too verbose and doesn't provide any useful information.
     @override
     def __repr__(self):
-        return f"{self.__class__.__name__}({self.hparams.concise_repr()})"
+        parts: list[str] = []
+        parts.append(f"config={self.hparams.concise_repr()}")
+        parts.append(f"device={self.device}")
+        if self.debug:
+            parts.append("debug=True")
+
+        parts_str = ", ".join(parts)
+        return f"{self.__class__.__name__}({parts_str})"
 
     @classmethod
     def _validate_class_for_ckpt_loading(cls):
