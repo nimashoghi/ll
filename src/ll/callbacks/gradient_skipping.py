@@ -1,5 +1,5 @@
 from logging import getLogger
-from typing import Literal, runtime_checkable
+from typing import Literal, Protocol, runtime_checkable
 
 import torch
 import torchmetrics
@@ -14,7 +14,7 @@ log = getLogger(__name__)
 
 
 @runtime_checkable
-class HasGradSkippedSteps:
+class HasGradSkippedSteps(Protocol):
     grad_skipped_steps: torchmetrics.SumMetric
 
 
