@@ -648,10 +648,13 @@ class OptimizationConfig(TypedConfig):
     """Gradient skipping configuration, or None to disable gradient skipping."""
 
 
+LogLevel: TypeAlias = Literal[
+    "CRITICAL", "FATAL", "ERROR", "WARN", "WARNING", "INFO", "DEBUG"
+]
+
+
 class PythonLogging(TypedConfig):
-    log_level: (
-        Literal["CRITICAL", "FATAL", "ERROR", "WARN", "WARNING", "INFO", "DEBUG"] | None
-    ) = None
+    log_level: LogLevel | None = None
     """Log level to use for the Python logger (or None to use the default)."""
 
     rich: bool = False
@@ -666,6 +669,21 @@ class PythonLogging(TypedConfig):
 
     use_rich_progress_bar: bool = False
     """If enabled, will use the rich library to format the progress bar."""
+
+    def pretty_(
+        self,
+        *,
+        log_level: LogLevel | None = "INFO",
+        torch: bool = True,
+        numpy: bool = True,
+        rich: bool = True,
+        progress: bool = True,
+    ):
+        self.log_level = log_level
+        self.lovely_tensors = torch
+        self.lovely_numpy = numpy
+        self.rich = rich
+        self.use_rich_progress_bar = progress
 
 
 TPlugin = TypeVar(
