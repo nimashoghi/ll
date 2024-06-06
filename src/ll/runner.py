@@ -23,7 +23,7 @@ from typing_extensions import (
     override,
 )
 
-from ._submit.session import lsf, slurm, unified
+from ._submit.session import unified
 from ._submit.session._script import create_launcher_script_file
 from .model.config import BaseConfig
 from .trainer import Trainer
