@@ -12,9 +12,10 @@ from .log_epoch import LogEpochCallback as LogEpochCallback
 from .on_exception_checkpoint import OnExceptionCheckpoint as OnExceptionCheckpoint
 from .print_table import PrintTableMetricsCallback as PrintTableMetricsCallback
 from .throughput_monitor import ThroughputMonitorConfig as ThroughputMonitorConfig
-from .timer import TimerConfig as TimerConfig
+from .timer import EpochTimer as EpochTimer
+from .timer import EpochTimerConfig as EpochTimerConfig
 
 CallbackConfig = Annotated[
-    ThroughputMonitorConfig | TimerConfig,
+    ThroughputMonitorConfig | EpochTimerConfig,
     Field(discriminator="name"),
 ]
