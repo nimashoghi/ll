@@ -3,6 +3,7 @@ from collections.abc import Sequence
 from logging import getLogger
 from typing import Any
 
+import numpy as np
 import torch
 from jaxtyping import BFloat16 as BFloat16
 from jaxtyping import Bool as Bool
@@ -99,7 +100,7 @@ def _make_error_str(input: Any, t: Any) -> str:
     return "\n".join(error_components)
 
 
-T = TypeVar("T", bound=torch.Tensor, infer_variance=True)
+T = TypeVar("T", torch.Tensor, np.ndarray, infer_variance=True)
 
 """
 Patch to jaxtyping:
