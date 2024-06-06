@@ -40,7 +40,6 @@ from .model import (
     EnvironmentSLURMInformationConfig as EnvironmentSLURMInformationConfig,
 )
 from .model import GradientClippingConfig as GradientClippingConfig
-from .model import GradientSkippingConfig as GradientSkippingConfig
 from .model import LightningDataModuleBase as LightningDataModuleBase
 from .model import LightningModuleBase as LightningModuleBase
 from .model import LoggingConfig as LoggingConfig

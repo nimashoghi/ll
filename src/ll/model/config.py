@@ -630,33 +630,9 @@ class GradientClippingConfig(TypedConfig):
     """Norm type to use for gradient clipping."""
 
 
-class GradientSkippingConfig(TypedConfig):
-    enabled: bool = True
-    """Enable gradient skipping."""
-    norm_type: str | float = 2.0
-    """Norm type to use for gradient skipping."""
-    threshold: float = float("inf")
-    """Threshold to use for gradient skipping."""
-    start_after_n_steps: int | None = 100
-    """Number of steps to wait before starting gradient skipping."""
-
-
 class OptimizationConfig(TypedConfig):
-    log_grad_norm: bool | str | float = False
-    """If enabled, will log the gradient norm (averaged across all model parameters) to the logger."""
-    log_grad_norm_per_param: bool | str | float = False
-    """If enabled, will log the gradient norm for each model parameter to the logger."""
-
-    log_param_norm: bool | str | float = False
-    """If enabled, will log the parameter norm (averaged across all model parameters) to the logger."""
-    log_param_norm_per_param: bool | str | float = False
-    """If enabled, will log the parameter norm for each model parameter to the logger."""
-
     gradient_clipping: GradientClippingConfig | None = None
     """Gradient clipping configuration, or None to disable gradient clipping."""
-
-    gradient_skipping: GradientSkippingConfig | None = None
-    """Gradient skipping configuration, or None to disable gradient skipping."""
 
 
 LogLevel: TypeAlias = Literal[

@@ -22,7 +22,6 @@ from .config import (
     EnvironmentSLURMInformationConfig as EnvironmentSLURMInformationConfig,
 )
 from .config import GradientClippingConfig as GradientClippingConfig
-from .config import GradientSkippingConfig as GradientSkippingConfig
 from .config import (
     LatestEpochCheckpointCallbackConfig as LatestEpochCheckpointCallbackConfig,
 )
