@@ -290,7 +290,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         session_command: list[str],
         config_base_path: Path,
         session_name: str,
-        attach: bool = False,
+        attach: bool = True,
     ):
         return [
             "screen",
@@ -315,7 +315,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         setup_commands: Sequence[str] | None = None,
         activate_venv: bool = True,
         print_environment_info: bool = False,
-        attach: bool = False,
+        attach: bool = True,
     ):
         """
         Launches len(sessions) local runs in different environments using `screen`.
