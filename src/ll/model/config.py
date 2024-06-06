@@ -630,9 +630,30 @@ class GradientClippingConfig(TypedConfig):
     """Norm type to use for gradient clipping."""
 
 
-class OptimizationConfig(TypedConfig):
+class OptimizationConfig(CallbackConfigBase):
+    log_grad_norm: bool | str | float = False
+    """If enabled, will log the gradient norm (averaged across all model parameters) to the logger."""
+    log_grad_norm_per_param: bool | str | float = False
+    """If enabled, will log the gradient norm for each model parameter to the logger."""
+
+    log_param_norm: bool | str | float = False
+    """If enabled, will log the parameter norm (averaged across all model parameters) to the logger."""
+    log_param_norm_per_param: bool | str | float = False
+    """If enabled, will log the parameter norm for each model parameter to the logger."""
+
     gradient_clipping: GradientClippingConfig | None = None
     """Gradient clipping configuration, or None to disable gradient clipping."""
+
+    @override
+    def construct_callbacks(self, root_config):
+        from ..callbacks.norm_logging import NormLoggingConfig
+
+        yield from NormLoggingConfig(
+            log_grad_norm=self.log_grad_norm,
+            log_grad_norm_per_param=self.log_grad_norm_per_param,
+            log_param_norm=self.log_param_norm,
+            log_param_norm_per_param=self.log_param_norm_per_param,
+        ).construct_callbacks(root_config)
 
 
 LogLevel: TypeAlias = Literal[
