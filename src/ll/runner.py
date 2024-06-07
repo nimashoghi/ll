@@ -455,6 +455,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         snapshot: bool | SnapshotConfig = False,
         gpus: Sequence[int] | None = None,
         env: Mapping[str, str] | None = None,
+        setup_commands: Sequence[str] | None = None,
         reset_ids: bool = True,
         attach: bool = True,
     ):
@@ -473,6 +474,8 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
             The GPUs to use for the runs.
         env : Mapping[str, str], optional
             Additional environment variables to set.
+        setup_commands : Sequence[str], optional
+            A list of commands to run at the beginning of the shell script.
         reset_ids : bool, optional
             Whether to reset the id of the runs before running them. This prevents the
             dev runs' logs from overwriting the main runs' logs.
@@ -493,7 +496,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
             snapshot=snapshot,
             name="ll-fast_dev_run",
             env=env,
-            setup_commands=["echo 'Running fast dev run'"],
+            setup_commands=setup_commands,
             attach=attach,
         )
 
