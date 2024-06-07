@@ -4,6 +4,7 @@ from ..config import Field
 from .base import CallbackConfigBase as CallbackConfigBase
 from .early_stopping import EarlyStopping as EarlyStopping
 from .ema import EMA as EMA
+from .ema import EMAConfig as EMAConfig
 from .finite_checks import FiniteChecksCallback as FiniteChecksCallback
 from .finite_checks import FiniteChecksConfig as FiniteChecksConfig
 from .gradient_skipping import GradientSkipping as GradientSkipping
@@ -28,6 +29,7 @@ CallbackConfig = Annotated[
     | PrintTableMetricsConfig
     | FiniteChecksConfig
     | NormLoggingConfig
-    | GradientSkippingConfig,
+    | GradientSkippingConfig
+    | EMAConfig,
     Field(discriminator="name"),
 ]

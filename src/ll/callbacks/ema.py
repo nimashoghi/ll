@@ -2,13 +2,15 @@ import contextlib
 import copy
 import threading
 from collections.abc import Callable, Iterable
-from typing import Any, overload
+from typing import Any, Literal, overload
 
 import lightning.pytorch as pl
 import torch
 from lightning.pytorch import Callback
 from lightning.pytorch.utilities.exceptions import MisconfigurationException
 from typing_extensions import override
+
+from .base import CallbackConfigBase
 
 
 class EMA(Callback):
@@ -354,3 +356,28 @@ class EMAOptimizer(torch.optim.Optimizer):
     def add_param_group(self, param_group):
         self.optimizer.add_param_group(param_group)
         self.rebuild_ema_params = True
+
+
+class EMAConfig(CallbackConfigBase):
+    name: Literal["ema"] = "ema"
+
+    decay: float
+    """The exponential decay used when calculating the moving average. Has to be between 0-1."""
+
+    validate_original_weights: bool = False
+    """Validate the original weights, as apposed to the EMA weights."""
+
+    every_n_steps: int = 1
+    """Apply EMA every N steps."""
+
+    cpu_offload: bool = False
+    """Offload weights to CPU."""
+
+    @override
+    def construct_callbacks(self, root_config):
+        yield EMA(
+            decay=self.decay,
+            validate_original_weights=self.validate_original_weights,
+            every_n_steps=self.every_n_steps,
+            cpu_offload=self.cpu_offload,
+        )
