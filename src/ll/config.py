@@ -71,8 +71,8 @@ class TypedConfig(BaseModel, _MutableMappingBase):
         """Called after the final config is validated."""
         pass
 
-    @deprecated("Use `model_validate` instead.")
     @classmethod
+    @deprecated("Use `model_validate` instead.")
     def from_dict(cls, model_dict: Mapping[str, Any]):
         return cls.model_validate(model_dict)
 
