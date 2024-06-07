@@ -273,6 +273,12 @@ def _parse_args():
         help="Set the environment variable. Format: KEY=VALUE",
         action="append",
     )
+    parser.add_argument(
+        "--replace-rocr-visible-devices",
+        action=argparse.BooleanOptionalAction,
+        help="Replace the ROCR_VISIBLE_DEVICES environment variable with CUDA_VISIBLE_DEVICES",
+        default=True,
+    )
 
     args = parser.parse_args()
     return args
@@ -309,6 +315,15 @@ def picklerunner_main():
                 key, value = env.split("=", 1)
                 log.critical(f"Setting {key}={value}...")
                 stack.enter_context(_set_env(key, value))
+
+        # Replace the ROCR_VISIBLE_DEVICES environment variable with CUDA_VISIBLE_DEVICES if requested.
+        if args.replace_rocr_visible_devices:
+            if "ROCR_VISIBLE_DEVICES" in os.environ:
+                log.critical(
+                    "Replacing ROCR_VISIBLE_DEVICES with CUDA_VISIBLE_DEVICES..."
+                )
+                os.environ["CUDA_VISIBLE_DEVICES"] = os.environ["ROCR_VISIBLE_DEVICES"]
+                os.environ.pop("ROCR_VISIBLE_DEVICES")
 
         # Unset the CUDA_VISIBLE_DEVICES environment variable if requested.
         if args.unset_cuda:
