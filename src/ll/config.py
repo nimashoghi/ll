@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING, Any, ClassVar
 from pydantic import BaseModel, ConfigDict
 from pydantic import Field as Field
 from pydantic import PrivateAttr as PrivateAttr
-from typing_extensions import override
+from typing_extensions import deprecated, override
 
 from ._config.missing import MISSING, validate_no_missing_values
 from ._config.missing import AllowMissing as AllowMissing
@@ -71,6 +71,7 @@ class TypedConfig(BaseModel, _MutableMappingBase):
         """Called after the final config is validated."""
         pass
 
+    @deprecated("Use `model_validate` instead.")
     @classmethod
     def from_dict(cls, model_dict: Mapping[str, Any]):
         return cls.model_validate(model_dict)

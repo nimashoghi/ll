@@ -36,7 +36,11 @@ from pydantic import DirectoryPath
 from typing_extensions import Self, TypedDict, TypeVar, override
 
 from ..callbacks import CallbackConfig
-from ..callbacks.base import CallbackConfigBase
+from ..callbacks.base import (
+    CallbackConfigBase,
+    _construct_callbacks_with_metadata,
+    _process_and_filter_callbacks,
+)
 from ..config import Field, TypedConfig
 from ..util.slurm import parse_slurm_node_list
 
@@ -1987,19 +1991,32 @@ class BaseConfig(TypedConfig):
                 f"The checkpoint does not contain the `{hparams_key}` attribute. "
                 "Are you sure this is a valid Lightning checkpoint?"
             )
-        return cls.from_dict(hparams)
+        return cls.model_validate(hparams)
 
-    def _ll_resolve_all_callback_configs(self) -> Iterable[CallbackConfigBase | None]:
-        yield self.trainer.actsave
-        yield self.trainer.early_stopping
-        yield self.trainer.checkpoint_saving
-        yield self.trainer.logging
-        yield self.trainer.python_logging
-        yield from self.trainer.callbacks
 
-    def _ll_resolve_all_callbacks(self):
-        for callback_config in self._ll_resolve_all_callback_configs():
-            if not callback_config:
-                continue
+# region Config resolution helpers
 
-            yield from callback_config.construct_callbacks(self)
+
+def _resolve_all_callback_configs(
+    config: BaseConfig,
+) -> Iterable[CallbackConfigBase | None]:
+    yield config.trainer.actsave
+    yield config.trainer.early_stopping
+    yield config.trainer.checkpoint_saving
+    yield config.trainer.logging
+    yield config.trainer.python_logging
+    yield from config.trainer.callbacks
+
+
+def _resolve_all_callbacks(root_config: BaseConfig):
+    callback_configs = list(_resolve_all_callback_configs(root_config))
+    callback_configs = [config for config in callback_configs if config is not None]
+    callbacks = _process_and_filter_callbacks(
+        callback
+        for callback_config in callback_configs
+        for callback in _construct_callbacks_with_metadata(callback_config, root_config)
+    )
+    return callbacks
+
+
+# endregion

@@ -28,6 +28,7 @@ from ..model.config import (
     CheckpointLoadingConfig,
     LightningTrainerKwargs,
     StrategyConfigProtocol,
+    _resolve_all_callbacks,
 )
 from ..util import seed
 from ..util.environment import set_additional_env_vars
@@ -410,7 +411,7 @@ class Trainer(LightningTrainer):
             # kwargs["profiler"] = profiler
             _update_kwargs(profiler=profiler)
 
-        if callbacks := list(config._ll_resolve_all_callbacks()):
+        if callbacks := _resolve_all_callbacks(config):
             _update_kwargs(callbacks=callbacks)
 
         if plugin_configs := config.trainer.plugins:
