@@ -51,17 +51,16 @@ class CallbackConfigBase(TypedConfig, ABC):
         self, root_config: "BaseConfig"
     ) -> Iterable[Callback | CallbackWithMetadata]: ...
 
+    def _construct_callbacks_with_metadata(
+        self, root_config: "BaseConfig"
+    ) -> Iterable[CallbackWithMetadata]:
+        for callback in self.construct_callbacks(root_config):
+            if isinstance(callback, CallbackWithMetadata):
+                yield callback
+                continue
 
-def _construct_callbacks_with_metadata(
-    config: CallbackConfigBase, root_config: "BaseConfig"
-) -> Iterable[CallbackWithMetadata]:
-    for callback in config.construct_callbacks(root_config):
-        if isinstance(callback, CallbackWithMetadata):
+            callback = self.with_metadata(callback)
             yield callback
-            continue
-
-        callback = config.with_metadata(callback)
-        yield callback
 
 
 def _process_and_filter_callbacks(

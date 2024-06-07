@@ -36,11 +36,7 @@ from pydantic import DirectoryPath
 from typing_extensions import Self, TypedDict, TypeVar, override
 
 from ..callbacks import CallbackConfig
-from ..callbacks.base import (
-    CallbackConfigBase,
-    _construct_callbacks_with_metadata,
-    _process_and_filter_callbacks,
-)
+from ..callbacks.base import CallbackConfigBase, _process_and_filter_callbacks
 from ..config import Field, TypedConfig
 from ..util.slurm import parse_slurm_node_list
 
@@ -652,12 +648,15 @@ class OptimizationConfig(CallbackConfigBase):
     def construct_callbacks(self, root_config):
         from ..callbacks.norm_logging import NormLoggingConfig
 
-        yield from NormLoggingConfig(
+        for callback in NormLoggingConfig(
             log_grad_norm=self.log_grad_norm,
             log_grad_norm_per_param=self.log_grad_norm_per_param,
             log_param_norm=self.log_param_norm,
             log_param_norm_per_param=self.log_param_norm_per_param,
-        ).construct_callbacks(root_config)
+        )._construct_callbacks_with_metadata(root_config):
+            callback = copy.deepcopy(callback)
+            callback.metadata.ignore_if_exists = True
+            yield callback
 
 
 LogLevel: TypeAlias = Literal[
@@ -2014,7 +2013,7 @@ def _resolve_all_callbacks(root_config: BaseConfig):
     callbacks = _process_and_filter_callbacks(
         callback
         for callback_config in callback_configs
-        for callback in _construct_callbacks_with_metadata(callback_config, root_config)
+        for callback in callback_config._construct_callbacks_with_metadata(root_config)
     )
     return callbacks
 
