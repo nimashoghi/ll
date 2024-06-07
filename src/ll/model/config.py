@@ -381,6 +381,9 @@ class WandbLoggerConfig(BaseLoggerConfig):
     enabled: bool = Field(default_factory=lambda: _wandb_available())
     """Enable WandB logging."""
 
+    priority: int = 2
+    """Priority of the logger. Higher values are logged first."""
+
     project: str | None = None
     """WandB project name to use for the logger. If None, will use the root config's project name."""
 
@@ -396,8 +399,8 @@ class WandbLoggerConfig(BaseLoggerConfig):
     watch: WandbWatchConfig = WandbWatchConfig()
     """WandB model watch configuration. Used to log model architecture, gradients, and parameters."""
 
-    priority: int = 2
-    """Priority of the logger. Higher values are logged first."""
+    offline: bool = False
+    """Whether to run WandB in offline mode."""
 
     @override
     def construct_logger(self, root_config):
@@ -424,6 +427,7 @@ class WandbLoggerConfig(BaseLoggerConfig):
                 else None
             ),
             tags=root_config.tags,
+            offline=self.offline,
         )
 
 
@@ -433,14 +437,14 @@ class CSVLoggerConfig(BaseLoggerConfig):
     enabled: bool = True
     """Enable CSV logging."""
 
+    priority: int = 0
+    """Priority of the logger. Higher values are logged first."""
+
     prefix: str = ""
     """A string to put at the beginning of metric keys."""
 
     flush_logs_every_n_steps: int = 100
     """How often to flush logs to disk."""
-
-    priority: int = 0
-    """Priority of the logger. Higher values are logged first."""
 
     @override
     def construct_logger(self, root_config):
@@ -489,6 +493,9 @@ class TensorboardLoggerConfig(BaseLoggerConfig):
     enabled: bool = Field(default_factory=lambda: _tensorboard_available())
     """Enable TensorBoard logging."""
 
+    priority: int = 2
+    """Priority of the logger. Higher values are logged first."""
+
     log_graph: bool = False
     """
     Adds the computational graph to tensorboard. This requires that
@@ -504,9 +511,6 @@ class TensorboardLoggerConfig(BaseLoggerConfig):
 
     prefix: str = ""
     """A string to put at the beginning of metric keys."""
-
-    priority: int = 2
-    """Priority of the logger. Higher values are logged first."""
 
     @override
     def construct_logger(self, root_config):
