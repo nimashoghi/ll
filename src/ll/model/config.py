@@ -656,6 +656,7 @@ class OptimizationConfig(CallbackConfigBase):
         )._construct_callbacks_with_metadata(root_config):
             callback = copy.deepcopy(callback)
             callback.metadata.ignore_if_exists = True
+            callback.metadata.priority = -1
             yield callback
 
 
