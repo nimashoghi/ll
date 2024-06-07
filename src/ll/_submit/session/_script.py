@@ -1,8 +1,10 @@
 import sys
 from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path
+from typing import TYPE_CHECKING
 
-from ...picklerunner import SerializedMultiFunction
+if TYPE_CHECKING:
+    from ...picklerunner import SerializedMultiFunction
 
 
 def create_launcher_script_file(
@@ -51,7 +53,7 @@ def create_launcher_script_file(
 
 def write_helper_script(
     base_dir: Path,
-    function: SerializedMultiFunction,
+    function: "SerializedMultiFunction",
     environment: Mapping[str, str],
     setup_commands: Sequence[str],
     job_index_variable: str,
