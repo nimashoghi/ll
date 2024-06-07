@@ -501,12 +501,9 @@ class Trainer(LightningTrainer):
             or self.gradient_clip_algorithm is not None
         ):
             raise ValueError(
-                "Gradient clipping is not supported with manual optimization. "
+                "Automatic gradient clipping is not supported with manual optimization. "
                 f"Please set {model.__class__.__name__}.automatic_optimization to True "
                 "or disable automatic gradient clipping. "
-                "If you want to use gradient clipping with manual optimization, you can "
-                "set `config.trainer.automatic_gradient_clip=False` and "
-                "use the values in `config.trainer.gradient_clip_val` and `config.trainer.gradient_clip_algorithm`."
             )
 
         with self._actsave_context(model):
