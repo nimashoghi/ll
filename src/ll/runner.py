@@ -7,11 +7,10 @@ import uuid
 from collections import Counter
 from collections.abc import Mapping, Sequence
 from contextlib import ExitStack
-from dataclasses import dataclass
 from functools import wraps
 from logging import getLogger
 from pathlib import Path
-from typing import Any, Generic, Literal, Protocol, TypeAlias, cast, runtime_checkable
+from typing import Any, Generic, Literal, Protocol, cast, runtime_checkable
 
 from tqdm.auto import tqdm
 from typing_extensions import TypedDict, TypeVar, TypeVarTuple, Unpack, override
@@ -105,21 +104,6 @@ def _resolve_runs(
 @runtime_checkable
 class RunProtocol(Protocol[TConfig, TReturn, Unpack[TArguments]]):
     def __call__(self, config: TConfig, *args: Unpack[TArguments]) -> TReturn: ...
-
-
-@dataclass
-class RunnerSession:
-    env: Mapping[str, str]
-    """The environment variables to use for the session."""
-
-    name: str | None = None
-    """The name of the session."""
-
-    per_rank_env: Sequence[Mapping[str, str]] | None = None
-    """The environment variables to set for each rank."""
-
-
-SessionGPUIndex: TypeAlias = int | tuple[int, ...]
 
 
 class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
@@ -278,6 +262,67 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
 
         return return_values
 
+    def fast_dev_run(
+        self,
+        runs: Sequence[TConfig] | Sequence[tuple[TConfig, Unpack[TArguments]]],
+        n_batches: int = 1,
+        *,
+        gpus: Sequence[int] | None = None,
+        env: Mapping[str, str] | None = None,
+        stop_on_error: bool = True,
+        reset_memory_caches: bool = True,
+        reset_ids: bool = True,
+    ):
+        """
+        Runs a list of configs locally with `LightningTrainer.fast_dev_run = True`.
+
+        Parameters
+        ----------
+        runs : Sequence[TConfig] | Sequence[tuple[TConfig, Unpack[TArguments]]]
+            A sequence of runs to submit.
+        n_batches : int, optional
+            The number of batches to run for `fast_dev_run`.
+        gpus : Sequence[int], optional
+            The GPUs to use for the runs.
+        env : Mapping[str, str], optional
+            Additional environment variables to set.
+        stop_on_error : bool, optional
+            Whether to stop on error.
+        reset_memory_caches : bool, optional
+            Whether to reset memory caches after each run.
+        reset_ids : bool, optional
+            Whether to reset the id of the runs before running them. This prevents the
+            dev runs' logs from overwriting the main runs' logs.
+        """
+        resolved_runs = _resolve_runs(
+            runs, copy_config=True, reset_id=reset_ids, validate=True
+        )
+
+        return_values: list[TReturn] = []
+        with self._with_env(env or {}):
+            for config, args in tqdm(resolved_runs, desc="Fast dev run"):
+                run_id = config.id
+                run_name = config.run_name
+                try:
+                    if gpus is not None:
+                        config.trainer.accelerator = "gpu"
+                        config.trainer.devices = gpus
+                    config.trainer.fast_dev_run = n_batches
+                    return_values.append(self._run_fn(config, *args))
+                except BaseException as e:
+                    log.critical(f"Error in run with {run_id=} ({run_name=}): {e}")
+                    if stop_on_error:
+                        raise
+                    else:
+                        # Print full traceback
+                        traceback.print_exc()
+                finally:
+                    # After each run, we should reset memory/caches
+                    if reset_memory_caches:
+                        self._reset_memory_caches()
+
+        return return_values
+
     def _launch_session(
         self,
         session_command: list[str],
@@ -402,14 +447,16 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         # Print the full command so the user can copy-paste it
         print(f"Run the following command to launch the session:\n\n{command}")
 
-    def fast_dev_run(
+    def fast_dev_run_session(
         self,
         runs: Sequence[TConfig] | Sequence[tuple[TConfig, Unpack[TArguments]]],
         n_batches: int = 1,
+        *,
+        snapshot: bool | SnapshotConfig = False,
+        gpus: Sequence[int] | None = None,
         env: Mapping[str, str] | None = None,
-        stop_on_error: bool = True,
-        reset_memory_caches: bool = True,
         reset_ids: bool = True,
+        attach: bool = True,
     ):
         """
         Runs a list of configs locally with `LightningTrainer.fast_dev_run = True`.
@@ -420,41 +467,35 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
             A sequence of runs to submit.
         n_batches : int, optional
             The number of batches to run for `fast_dev_run`.
+        snapshot : bool | Path, optional
+            The base path to save snapshots to. If `True`, a default path will be used. If `False`, no snapshots will be taken.
+        gpus : Sequence[int], optional
+            The GPUs to use for the runs.
         env : Mapping[str, str], optional
             Additional environment variables to set.
-        stop_on_error : bool, optional
-            Whether to stop on error.
-        reset_memory_caches : bool, optional
-            Whether to reset memory caches after each run.
         reset_ids : bool, optional
             Whether to reset the id of the runs before running them. This prevents the
             dev runs' logs from overwriting the main runs' logs.
+        attach : bool, optional
+            Whether to attach to the screen session after launching it.
         """
         resolved_runs = _resolve_runs(
             runs, copy_config=True, reset_id=reset_ids, validate=True
         )
+        for config, _ in resolved_runs:
+            config.trainer.fast_dev_run = n_batches
+            if gpus is not None:
+                config.trainer.accelerator = "gpu"
+                config.trainer.devices = gpus
 
-        return_values: list[TReturn] = []
-        with self._with_env(env or {}):
-            for config, args in tqdm(resolved_runs, desc="Fast dev run"):
-                run_id = config.id
-                run_name = config.run_name
-                try:
-                    config.trainer.fast_dev_run = n_batches
-                    return_values.append(self._run_fn(config, *args))
-                except BaseException as e:
-                    log.critical(f"Error in run with {run_id=} ({run_name=}): {e}")
-                    if stop_on_error:
-                        raise
-                    else:
-                        # Print full traceback
-                        traceback.print_exc()
-                finally:
-                    # After each run, we should reset memory/caches
-                    if reset_memory_caches:
-                        self._reset_memory_caches()
-
-        return return_values
+        return self.session(
+            [(configs, *args) for configs, args in resolved_runs],
+            snapshot=snapshot,
+            name="ll-fast_dev_run",
+            env=env,
+            setup_commands=["echo 'Running fast dev run'"],
+            attach=attach,
+        )
 
     def _reset_memory_caches(self):
         import gc
