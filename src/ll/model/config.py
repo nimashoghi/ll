@@ -903,7 +903,7 @@ class ModelCheckpointCallbackConfig(CallbackConfigBase):
     verbose: bool = False
     """Verbosity mode. If True, print additional information about checkpoints."""
 
-    save_last: Literal[True, False, "link"] | None = None
+    save_last: Literal[True, False, "link"] | None = "link"
     """
     Whether to save the last checkpoint.
         If True, saves a copy of the last checkpoint separately.

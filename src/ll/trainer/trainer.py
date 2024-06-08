@@ -3,7 +3,7 @@ import logging
 import os
 import subprocess
 import uuid
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import Any, Protocol, cast, runtime_checkable
 
@@ -12,7 +12,7 @@ import yaml
 from lightning.fabric.plugins.environments.lsf import LSFEnvironment
 from lightning.fabric.plugins.environments.slurm import SLURMEnvironment
 from lightning.fabric.plugins.precision.precision import _PRECISION_INPUT
-from lightning.pytorch import LightningDataModule, LightningModule
+from lightning.pytorch import LightningModule
 from lightning.pytorch import Trainer as LightningTrainer
 from lightning.pytorch.loggers import Logger
 from lightning.pytorch.profilers import Profiler
@@ -25,7 +25,6 @@ from ..model.config import (
     AcceleratorConfigProtocol,
     BaseConfig,
     BaseProfilerConfig,
-    CheckpointLoadingConfig,
     LightningTrainerKwargs,
     StrategyConfigProtocol,
     _resolve_all_callbacks,
@@ -472,6 +471,12 @@ class Trainer(LightningTrainer):
             log_dir = str(Path(log_dir).resolve())
         log.critical(f"LightningTrainer log directory: {self.log_dir}.")
 
+        # Checkpoint loading
+        if (
+            ckpt_loading := self._ll_config.trainer.checkpoint_loading
+        ) and ckpt_loading.path:
+            self.ckpt_path = ckpt_loading.path
+
     @contextlib.contextmanager
     def _actsave_context(self, model: LightningModule):
         hparams = cast(BaseConfig, model.hparams)
@@ -508,92 +513,3 @@ class Trainer(LightningTrainer):
 
         with self._actsave_context(model):
             return super()._run(model, ckpt_path)
-
-    def _resolve_ckpt_path_get_valid_path(
-        self,
-        ckpt_path: str | Path | None,
-        config: CheckpointLoadingConfig,
-    ):
-        if ckpt_path is not None:
-            return ckpt_path
-
-        if (candidate_path := config.path) is not None:
-            return candidate_path
-
-        return None
-
-    def _resolve_ckpt_path(self, ckpt_path: str | Path | None):
-        config = self._ll_config.trainer.checkpoint_loading
-
-        # First, let's just try to get a non-None path.
-        ckpt_path = self._resolve_ckpt_path_get_valid_path(ckpt_path, config)
-
-        return ckpt_path
-
-    @override
-    def fit(
-        self,
-        model: LightningModule,
-        train_dataloaders: Any | LightningDataModule | None = None,
-        val_dataloaders: Any | None = None,
-        datamodule: LightningDataModule | None = None,
-        ckpt_path: str | Path | None = None,
-    ) -> None:
-        return super().fit(
-            model,
-            train_dataloaders,
-            val_dataloaders,
-            datamodule,
-            self._resolve_ckpt_path(ckpt_path),
-        )
-
-    @override
-    def validate(
-        self,
-        model: LightningModule | None = None,
-        dataloaders: Any | LightningDataModule | None = None,
-        ckpt_path: str | Path | None = None,
-        verbose: bool = True,
-        datamodule: LightningDataModule | None = None,
-    ) -> list[Mapping[str, float]]:
-        return super().validate(
-            model,
-            dataloaders,
-            self._resolve_ckpt_path(ckpt_path),
-            verbose,
-            datamodule,
-        )
-
-    @override
-    def test(
-        self,
-        model: LightningModule | None = None,
-        dataloaders: Any | LightningDataModule | None = None,
-        ckpt_path: str | Path | None = None,
-        verbose: bool = True,
-        datamodule: LightningDataModule | None = None,
-    ) -> list[Mapping[str, float]]:
-        return super().test(
-            model,
-            dataloaders,
-            self._resolve_ckpt_path(ckpt_path),
-            verbose,
-            datamodule,
-        )
-
-    @override
-    def predict(
-        self,
-        model: LightningModule | None = None,
-        dataloaders: Any | LightningDataModule | None = None,
-        datamodule: LightningDataModule | None = None,
-        return_predictions: bool | None = None,
-        ckpt_path: str | Path | None = None,
-    ) -> list[Any] | None:
-        return super().predict(
-            model,
-            dataloaders,
-            datamodule,
-            return_predictions,
-            self._resolve_ckpt_path(ckpt_path),
-        )
