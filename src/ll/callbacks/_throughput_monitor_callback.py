@@ -12,7 +12,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import time
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, TypeVar, Union
+from collections import deque
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Callable,
+    Deque,
+    Dict,
+    List,
+    Optional,
+    TypeVar,
+    Union,
+)
 
 import torch
 from lightning.fabric.plugins import Precision as FabricPrecision
