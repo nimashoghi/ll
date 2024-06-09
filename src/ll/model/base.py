@@ -293,20 +293,6 @@ class LightningModuleBase(  # pyright: ignore[reportIncompatibleMethodOverride]
         loss = cast(torch.Tensor, loss)
         return loss
 
-    def skipped_training_step(self, batch: Any, batch_idx: int):
-        """
-        This function gets called when a `SkipBatch` exception is raised during any point in training.
-        If `automatic_optimization` is enabled, it should return a loss tensor that will be used for the backward pass. By default, it returns a zero loss tensor.
-        If `automatic_optimization` is disabled, this function needs to be implemented and should handle the backward pass itself.
-        """
-        if not self.automatic_optimization:
-            raise NotImplementedError(
-                "To use `SkipBatch` with manual optimization, you must implement `skipped_training_step`."
-            )
-
-        loss = self.zero_loss()
-        return loss
-
     @property
     def datamodule(self):
         datamodule = getattr(self.trainer, "datamodule", None)

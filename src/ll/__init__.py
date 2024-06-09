@@ -16,7 +16,6 @@ from .config import MissingField as MissingField
 from .config import PrivateAttr as PrivateAttr
 from .config import TypedConfig as TypedConfig
 from .data import dataset_transform as dataset_transform
-from .exception import SkipBatch as SkipBatch
 from .log import init_python_logging as init_python_logging
 from .log import pretty as pretty
 from .lr_scheduler import LRSchedulerConfig as LRSchedulerConfig
