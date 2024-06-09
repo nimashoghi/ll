@@ -1699,9 +1699,6 @@ class RunnerConfig(TypedConfig):
     python_logging: PythonLogging = PythonLogging()
     """Python logging configuration options."""
 
-    auto_call_trainer_init_from_runner: bool = True
-    """If enabled, will automatically call the Trainer.runner_init() function from the Runner. Should be `True` most of the time."""
-
     dump_run_information: bool = True
     """
     If enabled, will dump different bits of run information to the output directory before starting the run.

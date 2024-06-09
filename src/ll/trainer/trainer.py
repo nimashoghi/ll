@@ -53,53 +53,8 @@ class Trainer(LightningTrainer):
 
     @classmethod
     @contextlib.contextmanager
-    def ll_initialize(cls, config: BaseConfig):
-        """
-        Context manager for initializing the trainer.
-
-        Args:
-            config (BaseConfig): The configuration object.
-
-        Yields:
-            None
-
-        Raises:
-            ValueError: If both `config.trainer.default_root_dir` and `config.trainer.auto_set_default_root_dir` are set.
-
-        Example:
-            with Trainer.ll_initialize(config):
-                # Code to initialize the trainer
-        """
-        with contextlib.ExitStack() as stack:
-            if not config.runner.auto_call_trainer_init_from_runner:
-                stack.enter_context(cls.runner_init(config))
-
-            yield
-
-    @classmethod
-    @contextlib.contextmanager
-    def runner_init(cls, config: BaseConfig):
-        """
-        Context manager for initializing the runner.
-
-        Used to set up the Python logging and save the stdout/stderr to a file.
-
-        Args:
-            config (BaseConfig): The configuration object.
-
-        Yields:
-            None
-
-        """
-        with contextlib.ExitStack() as stack:
-            yield
-
-    @classmethod
-    @contextlib.contextmanager
     def context(cls, config: BaseConfig):
         with contextlib.ExitStack() as stack:
-            stack.enter_context(cls.ll_initialize(config))
-
             cls._finalizers.clear()
             if (
                 seed_config := config.trainer.reproducibility.seed_everything

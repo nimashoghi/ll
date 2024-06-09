@@ -287,10 +287,6 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
                 # Set up Python logging
                 self._setup_python_logging(config)
 
-                # If `auto_call_trainer_init_from_runner`, we call `Trainer.runner_init` before running the program.
-                if config.runner.auto_call_trainer_init_from_runner:
-                    stack.enter_context(Trainer.runner_init(config))
-
                 if config.trainer.auto_wrap_trainer:
                     stack.enter_context(Trainer.context(config))
                     log.critical("Auto-wrapping run in Trainer context")
