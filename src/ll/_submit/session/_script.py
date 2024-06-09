@@ -13,6 +13,10 @@ def create_launcher_script_file(
     environment: Mapping[str, str],
     setup_commands: Sequence[str],
     chmod: bool = True,
+    prepend_command_with_exec: bool = True,
+    # ^ If True, the original command will be prepended with 'exec' to replace the shell process
+    #   with the command. This is useful for ensuring that the command is the only process in the
+    #   process tree (e.g. for better signal handling).
 ):
     """
     Creates a helper bash script for running the given function.
@@ -44,6 +48,9 @@ def create_launcher_script_file(
 
         if not isinstance(original_command, str):
             original_command = " ".join(original_command)
+
+        if prepend_command_with_exec:
+            original_command = f"exec {original_command}"
         f.write(f"{original_command}\n")
 
     if chmod:
