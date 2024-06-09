@@ -17,6 +17,7 @@ from typing_extensions import TypedDict, TypeVar, TypeVarTuple, Unpack, override
 
 from ._submit.session import unified
 from ._submit.session._script import create_launcher_script_file
+from .log import init_python_logging
 from .model.config import BaseConfig
 from .trainer import Trainer
 from .util.environment import (
@@ -195,6 +196,25 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
 
         return base_path
 
+    def _setup_python_logging(self, root_config: BaseConfig):
+        """
+        Sets up the logger with the specified configurations.
+
+        Args:
+            root_config (BaseConfig): The root configuration object.
+        """
+        config = root_config.runner.python_logging
+
+        return init_python_logging(
+            lovely_tensors=config.lovely_tensors,
+            lovely_numpy=config.lovely_numpy,
+            rich=config.rich,
+            log_level=config.log_level,
+            log_save_dir=root_config.directory.resolve_subdirectory(
+                root_config.id, "stdio"
+            ),
+        )
+
     @property
     def _run_fn(self) -> RunProtocol[TConfig, TReturn, Unpack[TArguments]]:
         run = self._run
@@ -209,6 +229,9 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
                 # Set additional environment variables
                 if additional_env := config.runner.additional_env_vars:
                     stack.enter_context(self._with_env(additional_env))
+
+                # Set up Python logging
+                self._setup_python_logging(config)
 
                 # If `auto_call_trainer_init_from_runner`, we call `Trainer.runner_init` before running the program.
                 if config.runner.auto_call_trainer_init_from_runner:

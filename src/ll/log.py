@@ -4,13 +4,6 @@ from pathlib import Path
 log = logging.getLogger(__name__)
 
 
-def _default_log_handlers(log_save_dir: Path):
-    # Capture the logs to `dirpath`/log.log
-    log_file = log_save_dir / "log.log"
-    log_file.touch(exist_ok=True)
-    return logging.FileHandler(log_file)
-
-
 def init_python_logging(
     *,
     lovely_tensors: bool = False,
@@ -41,7 +34,9 @@ def init_python_logging(
 
     log_handlers: list[logging.Handler] = []
     if log_save_dir:
-        log_handlers.append(_default_log_handlers(log_save_dir))
+        log_file = log_save_dir / "log.log"
+        log_file.touch(exist_ok=True)
+        log_handlers.append(logging.FileHandler(log_file))
 
     if rich:
         try:

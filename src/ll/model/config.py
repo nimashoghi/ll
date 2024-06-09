@@ -669,7 +669,7 @@ LogLevel: TypeAlias = Literal[
 ]
 
 
-class PythonLogging(CallbackConfigBase):
+class PythonLogging(TypedConfig):
     log_level: LogLevel | None = None
     """Log level to use for the Python logger (or None to use the default)."""
 
@@ -683,9 +683,6 @@ class PythonLogging(CallbackConfigBase):
     lovely_numpy: bool = False
     """If enabled, will use the lovely-numpy library to format numpy arrays. False by default as it causes some issues with other libaries."""
 
-    use_rich_progress_bar: bool = False
-    """If enabled, will use the rich library to format the progress bar."""
-
     def pretty_(
         self,
         *,
@@ -694,21 +691,12 @@ class PythonLogging(CallbackConfigBase):
         numpy: bool = True,
         rich: bool = True,
         rich_tracebacks: bool = True,
-        rich_progress_bar: bool = False,
     ):
         self.log_level = log_level
         self.lovely_tensors = torch
         self.lovely_numpy = numpy
         self.rich = rich
         self.rich_tracebacks = rich_tracebacks
-        self.use_rich_progress_bar = rich_progress_bar
-
-    @override
-    def construct_callbacks(self, root_config):
-        if self.use_rich_progress_bar:
-            from lightning.pytorch.callbacks.progress import RichProgressBar
-
-            yield RichProgressBar()
 
 
 TPlugin = TypeVar(
@@ -1499,9 +1487,6 @@ class TrainerConfig(TypedConfig):
     checkpoint_saving: CheckpointSavingConfig = CheckpointSavingConfig()
     """Checkpoint saving configuration options."""
 
-    python_logging: PythonLogging = PythonLogging()
-    """Python logging configuration options."""
-
     logging: LoggingConfig = LoggingConfig()
     """Logging/experiment tracking (e.g., WandB) configuration options."""
 
@@ -1718,6 +1703,8 @@ class RunnerOutputSaveConfig(TypedConfig):
 
 
 class RunnerConfig(TypedConfig):
+    python_logging: PythonLogging = PythonLogging()
+    """Python logging configuration options."""
     auto_call_trainer_init_from_runner: bool = True
     """If enabled, will automatically call the Trainer.runner_init() function from the Runner. Should be `True` most of the time."""
     save_output: RunnerOutputSaveConfig | None = None
@@ -1832,22 +1819,6 @@ class BaseConfig(TypedConfig):
             self: The current instance of the class.
         """
         self.directory.project_root = Path(project_root)
-        return self
-
-    def debug_and_disable_logging_(self):
-        """
-        Enable debug mode and disable logging. Useful for debugging.
-
-        This method sets the `debug` attribute to True, disables logging in the trainer,
-        and sets the log level to DEBUG.
-
-        Returns:
-            self: The current instance of the class.
-        """
-        self.debug = True
-        self.trainer.logging.enabled = False
-        self.trainer.python_logging.log_level = "DEBUG"
-
         return self
 
     def reset_(
@@ -1996,7 +1967,6 @@ def _resolve_all_callback_configs(
     yield config.trainer.early_stopping
     yield config.trainer.checkpoint_saving
     yield config.trainer.logging
-    yield config.trainer.python_logging
     yield from config.trainer.callbacks
 
 

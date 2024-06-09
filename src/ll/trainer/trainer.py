@@ -20,7 +20,6 @@ from lightning.pytorch.utilities.types import _EVALUATE_OUTPUT, _PREDICT_OUTPUT
 from typing_extensions import Unpack, assert_never, override
 
 from ..actsave import ActSave
-from ..log import init_python_logging
 from ..model.config import (
     AcceleratorConfigProtocol,
     BaseConfig,
@@ -69,28 +68,6 @@ class Trainer(LightningTrainer):
         Call this method to clean up after training.
         """
         _finalize_loggers(self.loggers)
-
-    @classmethod
-    def setup_python_logging(cls, root_config: BaseConfig):
-        """
-        Sets up the logger with the specified configurations.
-
-        Args:
-            root_config (BaseConfig): The root configuration object.
-            config (PythonLogging): The Python logging configuration object.
-
-        Returns:
-            None
-        """
-        config = root_config.trainer.python_logging
-
-        return init_python_logging(
-            lovely_tensors=config.lovely_tensors,
-            lovely_numpy=config.lovely_numpy,
-            rich=config.rich,
-            log_level=config.log_level,
-            log_save_dir=_stdio_log_dir(root_config),
-        )
 
     @classmethod
     @contextlib.contextmanager
@@ -165,9 +142,6 @@ class Trainer(LightningTrainer):
 
         """
         with contextlib.ExitStack() as stack:
-            # Set up the Python logging
-            cls.setup_python_logging(config)
-
             # Save stdout/stderr to a file.
             stack.enter_context(Trainer.output_save_context(config))
 
