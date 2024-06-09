@@ -1698,8 +1698,6 @@ class TrainerConfig(TypedConfig):
     """If enabled, the model supports scaling the gradients of shared parameters that are registered using `LightningModuleBase.register_shared_parameters(...)`"""
     supports_parameter_hooks: bool = True
     """If enabled, the model supports registering parameter hooks using `LightningModuleBase.register_parameter_hook(...)`"""
-    log_batch_info_on_error: bool = False
-    """If enabled, will log the batch info (e.g. batch index, batch object, etc.) when an exception is thrown during training."""
 
     lightning_kwargs: LightningTrainerKwargs = LightningTrainerKwargs()
     """
