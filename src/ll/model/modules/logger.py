@@ -2,10 +2,11 @@ from collections import deque
 from collections.abc import Callable, Generator
 from contextlib import contextmanager
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
 import torchmetrics
-from lightning.pytorch import LightningModule
+from lightning.pytorch import LightningDataModule, LightningModule
 from lightning.pytorch.utilities.types import _METRIC
 from lightning_utilities.core.rank_zero import rank_zero_warn
 from typing_extensions import override
@@ -134,3 +135,34 @@ class LoggerModuleMixin(mixin_base_type(LightningModule)):
                 else value
             }
         )
+
+    @property
+    def log_dir(self):
+        if not isinstance(self, (LightningModule, LightningDataModule)):
+            raise TypeError(
+                "log_dir can only be used on LightningModule or LightningDataModule"
+            )
+
+        if (trainer := self.trainer) is None:
+            raise RuntimeError("trainer is not defined")
+
+        if (logger := trainer.logger) is None:
+            raise RuntimeError("trainer.logger is not defined")
+
+        if (log_dir := logger.log_dir) is None:
+            raise RuntimeError("trainer.logger.log_dir is not defined")
+
+        return Path(log_dir)
+
+    @property
+    def should_update_logs(self):
+        if not isinstance(self, (LightningModule, LightningDataModule)):
+            raise TypeError(
+                "should_update_logs can only be used on LightningModule or LightningDataModule"
+            )
+
+        trainer = self._trainer if isinstance(self, LightningModule) else self.trainer
+        if trainer is None:
+            return True
+
+        return trainer._logger_connector.should_update_logs

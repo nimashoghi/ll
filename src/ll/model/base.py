@@ -27,7 +27,6 @@ from .config import (
 from .modules.callback import CallbackModuleMixin, CallbackRegistrarModuleMixin
 from .modules.debug import DebugModuleMixin
 from .modules.distributed import DistributedMixin
-from .modules.log_dir import LogDirMixin
 from .modules.logger import LoggerModuleMixin
 from .modules.profiler import ProfilerMixin
 from .modules.rlp_sanity_checks import RLPSanityCheckModuleMixin
@@ -136,7 +135,6 @@ def _try_get(fn: Callable[[], T]) -> T | None:
 
 class LightningModuleBase(  # pyright: ignore[reportIncompatibleMethodOverride]
     ProfilerMixin,
-    LogDirMixin,
     RLPSanityCheckModuleMixin,
     LoggerModuleMixin,
     DistributedMixin,
