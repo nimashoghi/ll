@@ -25,7 +25,6 @@ from ..model.config import (
     StrategyConfigProtocol,
     _resolve_all_callbacks,
 )
-from ..util import seed
 
 log = logging.getLogger(__name__)
 
@@ -56,15 +55,6 @@ class Trainer(LightningTrainer):
     def context(cls, config: BaseConfig):
         with contextlib.ExitStack() as stack:
             cls._finalizers.clear()
-            if (
-                seed_config := config.trainer.reproducibility.seed_everything
-            ) is not None:
-                stack.enter_context(
-                    seed.seed_context(
-                        seed_config.seed,
-                        workers=seed_config.seed_workers,
-                    )
-                )
 
             if (precision := config.trainer.set_float32_matmul_precision) is not None:
                 torch.set_float32_matmul_precision(precision)

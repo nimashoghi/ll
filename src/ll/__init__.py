@@ -50,7 +50,7 @@ from .model import PythonLogging as PythonLogging
 from .model import ReproducibilityConfig as ReproducibilityConfig
 from .model import RunnerConfig as RunnerConfig
 from .model import SanityCheckingConfig as SanityCheckingConfig
-from .model import SeedEverythingConfig as SeedEverythingConfig
+from .model import SeedConfig as SeedConfig
 from .model import TrainerConfig as TrainerConfig
 from .model import WandbWatchConfig as WandbWatchConfig
 from .nn import TypedModuleDict as TypedModuleDict

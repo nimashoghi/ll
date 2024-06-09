@@ -22,6 +22,7 @@ from ._submit.session._script import create_launcher_script_file
 from .log import init_python_logging
 from .model.config import BaseConfig
 from .trainer import Trainer
+from .util import seed
 from .util.environment import (
     remove_lsf_environment_variables,
     remove_slurm_environment_variables,
@@ -286,6 +287,12 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
 
                 # Set up Python logging
                 self._setup_python_logging(config)
+
+                # Seed everything
+                seed.seed_everything(
+                    config.runner.seed.seed,
+                    workers=config.runner.seed.seed_workers,
+                )
 
                 if config.trainer.auto_wrap_trainer:
                     stack.enter_context(Trainer.context(config))

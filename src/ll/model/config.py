@@ -846,18 +846,7 @@ class DirectoryConfig(TypedConfig):
         return log_dir
 
 
-class SeedEverythingConfig(TypedConfig):
-    seed: int | None = 0
-    """Seed for the random number generator. If None, will use a random seed."""
-
-    seed_workers: bool = False
-    """Whether to seed the workers of the dataloader."""
-
-
 class ReproducibilityConfig(TypedConfig):
-    seed_everything: SeedEverythingConfig | None = None
-    """Seed everything configuration options."""
-
     deterministic: bool | Literal["warn"] | None = None
     """
     If ``True``, sets whether PyTorch operations must use deterministic algorithms.
@@ -1695,9 +1684,20 @@ class TrainerConfig(TypedConfig):
     """If enabled, will set the torch float32 matmul precision to the specified value. Useful for faster training on Ampere+ GPUs."""
 
 
+class SeedConfig(TypedConfig):
+    seed: int
+    """Seed for the random number generator."""
+
+    seed_workers: bool = False
+    """Whether to seed the workers of the dataloader."""
+
+
 class RunnerConfig(TypedConfig):
     python_logging: PythonLogging = PythonLogging()
     """Python logging configuration options."""
+
+    seed: SeedConfig = SeedConfig(seed=0)
+    """Seed everything configuration options."""
 
     dump_run_information: bool = True
     """
