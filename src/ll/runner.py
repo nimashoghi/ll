@@ -206,6 +206,10 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
             with ExitStack() as stack:
                 nonlocal run
 
+                # Set additional environment variables
+                if additional_env := config.runner.additional_env_vars:
+                    stack.enter_context(self._with_env(additional_env))
+
                 # If `auto_call_trainer_init_from_runner`, we call `Trainer.runner_init` before running the program.
                 if config.runner.auto_call_trainer_init_from_runner:
                     stack.enter_context(Trainer.runner_init(config))

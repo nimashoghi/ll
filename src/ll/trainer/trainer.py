@@ -30,7 +30,6 @@ from ..model.config import (
     _resolve_all_callbacks,
 )
 from ..util import seed
-from ..util.environment import set_additional_env_vars
 
 log = logging.getLogger(__name__)
 
@@ -226,10 +225,6 @@ class Trainer(LightningTrainer):
 
             if (precision := config.trainer.set_float32_matmul_precision) is not None:
                 torch.set_float32_matmul_precision(precision)
-
-            stack.enter_context(
-                set_additional_env_vars(config.trainer.additional_env_vars)
-            )
 
             try:
                 yield

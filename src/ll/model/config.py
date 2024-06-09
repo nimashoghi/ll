@@ -1706,9 +1706,6 @@ class TrainerConfig(TypedConfig):
     This is essentially a non-type-checked version of `lightning_kwargs`.
     """
 
-    additional_env_vars: dict[str, str] = {}
-    """Additional environment variables to set when running the trainer."""
-
     set_float32_matmul_precision: Literal["medium", "high", "highest"] | None = None
     """If enabled, will set the torch float32 matmul precision to the specified value. Useful for faster training on Ampere+ GPUs."""
 
@@ -1732,6 +1729,8 @@ class RunnerConfig(TypedConfig):
         - Run config
         - Full set of environment variables
     """
+    additional_env_vars: dict[str, str] = {}
+    """Additional environment variables to set when running the script."""
 
 
 class MetricConfig(TypedConfig):
