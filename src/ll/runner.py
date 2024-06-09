@@ -354,6 +354,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         activate_venv: bool = True,
         print_environment_info: bool = False,
         attach: bool = True,
+        print_command: bool = True,
     ):
         """
         Launches len(sessions) local runs in different environments using `screen`.
@@ -376,6 +377,8 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
             Whether to print the environment information before starting each job.
         attach : bool, optional
             Whether to attach to the screen session after launching it.
+        print_command : bool, optional
+            Whether to print the command to the console.
         """
 
         # Generate a random ID for the session.
@@ -445,7 +448,10 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         command = " ".join(command)
 
         # Print the full command so the user can copy-paste it
-        print(f"Run the following command to launch the session:\n\n{command}")
+        if print_command:
+            print(f"Run the following command to launch the session:\n\n{command}")
+
+        return command
 
     def fast_dev_run_session(
         self,
@@ -458,6 +464,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         setup_commands: Sequence[str] | None = None,
         reset_ids: bool = True,
         attach: bool = True,
+        print_command: bool = True,
     ):
         """
         Runs a list of configs locally with `LightningTrainer.fast_dev_run = True`.
@@ -481,6 +488,8 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
             dev runs' logs from overwriting the main runs' logs.
         attach : bool, optional
             Whether to attach to the screen session after launching it.
+        print_command : bool, optional
+            Whether to print the command to the console.
         """
         resolved_runs = _resolve_runs(
             runs, copy_config=True, reset_id=reset_ids, validate=True
@@ -498,6 +507,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
             env=env,
             setup_commands=setup_commands,
             attach=attach,
+            print_command=print_command,
         )
 
     def _reset_memory_caches(self):
@@ -601,6 +611,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         activate_venv: bool = True,
         print_environment_info: bool = False,
         env: Mapping[str, str] | None = None,
+        print_command: bool = True,
         **kwargs: Unpack[unified.GenericJobKwargs],
     ):
         """
@@ -622,6 +633,8 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
             Whether to print the environment information before starting each job.
         env : Mapping[str, str], optional
             Additional environment variables to set.
+        print_command : bool, optional
+            Whether to print the command to the console.
         kwargs : dict
             Additional keyword arguments to pass to the job submission script.
         """
@@ -688,8 +701,12 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
             map_array_args,
             **kwargs,
         )
-        print("Please run the following command to submit the jobs:")
-        print(submission.submission_command_str)
+        if print_command:
+            print(
+                f"Please run the following command to submit the jobs:\n\n{submission.submission_command_str}"
+            )
+
+        return submission
 
     def submit_slurm(
         self,
@@ -700,6 +717,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         activate_venv: bool = True,
         print_environment_info: bool = False,
         env: Mapping[str, str] | None = None,
+        print_command: bool = True,
         **kwargs: Unpack[unified.GenericJobKwargs],
     ):
         """
@@ -721,6 +739,8 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
             Whether to print the environment information before starting each job.
         env : Mapping[str, str], optional
             Additional environment variables to set.
+        print_command : bool, optional
+            Whether to print the command to the console.
         kwargs : dict
             Additional keyword arguments to pass to the job submission script.
         """
@@ -732,6 +752,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
             activate_venv=activate_venv,
             print_environment_info=print_environment_info,
             env=env,
+            print_command=print_command,
             **kwargs,
         )
 
@@ -744,6 +765,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         activate_venv: bool = True,
         print_environment_info: bool = False,
         env: Mapping[str, str] | None = None,
+        print_command: bool = True,
         **kwargs: Unpack[unified.GenericJobKwargs],
     ):
         """
@@ -765,6 +787,8 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
             Whether to print the environment information before starting each job.
         env : Mapping[str, str], optional
             Additional environment variables to set.
+        print_command : bool, optional
+            Whether to print the command to the console.
         kwargs : dict
             Additional keyword arguments to pass to the job submission script.
         """
@@ -776,6 +800,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
             activate_venv=activate_venv,
             print_environment_info=print_environment_info,
             env=env,
+            print_command=print_command,
             **kwargs,
         )
 
