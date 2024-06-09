@@ -3,6 +3,7 @@ import contextlib
 import logging
 import os
 import sys
+import uuid
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from os import PathLike
@@ -346,14 +347,29 @@ def picklerunner_main():
 
         for i, path in enumerate(paths):
             log.critical(f"Executing #{i}: {path=}...")
-            # The result should be saved to {path_without_extension}.result.pkl
             result = execute_single(path)
-            result_path = path.with_suffix(".result.pkl")
+            result_path = _to_result_path(path)
             log.critical(f"Saving result to {result_path}...")
             with result_path.open("wb") as file:
                 pickle.dump(result, file)
 
         log.critical("Done!")
+
+
+def _to_result_path(script_path: Path):
+    results_dir = script_path.parent / "results"
+    results_dir.mkdir(exist_ok=True)
+    filename = script_path.stem
+    # Add a random uuid to the filename to avoid the case where different
+    # ranks write to the same file.
+    # Final sanity check: If the filename exists, try another one.
+    while True:
+        updated_filename = f"{filename}-{uuid.uuid4()}"
+        if not (results_dir / f"{updated_filename}.pkl").exists():
+            filename = updated_filename
+            break
+
+    return results_dir / f"{filename}.pkl"
 
 
 if __name__ == "__main__":
