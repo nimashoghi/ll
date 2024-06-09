@@ -18,7 +18,6 @@ from lightning.pytorch.callbacks import Callback
 from lightning.pytorch.utilities.types import STEP_OUTPUT
 from typing_extensions import Self, TypeVar, deprecated, override
 
-from ..trainer._wrappers.skip_batch import SkipBatchWrapper
 from .config import (
     BaseConfig,
     EnvironmentClassInformationConfig,
@@ -288,8 +287,6 @@ class LightningModuleBase(  # pyright: ignore[reportIncompatibleMethodOverride]
         self.save_hyperparameters(hparams)
 
         self.register_callback(lambda: DebugFlagCallback())
-
-        SkipBatchWrapper.wrap_lightning_module(self)
 
     def zero_loss(self):
         """
