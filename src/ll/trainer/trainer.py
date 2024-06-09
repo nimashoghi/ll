@@ -159,9 +159,18 @@ class Trainer(LightningTrainer):
                 case "fp16-mixed":
                     resolved_precision = "16-mixed"
                 case "16-mixed-auto":
-                    resolved_precision = (
-                        "bf16-mixed" if torch.cuda.is_bf16_supported() else "16-mixed"
-                    )
+                    try:
+                        resolved_precision = (
+                            "bf16-mixed"
+                            if torch.cuda.is_bf16_supported()
+                            else "16-mixed"
+                        )
+                    except BaseException:
+                        resolved_precision = "16-mixed"
+                        log.warning(
+                            "Failed to detect bfloat16 support. Falling back to 16-mixed."
+                        )
+
                     log.critical(
                         f"Auto-resolving {precision=} to {resolved_precision=}."
                     )
