@@ -3,6 +3,8 @@ from collections.abc import Callable
 import torch
 from lightning.fabric.utilities.imports import _TORCH_GREATER_EQUAL_2_1
 
+MEASURE_FLOPS_AVAILABLE = _TORCH_GREATER_EQUAL_2_1
+
 
 def measure_flops(
     forward_fn: Callable[[], torch.Tensor],
@@ -32,7 +34,7 @@ def measure_flops(
             FLOPs will be included in the result.
 
     """
-    if not _TORCH_GREATER_EQUAL_2_1:
+    if not MEASURE_FLOPS_AVAILABLE:
         raise ImportError("`measure_flops` requires PyTorch >= 2.1.")
 
     from .flop_counter import FlopCounterMode
