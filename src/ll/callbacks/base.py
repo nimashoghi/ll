@@ -98,7 +98,7 @@ def _process_and_filter_callbacks(
     return [callback.callback for callback in callbacks]
 
 
-def resolve_all_callbacks(root_config: BaseConfig):
+def resolve_all_callbacks(root_config: "BaseConfig"):
     callback_configs = [
         config for config in root_config.ll_all_callback_configs() if config is not None
     ]
