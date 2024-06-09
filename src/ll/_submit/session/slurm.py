@@ -468,16 +468,16 @@ def _update_kwargs(kwargs: SlurmJobKwargs, base_path: Path):
 
     # Add ntasks/cpus/gpus
     if (ntasks := kwargs.get("ntasks")) is not None:
-        command_parts.extend(["--ntasks", str(ntasks)])
+        command_parts.append(f"--ntasks={ntasks}")
 
     if (ntasks_per_node := kwargs.get("ntasks_per_node")) is not None:
-        command_parts.extend(["--ntasks-per-node", str(ntasks_per_node)])
+        command_parts.append(f"--ntasks-per-node={ntasks_per_node}")
 
     if (cpus_per_task := kwargs.get("cpus_per_task")) is not None:
-        command_parts.extend(["--cpus-per-task", str(cpus_per_task)])
+        command_parts.append(f"--cpus-per-task={cpus_per_task}")
 
     if gres := _determine_gres(kwargs):
-        command_parts.extend(["--gres", ",".join(gres)])
+        command_parts.append(f"--gres={','.join(gres)}")
 
     command_parts.append("--unbuffered")
 
