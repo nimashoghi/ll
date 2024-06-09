@@ -4,9 +4,9 @@ from pathlib import Path
 
 @dataclass(frozen=True)
 class SubmitOutput:
-    submission_command: list[str]
-    submission_script_path: Path
+    command_parts: list[str]
+    script_path: Path
 
     @property
-    def submission_command_str(self) -> str:
-        return " ".join(self.submission_command)
+    def command(self) -> str:
+        return " ".join(self.command_parts)

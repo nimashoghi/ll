@@ -545,6 +545,6 @@ def to_array_batch_script(
     )
     script_path = script_path.resolve().absolute()
     return SubmitOutput(
-        submission_command=["sbatch", f"{script_path}"],
-        submission_script_path=script_path,
+        command_parts=["sbatch", f"{script_path}"],
+        script_path=script_path,
     )

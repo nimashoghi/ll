@@ -703,7 +703,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         )
         if print_command:
             print(
-                f"Please run the following command to submit the jobs:\n\n{submission.submission_command_str}"
+                f"Please run the following command to submit the jobs:\n\n{submission.command}"
             )
 
         return submission
