@@ -49,7 +49,6 @@ from .model import PrimaryMetricConfig as PrimaryMetricConfig
 from .model import PythonLogging as PythonLogging
 from .model import ReproducibilityConfig as ReproducibilityConfig
 from .model import RunnerConfig as RunnerConfig
-from .model import RunnerOutputSaveConfig as RunnerOutputSaveConfig
 from .model import SanityCheckingConfig as SanityCheckingConfig
 from .model import SeedEverythingConfig as SeedEverythingConfig
 from .model import TrainerConfig as TrainerConfig

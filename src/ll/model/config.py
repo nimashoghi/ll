@@ -1695,20 +1695,13 @@ class TrainerConfig(TypedConfig):
     """If enabled, will set the torch float32 matmul precision to the specified value. Useful for faster training on Ampere+ GPUs."""
 
 
-class RunnerOutputSaveConfig(TypedConfig):
-    enabled: bool = True
-    """Enable saving the runner stdout and stderr to a file."""
-    dirpath: str | Path | None = None
-    """Directory path for the output file. If None, will use the current working directory/ll_runner_logs/{id}"""
-
-
 class RunnerConfig(TypedConfig):
     python_logging: PythonLogging = PythonLogging()
     """Python logging configuration options."""
+
     auto_call_trainer_init_from_runner: bool = True
     """If enabled, will automatically call the Trainer.runner_init() function from the Runner. Should be `True` most of the time."""
-    save_output: RunnerOutputSaveConfig | None = None
-    """Output saving configuration options, or ``None`` to disable output saving."""
+
     dump_run_information: bool = True
     """
     If enabled, will dump different bits of run information to the output directory before starting the run.
@@ -1716,6 +1709,7 @@ class RunnerConfig(TypedConfig):
         - Run config
         - Full set of environment variables
     """
+
     additional_env_vars: dict[str, str] = {}
     """Additional environment variables to set when running the script."""
 

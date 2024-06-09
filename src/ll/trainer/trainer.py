@@ -42,21 +42,6 @@ def _finalize_loggers(loggers: Sequence[Logger]):
         logger.finish()
 
 
-def _stdio_log_dir(root_config: BaseConfig):
-    if (config := root_config.runner.save_output) is None or not config.enabled:
-        return None
-
-    if not (dirpath := config.dirpath):
-        dirpath = root_config.directory.resolve_subdirectory(root_config.id, "stdio")
-
-    dirpath = Path(dirpath).resolve()
-
-    # Make sure that the directory exists
-    dirpath.mkdir(parents=True, exist_ok=True)
-
-    return dirpath
-
-
 class Trainer(LightningTrainer):
     _finalizers: list[Callable[[], None]] = []
 
@@ -65,38 +50,6 @@ class Trainer(LightningTrainer):
         Call this method to clean up after training.
         """
         _finalize_loggers(self.loggers)
-
-    @classmethod
-    @contextlib.contextmanager
-    def output_save_context(cls, root_config: BaseConfig):
-        """
-        A context manager that saves the output logs to a specified directory.
-
-        Args:
-            root_config (BaseConfig): The root configuration object.
-
-        Yields:
-            None: This context manager does not return any value.
-
-        Example:
-            with Trainer.output_save_context(root_config):
-                # Code block where the output logs will be saved
-        """
-        # Get the directory path
-        if (dirpath := _stdio_log_dir(root_config)) is None:
-            yield
-            return
-
-        # Capture the stdout and stderr logs to `dirpath`/stdout.log and `dirpath`/stderr.log
-        stdout_log = dirpath / "stdout.log"
-        stderr_log = dirpath / "stderr.log"
-        stdout_log.touch(exist_ok=True)
-        stderr_log.touch(exist_ok=True)
-        with stdout_log.open("a") as file:
-            with contextlib.redirect_stdout(file):
-                with stderr_log.open("a") as file:
-                    with contextlib.redirect_stderr(file):
-                        yield
 
     @classmethod
     @contextlib.contextmanager
@@ -139,9 +92,6 @@ class Trainer(LightningTrainer):
 
         """
         with contextlib.ExitStack() as stack:
-            # Save stdout/stderr to a file.
-            stack.enter_context(Trainer.output_save_context(config))
-
             yield
 
     @classmethod
