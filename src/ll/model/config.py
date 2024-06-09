@@ -1692,9 +1692,6 @@ class TrainerConfig(TypedConfig):
     auto_add_trainer_finalizer: bool = True
     """If enabled, will automatically finalize the trainer (e.g., call `wandb.finish()`) when the run ends. Should be `True` most of the time."""
 
-    supports_shared_parameters: bool = True
-    """If enabled, the model supports scaling the gradients of shared parameters that are registered using `LightningModuleBase.register_shared_parameters(...)`"""
-
     lightning_kwargs: LightningTrainerKwargs = LightningTrainerKwargs()
     """
     Additional keyword arguments to pass to the Lightning `pl.Trainer` constructor.
