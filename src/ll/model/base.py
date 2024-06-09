@@ -31,7 +31,6 @@ from .modules.log_dir import LogDirMixin
 from .modules.logger import LoggerModuleMixin
 from .modules.profiler import ProfilerMixin
 from .modules.rlp_sanity_checks import RLPSanityCheckModuleMixin
-from .modules.wandb import WandbWrapperMixin
 
 log = getLogger(__name__)
 
@@ -138,7 +137,6 @@ def _try_get(fn: Callable[[], T]) -> T | None:
 class LightningModuleBase(  # pyright: ignore[reportIncompatibleMethodOverride]
     ProfilerMixin,
     LogDirMixin,
-    WandbWrapperMixin,
     RLPSanityCheckModuleMixin,
     LoggerModuleMixin,
     DistributedMixin,

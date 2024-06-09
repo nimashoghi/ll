@@ -36,7 +36,8 @@ from pydantic import DirectoryPath
 from typing_extensions import Self, TypedDict, TypeVar, override
 
 from ..callbacks import CallbackConfig
-from ..callbacks.base import CallbackConfigBase, _process_and_filter_callbacks
+from ..callbacks.base import CallbackConfigBase
+from ..callbacks.wandb_watch import WandbWatchConfig
 from ..config import Field, TypedConfig
 from ..util.slurm import parse_slurm_node_list
 
@@ -351,18 +352,6 @@ def _project_name(
     return module
 
 
-class WandbWatchConfig(TypedConfig):
-    enabled: bool = True
-    """Enable watching the model for wandb."""
-
-    log: str | None = None
-    log_graph: bool = True
-    log_freq: int = 100
-
-    def __bool__(self):
-        return self.enabled
-
-
 def _wandb_available():
     try:
         from lightning.pytorch.loggers.wandb import _WANDB_AVAILABLE
@@ -375,7 +364,7 @@ def _wandb_available():
         return False
 
 
-class WandbLoggerConfig(BaseLoggerConfig):
+class WandbLoggerConfig(CallbackConfigBase, BaseLoggerConfig):
     kind: Literal["wandb"] = "wandb"
 
     enabled: bool = Field(default_factory=lambda: _wandb_available())
@@ -429,6 +418,11 @@ class WandbLoggerConfig(BaseLoggerConfig):
             tags=root_config.tags,
             offline=self.offline,
         )
+
+    @override
+    def construct_callbacks(self, root_config):
+        if self.watch:
+            yield from self.watch.construct_callbacks(root_config)
 
 
 class CSVLoggerConfig(BaseLoggerConfig):
@@ -624,6 +618,12 @@ class LoggingConfig(CallbackConfigBase):
 
             yield LogEpochCallback()
 
+        for logger in self.loggers:
+            if not logger or not isinstance(logger, CallbackConfigBase):
+                continue
+
+            yield from logger.construct_callbacks(root_config)
+
 
 class GradientClippingConfig(TypedConfig):
     enabled: bool = True
@@ -652,16 +652,12 @@ class OptimizationConfig(CallbackConfigBase):
     def construct_callbacks(self, root_config):
         from ..callbacks.norm_logging import NormLoggingConfig
 
-        for callback in NormLoggingConfig(
+        yield from NormLoggingConfig(
             log_grad_norm=self.log_grad_norm,
             log_grad_norm_per_param=self.log_grad_norm_per_param,
             log_param_norm=self.log_param_norm,
             log_param_norm_per_param=self.log_param_norm_per_param,
-        )._construct_callbacks_with_metadata(root_config):
-            callback = copy.deepcopy(callback)
-            callback.metadata.ignore_if_exists = True
-            callback.metadata.priority = -1
-            yield callback
+        ).construct_callbacks(root_config)
 
 
 LogLevel: TypeAlias = Literal[
@@ -1945,29 +1941,9 @@ class BaseConfig(TypedConfig):
             )
         return cls.model_validate(hparams)
 
-
-# region Config resolution helpers
-
-
-def _resolve_all_callback_configs(
-    config: BaseConfig,
-) -> Iterable[CallbackConfigBase | None]:
-    yield config.trainer.actsave
-    yield config.trainer.early_stopping
-    yield config.trainer.checkpoint_saving
-    yield config.trainer.logging
-    yield from config.trainer.callbacks
-
-
-def _resolve_all_callbacks(root_config: BaseConfig):
-    callback_configs = list(_resolve_all_callback_configs(root_config))
-    callback_configs = [config for config in callback_configs if config is not None]
-    callbacks = _process_and_filter_callbacks(
-        callback
-        for callback_config in callback_configs
-        for callback in callback_config._construct_callbacks_with_metadata(root_config)
-    )
-    return callbacks
-
-
-# endregion
+    def ll_all_callback_configs(self) -> Iterable[CallbackConfigBase | None]:
+        yield self.trainer.actsave
+        yield self.trainer.early_stopping
+        yield self.trainer.checkpoint_saving
+        yield self.trainer.logging
+        yield from self.trainer.callbacks

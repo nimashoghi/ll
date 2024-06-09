@@ -51,30 +51,18 @@ class CallbackConfigBase(TypedConfig, ABC):
         self, root_config: "BaseConfig"
     ) -> Iterable[Callback | CallbackWithMetadata]: ...
 
-    def _construct_callbacks_with_metadata(
-        self, root_config: "BaseConfig"
-    ) -> Iterable[CallbackWithMetadata]:
-        for callback in self.construct_callbacks(root_config):
-            if isinstance(callback, CallbackWithMetadata):
-                yield callback
-                continue
 
-            callback = self.with_metadata(callback)
+# region Config resolution helpers
+def _construct_callbacks_with_metadata(
+    config: CallbackConfigBase, root_config: "BaseConfig"
+) -> Iterable[CallbackWithMetadata]:
+    for callback in config.construct_callbacks(root_config):
+        if isinstance(callback, CallbackWithMetadata):
             yield callback
+            continue
 
-
-def _process_and_filter_callbacks(
-    callbacks: Iterable[CallbackWithMetadata],
-) -> list[Callback]:
-    callbacks = list(callbacks)
-
-    # Sort by priority (higher priority first)
-    callbacks.sort(key=lambda callback: callback.metadata.priority, reverse=True)
-
-    # Process `ignore_if_exists`
-    callbacks = _filter_ignore_if_exists(callbacks)
-
-    return [callback.callback for callback in callbacks]
+        callback = config.with_metadata(callback)
+        yield callback
 
 
 def _filter_ignore_if_exists(callbacks: list[CallbackWithMetadata]):
@@ -94,3 +82,32 @@ def _filter_ignore_if_exists(callbacks: list[CallbackWithMetadata]):
         callbacks_filtered.append(callback)
 
     return callbacks_filtered
+
+
+def _process_and_filter_callbacks(
+    callbacks: Iterable[CallbackWithMetadata],
+) -> list[Callback]:
+    callbacks = list(callbacks)
+
+    # Sort by priority (higher priority first)
+    callbacks.sort(key=lambda callback: callback.metadata.priority, reverse=True)
+
+    # Process `ignore_if_exists`
+    callbacks = _filter_ignore_if_exists(callbacks)
+
+    return [callback.callback for callback in callbacks]
+
+
+def resolve_all_callbacks(root_config: BaseConfig):
+    callback_configs = [
+        config for config in root_config.ll_all_callback_configs() if config is not None
+    ]
+    callbacks = _process_and_filter_callbacks(
+        callback
+        for callback_config in callback_configs
+        for callback in _construct_callbacks_with_metadata(callback_config, root_config)
+    )
+    return callbacks
+
+
+# endregion

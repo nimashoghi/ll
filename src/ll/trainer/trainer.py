@@ -16,13 +16,13 @@ from lightning.pytorch.utilities.types import _EVALUATE_OUTPUT, _PREDICT_OUTPUT
 from typing_extensions import Unpack, assert_never, override
 
 from ..actsave import ActSave
+from ..callbacks.base import resolve_all_callbacks
 from ..model.config import (
     AcceleratorConfigProtocol,
     BaseConfig,
     BaseProfilerConfig,
     LightningTrainerKwargs,
     StrategyConfigProtocol,
-    _resolve_all_callbacks,
 )
 
 log = logging.getLogger(__name__)
@@ -196,7 +196,7 @@ class Trainer(LightningTrainer):
             # kwargs["profiler"] = profiler
             _update_kwargs(profiler=profiler)
 
-        if callbacks := _resolve_all_callbacks(config):
+        if callbacks := resolve_all_callbacks(config):
             _update_kwargs(callbacks=callbacks)
 
         if plugin_configs := config.trainer.plugins:

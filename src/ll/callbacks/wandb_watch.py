@@ -1,5 +1,5 @@
 from logging import getLogger
-from typing import Protocol, cast, runtime_checkable
+from typing import Literal, Protocol, cast, runtime_checkable
 
 import torch.nn as nn
 from lightning.pytorch import LightningModule, Trainer
@@ -7,9 +7,7 @@ from lightning.pytorch.callbacks.callback import Callback
 from lightning.pytorch.loggers import WandbLogger
 from typing_extensions import override
 
-from ...util.typing_utils import mixin_base_type
-from ..config import BaseConfig
-from .callback import CallbackModuleMixin
+from .base import CallbackConfigBase
 
 log = getLogger(__name__)
 
@@ -20,6 +18,11 @@ class _HasWandbLogModuleProtocol(Protocol):
 
 
 class WandbWatchCallback(Callback):
+    def __init__(self, config: "WandbWatchConfig"):
+        super().__init__()
+
+        self.config = config
+
     @override
     def on_fit_start(self, trainer: Trainer, pl_module: LightningModule) -> None:
         self._on_start(trainer, pl_module)
@@ -37,12 +40,8 @@ class WandbWatchCallback(Callback):
         self._on_start(trainer, pl_module)
 
     def _on_start(self, trainer: Trainer, pl_module: LightningModule) -> None:
-        config = cast(BaseConfig, pl_module.hparams)
-        if (
-            not config.trainer.logging.enabled
-            or (wandb_config := config.trainer.logging.wandb) is None
-            or not wandb_config.watch
-        ):
+        # If not enabled, return
+        if not self.config:
             return
 
         if (
@@ -70,16 +69,31 @@ class WandbWatchCallback(Callback):
 
         logger.watch(
             module,
-            log=cast(str, wandb_config.watch.log),
-            log_freq=wandb_config.watch.log_freq,
-            log_graph=wandb_config.watch.log_graph,
+            log=cast(str, self.config.log),
+            log_freq=self.config.log_freq,
+            log_graph=self.config.log_graph,
         )
         setattr(pl_module, "_model_watched", True)
 
 
-class WandbWrapperMixin(mixin_base_type(CallbackModuleMixin)):
-    @override
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+class WandbWatchConfig(CallbackConfigBase):
+    name: Literal["finite_checks"] = "finite_checks"
 
-        self.register_callback(lambda: WandbWatchCallback())
+    enabled: bool = True
+    """Enable watching the model for wandb."""
+
+    log: str | None = None
+    """Log type for wandb."""
+
+    log_graph: bool = True
+    """Whether to log the graph for wandb."""
+
+    log_freq: int = 100
+    """Log frequency for wandb."""
+
+    def __bool__(self):
+        return self.enabled
+
+    @override
+    def construct_callbacks(self, root_config):
+        yield WandbWatchCallback(self)
