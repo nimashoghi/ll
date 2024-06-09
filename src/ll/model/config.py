@@ -1659,6 +1659,8 @@ class TrainerConfig(TypedConfig):
     """If enabled, will automatically wrap the `run` function with a `Trainer.context()` context manager. Should be `True` most of the time."""
     auto_set_default_root_dir: bool = True
     """If enabled, will automatically set the default root dir to [cwd/lightning_logs/<id>/]. There is basically no reason to disable this."""
+    supports_shared_parameters: bool = True
+    """If enabled, the model supports scaling the gradients of shared parameters that are registered using `LightningModuleBase.register_shared_parameters(...)`"""
 
     lightning_kwargs: LightningTrainerKwargs = LightningTrainerKwargs()
     """

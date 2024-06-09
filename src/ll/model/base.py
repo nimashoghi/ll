@@ -30,6 +30,7 @@ from .modules.distributed import DistributedMixin
 from .modules.logger import LoggerLightningModuleMixin, LoggerModuleMixin
 from .modules.profiler import ProfilerMixin
 from .modules.rlp_sanity_checks import RLPSanityCheckModuleMixin
+from .modules.shared_parameters import SharedParametersModuleMixin
 
 log = getLogger(__name__)
 
@@ -137,6 +138,7 @@ class LightningModuleBase(  # pyright: ignore[reportIncompatibleMethodOverride]
     ProfilerMixin,
     RLPSanityCheckModuleMixin,
     LoggerLightningModuleMixin,
+    SharedParametersModuleMixin,
     DistributedMixin,
     CallbackModuleMixin,
     Base[THparams],
