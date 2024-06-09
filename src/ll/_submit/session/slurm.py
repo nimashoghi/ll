@@ -1,4 +1,5 @@
 import copy
+import math
 import os
 import signal
 from collections.abc import Callable, Mapping, Sequence
@@ -204,6 +205,13 @@ class SlurmJobKwargs(TypedDict, total=False):
     This corresponds to the "--signal" option in sbatch.
     """
 
+    signal_delay: timedelta
+    """
+    The delay before sending the signal to the job.
+
+    This corresponds to the "--signal ...@[delay]" option in sbatch.
+    """
+
     open_mode: str
     """
     The open mode for the output and error files.
@@ -256,6 +264,7 @@ DEFAULT_KWARGS: SlurmJobKwargs = {
     "nodes": 1,
     # "time": timedelta(hours=2),
     "signal": signal.SIGUSR1,
+    "signal_delay": timedelta(seconds=90),
     "open_mode": "append",
 }
 
@@ -417,7 +426,10 @@ def _write_batch_script_to_file(
             f.write(f"#SBATCH --constraint={','.join(constraint)}\n")
 
         if (signal := kwargs.get("signal")) is not None:
-            f.write(f"#SBATCH --signal={signal.name}\n")
+            signal_str = signal.name
+            if (signal_delay := kwargs.get("signal_delay")) is not None:
+                signal_str += f"@{math.ceil(signal_delay.total_seconds())}"
+            f.write(f"#SBATCH --signal={signal_str}\n")
 
         f.write("\n")
 
