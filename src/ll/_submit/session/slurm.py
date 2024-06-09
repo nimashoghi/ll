@@ -465,6 +465,20 @@ def _update_kwargs(kwargs: SlurmJobKwargs, base_path: Path):
         if isinstance(srun_flags, str):
             srun_flags = [srun_flags]
         command_parts.extend(srun_flags)
+
+    # Add ntasks/cpus/gpus
+    if (ntasks := kwargs.get("ntasks")) is not None:
+        command_parts.extend(["--ntasks", str(ntasks)])
+
+    if (ntasks_per_node := kwargs.get("ntasks_per_node")) is not None:
+        command_parts.extend(["--ntasks-per-node", str(ntasks_per_node)])
+
+    if (cpus_per_task := kwargs.get("cpus_per_task")) is not None:
+        command_parts.extend(["--cpus-per-task", str(cpus_per_task)])
+
+    if gres := _determine_gres(kwargs):
+        command_parts.extend(["--gres", ",".join(gres)])
+
     command_parts.append("--unbuffered")
 
     # Add the task id to the output filenames
