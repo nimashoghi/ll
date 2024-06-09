@@ -1,9 +1,9 @@
 import contextlib
 import logging
 import os
-from collections.abc import Callable, Sequence
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Any, Protocol, cast, runtime_checkable
+from typing import Any, cast
 
 import torch
 from lightning.fabric.plugins.environments.lsf import LSFEnvironment
@@ -11,7 +11,6 @@ from lightning.fabric.plugins.environments.slurm import SLURMEnvironment
 from lightning.fabric.plugins.precision.precision import _PRECISION_INPUT
 from lightning.pytorch import LightningModule
 from lightning.pytorch import Trainer as LightningTrainer
-from lightning.pytorch.loggers import Logger
 from lightning.pytorch.profilers import Profiler
 from lightning.pytorch.utilities.types import _EVALUATE_OUTPUT, _PREDICT_OUTPUT
 from typing_extensions import Unpack, assert_never, override
@@ -29,48 +28,14 @@ from ..model.config import (
 log = logging.getLogger(__name__)
 
 
-@runtime_checkable
-class _FinalizableLogger(Protocol):
-    def finish(self) -> Any: ...
-
-
-def _finalize_loggers(loggers: Sequence[Logger]):
-    for logger in loggers:
-        if not isinstance(logger, _FinalizableLogger):
-            continue
-        logger.finish()
-
-
 class Trainer(LightningTrainer):
-    _finalizers: list[Callable[[], None]] = []
-
-    def finalize(self):
-        """
-        Call this method to clean up after training.
-        """
-        _finalize_loggers(self.loggers)
-
     @classmethod
     @contextlib.contextmanager
     def context(cls, config: BaseConfig):
-        with contextlib.ExitStack() as stack:
-            cls._finalizers.clear()
+        if (precision := config.trainer.set_float32_matmul_precision) is not None:
+            torch.set_float32_matmul_precision(precision)
 
-            if (precision := config.trainer.set_float32_matmul_precision) is not None:
-                torch.set_float32_matmul_precision(precision)
-
-            try:
-                yield
-            finally:
-                n_finalizers = 0
-                for finalizer in reversed(cls._finalizers):
-                    finalizer()
-                    n_finalizers += 1
-
-                cls._finalizers.clear()
-                log.critical(
-                    f"Ran {n_finalizers} finalizers for {cls.__name__} cleanup."
-                )
+        yield
 
     @classmethod
     def _update_kwargs(
@@ -264,6 +229,10 @@ class Trainer(LightningTrainer):
                 num_nodes = LSFEnvironment().world_size()
                 log.critical(f"LSF detected with {num_nodes=}.")
                 _update_kwargs(num_nodes=num_nodes)
+            else:
+                log.info(
+                    "config.trainer.auto_determine_num_nodes ignored because no SLURM or LSF detected."
+                )
 
         # Update the kwargs with the additional trainer kwargs
         _update_kwargs(**cast(Any, config.trainer.additional_trainer_kwargs))
@@ -283,9 +252,6 @@ class Trainer(LightningTrainer):
         kwargs = self._update_kwargs(config, kwargs)
         log.critical(f"LightningTrainer.__init__ with {kwargs=}.")
         super().__init__(**kwargs)
-
-        if config.trainer.auto_add_trainer_finalizer:
-            type(self)._finalizers.append(self.finalize)
 
         # Print out the log dir, so that we can easily find it in the logs.
         if log_dir := self.log_dir:

@@ -1663,8 +1663,6 @@ class TrainerConfig(TypedConfig):
     """If enabled, will automatically wrap the `run` function with a `Trainer.context()` context manager. Should be `True` most of the time."""
     auto_set_default_root_dir: bool = True
     """If enabled, will automatically set the default root dir to [cwd/lightning_logs/<id>/]. There is basically no reason to disable this."""
-    auto_add_trainer_finalizer: bool = True
-    """If enabled, will automatically finalize the trainer (e.g., call `wandb.finish()`) when the run ends. Should be `True` most of the time."""
 
     lightning_kwargs: LightningTrainerKwargs = LightningTrainerKwargs()
     """

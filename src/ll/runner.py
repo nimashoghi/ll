@@ -294,9 +294,10 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
                     workers=config.runner.seed.seed_workers,
                 )
 
+                # Auto-wrap the run in a Trainer context
                 if config.trainer.auto_wrap_trainer:
                     stack.enter_context(Trainer.context(config))
-                    log.critical("Auto-wrapping run in Trainer context")
+                    log.info("Auto-wrapping run in Trainer context")
 
                 # Dump run information
                 if config.runner.dump_run_information:
