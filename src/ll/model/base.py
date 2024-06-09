@@ -30,7 +30,6 @@ from .modules.debug import DebugModuleMixin
 from .modules.distributed import DistributedMixin
 from .modules.log_dir import LogDirMixin
 from .modules.logger import LoggerModuleMixin
-from .modules.parameter_hooks import ParameterHookModuleMixin
 from .modules.profiler import ProfilerMixin
 from .modules.rlp_sanity_checks import RLPSanityCheckModuleMixin
 from .modules.shared_parameters import SharedParametersModuleMixin
@@ -145,7 +144,6 @@ class LightningModuleBase(  # pyright: ignore[reportIncompatibleMethodOverride]
     RLPSanityCheckModuleMixin,
     LoggerModuleMixin,
     SharedParametersModuleMixin,
-    ParameterHookModuleMixin,
     DistributedMixin,
     CallbackModuleMixin,
     Base[THparams],

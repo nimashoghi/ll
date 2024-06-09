@@ -1696,8 +1696,6 @@ class TrainerConfig(TypedConfig):
     """If enabled, the model supports skipping an entire batch by throwing a `SkipBatch` exception."""
     supports_shared_parameters: bool = True
     """If enabled, the model supports scaling the gradients of shared parameters that are registered using `LightningModuleBase.register_shared_parameters(...)`"""
-    supports_parameter_hooks: bool = True
-    """If enabled, the model supports registering parameter hooks using `LightningModuleBase.register_parameter_hook(...)`"""
 
     lightning_kwargs: LightningTrainerKwargs = LightningTrainerKwargs()
     """
