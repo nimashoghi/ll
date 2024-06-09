@@ -1946,4 +1946,5 @@ class BaseConfig(TypedConfig):
         yield self.trainer.early_stopping
         yield self.trainer.checkpoint_saving
         yield self.trainer.logging
+        yield self.trainer.optimizer
         yield from self.trainer.callbacks
