@@ -44,6 +44,10 @@ class WandbWatchCallback(Callback):
         if not self.config:
             return
 
+        # If we're in fast_dev_run, don't watch the model
+        if getattr(trainer, "fast_dev_run", False):
+            return
+
         if (
             logger := next(
                 (
