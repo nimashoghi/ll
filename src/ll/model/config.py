@@ -1671,7 +1671,7 @@ class TrainerConfig(TypedConfig):
     Please refer to the Lightning documentation for a list of valid keyword arguments.
     """
 
-    additional_trainer_kwargs: dict[str, Any] = {}
+    additional_lightning_kwargs: dict[str, Any] = {}
     """
     Additional keyword arguments to pass to the Lightning `pl.Trainer` constructor.
 

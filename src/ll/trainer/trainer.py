@@ -235,7 +235,7 @@ class Trainer(LightningTrainer):
                 )
 
         # Update the kwargs with the additional trainer kwargs
-        _update_kwargs(**cast(Any, config.trainer.additional_trainer_kwargs))
+        _update_kwargs(**cast(Any, config.trainer.additional_lightning_kwargs))
         _update_kwargs(**config.trainer.lightning_kwargs)
         _update_kwargs(**kwargs_ctor)
 
