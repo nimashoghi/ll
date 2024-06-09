@@ -21,3 +21,16 @@ class LogDirMixin:
             raise RuntimeError("trainer.logger.log_dir is not defined")
 
         return Path(log_dir)
+
+    @property
+    def should_update_logs(self):
+        if not isinstance(self, (LightningModule, LightningDataModule)):
+            raise TypeError(
+                "should_update_logs can only be used on LightningModule or LightningDataModule"
+            )
+
+        trainer = self._trainer if isinstance(self, LightningModule) else self.trainer
+        if trainer is None:
+            return True
+
+        return trainer._logger_connector.should_update_logs
