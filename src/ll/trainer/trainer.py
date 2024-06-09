@@ -224,19 +224,12 @@ class Trainer(LightningTrainer):
                     )
                 )
 
-            additional_env_vars: dict[str, str] = {**config.trainer.additional_env_vars}
-            if config.trainer.set_nccl_optimal_params:
-                # We need to set these env vars before the NCCL library is loaded.
-                # Reportedly, the training performance can be improved quite a bit, see
-                #   https://lightning.ai/docs/pytorch/stable/advanced/ddp_optimizations.html#on-a-multi-node-cluster-set-nccl-parameters
-                # Details on all available env vars: https://docs.nvidia.com/deeplearning/nccl/user-guide/docs/env.html
-                additional_env_vars["NCCL_NSOCKS_PERTHREAD"] = "4"
-                additional_env_vars["NCCL_SOCKET_NTHREADS"] = "2"
-
             if (precision := config.trainer.set_float32_matmul_precision) is not None:
                 torch.set_float32_matmul_precision(precision)
 
-            stack.enter_context(set_additional_env_vars(additional_env_vars))
+            stack.enter_context(
+                set_additional_env_vars(config.trainer.additional_env_vars)
+            )
 
             try:
                 yield
