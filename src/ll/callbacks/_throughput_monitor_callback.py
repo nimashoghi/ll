@@ -325,7 +325,7 @@ class ThroughputMonitor(Callback):
     def __init__(
         self,
         batch_size_fn: Callable[[Any], int],
-        length_fn: Optional[Callable[[Any], int]] = None,
+        length_fn: Optional[Callable[[Any], int | None]] = None,
         **kwargs: Any,
     ) -> None:
         super().__init__()
@@ -387,7 +387,8 @@ class ThroughputMonitor(Callback):
         elapsed = time.perf_counter() - self._t0s[stage]
         if self.length_fn is not None:
             with torch.inference_mode():
-                self._lengths[stage] += self.length_fn(batch)
+                if (length := self.length_fn(batch)) is not None:
+                    self._lengths[stage] += length
 
         if hasattr(pl_module, "flops_per_batch"):
             flops_per_batch = pl_module.flops_per_batch
