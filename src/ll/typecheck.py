@@ -94,7 +94,10 @@ def _make_error_str(input: Any, t: Any) -> str:
     if hasattr(t, "__instancecheck_str__"):
         error_components.append(t.__instancecheck_str__(input))
     if torch.is_tensor(input):
-        error_components.append(repr(lovely(input)))
+        try:
+            error_components.append(repr(lovely(input)))
+        except BaseException:
+            error_components.append(repr(input.shape))
     error_components.append(shape_str(get_shape_memo()))
 
     return "\n".join(error_components)
