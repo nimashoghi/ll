@@ -1,10 +1,5 @@
-import sys
 from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from ...picklerunner import SerializedMultiFunction
 
 
 def create_launcher_script_file(
@@ -60,11 +55,9 @@ def create_launcher_script_file(
 
 def write_helper_script(
     base_dir: Path,
-    function: "SerializedMultiFunction",
+    command: str | Iterable[str],
     environment: Mapping[str, str],
     setup_commands: Sequence[str],
-    job_index_variable: str,
-    python_executable: str | None = None,
     chmod: bool = True,
 ):
     """
@@ -82,13 +75,10 @@ def write_helper_script(
         using `singularity exec my_container.sif bash /path/to/helper.sh`.
     """
 
-    if python_executable is None:
-        python_executable = sys.executable
-
     out_path = base_dir / "helper.sh"
     create_launcher_script_file(
         out_path,
-        function.to_bash_command(job_index_variable, python_executable),
+        command,
         environment,
         setup_commands,
         chmod,

@@ -438,6 +438,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         setup_commands: Sequence[str] | None = None,
         activate_venv: bool = True,
         print_environment_info: bool = False,
+        pause_before_exit: bool = False,
         attach: bool = True,
         print_command: bool = True,
     ):
@@ -460,6 +461,8 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
             Whether to activate the virtual environment before running the jobs.
         print_environment_info : bool, optional
             Whether to print the environment information before starting each job.
+        pause_before_exit : bool, optional
+            Whether to pause before exiting the screen session.
         attach : bool, optional
             Whether to attach to the screen session after launching it.
         print_command : bool, optional
@@ -492,11 +495,6 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
             setup_commands_pre.append("echo 'Activating environment'")
             setup_commands_pre.append(_shell_hook())
 
-        # Print the environment information
-        if print_environment_info:
-            setup_commands_pre.append("echo 'Environment information:'")
-            setup_commands_pre.append("python -m ll._submit.print_environment_info")
-
         setup_commands = setup_commands_pre + list(setup_commands or [])
 
         # Save all configs to pickle files
@@ -517,7 +515,10 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         launcher_path = config_pickle_save_path / "launcher.sh"
         create_launcher_script_file(
             launcher_path,
-            serialized.bash_command_sequential(),
+            serialized.bash_command_sequential(
+                pause_before_exit=pause_before_exit,
+                print_environment_info=print_environment_info,
+            ),
             env,
             setup_commands,
         )
@@ -547,9 +548,12 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         gpus: Sequence[int] | None = None,
         env: Mapping[str, str] | None = None,
         setup_commands: Sequence[str] | None = None,
-        reset_ids: bool = True,
+        activate_venv: bool = True,
+        print_environment_info: bool = False,
+        pause_before_exit: bool = False,
         attach: bool = True,
         print_command: bool = True,
+        reset_ids: bool = True,
     ):
         """
         Runs a list of configs locally with `LightningTrainer.fast_dev_run = True`.
@@ -568,13 +572,19 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
             Additional environment variables to set.
         setup_commands : Sequence[str], optional
             A list of commands to run at the beginning of the shell script.
-        reset_ids : bool, optional
-            Whether to reset the id of the runs before running them. This prevents the
-            dev runs' logs from overwriting the main runs' logs.
+        activate_venv : bool, optional
+            Whether to activate the virtual environment before running the jobs.
+        print_environment_info : bool, optional
+            Whether to print the environment information before starting each job.
+        pause_before_exit : bool, optional
+            Whether to pause before exiting the screen session.
         attach : bool, optional
             Whether to attach to the screen session after launching it.
         print_command : bool, optional
             Whether to print the command to the console.
+        reset_ids : bool, optional
+            Whether to reset the id of the runs before running them. This prevents the
+            dev runs' logs from overwriting the main runs' logs.
         """
         resolved_runs = _resolve_runs(
             runs, copy_config=True, reset_id=reset_ids, validate=True
@@ -593,6 +603,9 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
             setup_commands=setup_commands,
             attach=attach,
             print_command=print_command,
+            activate_venv=activate_venv,
+            print_environment_info=print_environment_info,
+            pause_before_exit=pause_before_exit,
         )
 
     def _reset_memory_caches(self):
@@ -758,11 +771,6 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
             setup_commands_pre.append("echo 'Activating environment'")
             setup_commands_pre.append(_shell_hook())
 
-        # Print the environment information
-        if print_environment_info:
-            setup_commands_pre.append("echo 'Environment information:'")
-            setup_commands_pre.append("python -m ll._submit.print_environment_info")
-
         kwargs["setup_commands"] = setup_commands_pre + list(
             kwargs.get("setup_commands", [])
         )
@@ -784,6 +792,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
             base_path,
             _runner_main,
             map_array_args,
+            print_environment_info=print_environment_info,
             **kwargs,
         )
         if print_command:

@@ -444,15 +444,14 @@ def to_array_batch_script(
         [(args, {}) for args in args_list],
         start_idx=1,  # LSF job indices are 1-based
         additional_command_parts=additional_command_parts,
-        print_environment_info=print_environment_info,
     )
     helper_path = write_helper_script(
         destdir,
-        serialized_command,
+        serialized_command.to_bash_command(
+            job_index_variable, print_environment_info=print_environment_info
+        ),
         kwargs.get("environment", {}),
         kwargs.get("setup_commands", []),
-        job_index_variable,
-        None,
     )
     command = helper_script_to_command(helper_path, kwargs.get("command_template"))
 

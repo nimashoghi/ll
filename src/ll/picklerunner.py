@@ -23,7 +23,7 @@ class SerializedFunctionCallDict(TypedDict):
 
 
 @dataclass(frozen=True)
-class SerializedFunction(PathLike):
+class _SerializedFunction(PathLike):
     path: Path
 
     _additional_command_parts: Sequence[str] = ()
@@ -61,21 +61,22 @@ def serialize_single(
     with dest.open("wb") as file:
         pickle.dump(serialized, file)
 
-    return SerializedFunction(dest, additional_command_parts)
+    return _SerializedFunction(dest, additional_command_parts)
 
 
 @dataclass(frozen=True)
 class SerializedMultiFunction(PathLike):
     base_dir: Path
-    functions: Sequence[SerializedFunction]
+    functions: Sequence[_SerializedFunction]
     _additional_command_parts: Sequence[str] = ()
-    print_environment_info: bool = False
 
     def to_bash_command(
         self,
         job_index_variable: str,
         python_executable: str | None = None,
         environment: Mapping[str, str] | None = None,
+        print_environment_info: bool = False,
+        pause_before_exit: bool = False,
     ) -> list[str]:
         if python_executable is None:
             python_executable = sys.executable
@@ -86,14 +87,18 @@ class SerializedMultiFunction(PathLike):
         command.append(python_executable)
         command.append("-m")
         command.append(__name__)
+
         if environment:
             for key, value in environment.items():
                 command.append("--env")
                 command.append(f"{key}={value}")
-        if self.print_environment_info:
+
+        if print_environment_info:
             command.append("--print-environment-info")
-        else:
-            command.append("--no-print-environment-info")
+
+        if pause_before_exit:
+            command.append("--pause-before-exit")
+
         command.append(
             f'"{str(self.base_dir.absolute())}/${{{job_index_variable}}}.pkl"'
         )
@@ -107,6 +112,8 @@ class SerializedMultiFunction(PathLike):
         self,
         python_executable: str | None = None,
         environment: Mapping[str, str] | None = None,
+        pause_before_exit: bool = False,
+        print_environment_info: bool = False,
     ) -> list[str]:
         if python_executable is None:
             python_executable = sys.executable
@@ -118,63 +125,26 @@ class SerializedMultiFunction(PathLike):
         command.append(python_executable)
         command.append("-m")
         command.append(__name__)
+
         if environment:
             for key, value in environment.items():
                 command.append("--env")
                 command.append(f"{key}={value}")
+
+        if print_environment_info:
+            command.append("--print-environment-info")
+        else:
+            command.append("--no-print-environment-info")
+
+        if pause_before_exit:
+            command.append("--pause-before-exit")
+
         command.extend(all_files)
 
         if self._additional_command_parts:
             # command += " " + " ".join(self._additional_command_parts)
             command.extend(self._additional_command_parts)
         return command
-
-    def _to_bash_command_sequential_worker(
-        self,
-        num_workers: int,
-        worker_id: int,
-        python_executable: str,
-        environment: Mapping[str, str] | None = None,
-    ) -> list[str]:
-        assert 0 <= worker_id < num_workers, f"{worker_id=} {num_workers=}"
-
-        all_files = [
-            f'"{str(fn.path.absolute())}"'
-            for i, fn in enumerate(self.functions)
-            if i % num_workers == worker_id
-        ]
-
-        command: list[str] = []
-        # command = f"{python_executable} -m {__name__} {all_files}"
-        command.append(python_executable)
-        command.append("-m")
-        command.append(__name__)
-        if environment:
-            for key, value in environment.items():
-                command.append("--env")
-                command.append(f"{key}={value}")
-        command.extend(all_files)
-
-        if self._additional_command_parts:
-            # command += " " + " ".join(self._additional_command_parts)
-            command.extend(self._additional_command_parts)
-        return command
-
-    def to_bash_command_sequential_workers(
-        self,
-        num_workers: int,
-        python_executable: str | None = None,
-        environment: Mapping[str, str] | None = None,
-    ) -> list[list[str]]:
-        if python_executable is None:
-            python_executable = sys.executable
-
-        return [
-            self._to_bash_command_sequential_worker(
-                num_workers, i, python_executable, environment
-            )
-            for i in range(num_workers)
-        ]
 
     @override
     def __fspath__(self) -> str:
@@ -187,9 +157,8 @@ def serialize_many(
     args_and_kwargs_list: Sequence[tuple[Sequence[Any], Mapping[str, Any]]],
     start_idx: int = 0,
     additional_command_parts: Sequence[str] = (),
-    print_environment_info: bool = False,
 ):
-    serialized_list: list[SerializedFunction] = []
+    serialized_list: list[_SerializedFunction] = []
 
     destdir = Path(destdir)
     for i, (args, kwargs) in enumerate(args_and_kwargs_list):
@@ -197,12 +166,7 @@ def serialize_many(
         serialized = serialize_single(dest, fn, args, kwargs)
         serialized_list.append(serialized)
 
-    return SerializedMultiFunction(
-        destdir,
-        serialized_list,
-        additional_command_parts,
-        print_environment_info=print_environment_info,
-    )
+    return SerializedMultiFunction(destdir, serialized_list, additional_command_parts)
 
 
 def execute_single(path: _Path):
@@ -280,6 +244,12 @@ def _parse_args():
         help="Replace the ROCR_VISIBLE_DEVICES environment variable with CUDA_VISIBLE_DEVICES",
         default=True,
     )
+    parser.add_argument(
+        "--pause-before-exit",
+        action=argparse.BooleanOptionalAction,
+        help="Wait for the user to press Enter after finishing",
+        default=False,
+    )
 
     args = parser.parse_args()
     return args
@@ -345,6 +315,7 @@ def picklerunner_main():
             if not path.exists():
                 raise FileNotFoundError(f"Path {path} does not exist")
 
+        # Execute the sessions.
         for i, path in enumerate(paths):
             log.critical(f"Executing #{i}: {path=}...")
             result = execute_single(path)
@@ -353,7 +324,12 @@ def picklerunner_main():
             with result_path.open("wb") as file:
                 pickle.dump(result, file)
 
-        log.critical("Done!")
+        log.critical("Finished running all sessions.")
+
+        if args.pause_before_exit:
+            input("Press Enter to continue...")
+
+        log.critical("Exiting...")
 
 
 def _to_result_path(script_path: Path):
