@@ -441,6 +441,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         pause_before_exit: bool = False,
         attach: bool = True,
         print_command: bool = True,
+        python_command_prefix: str | None = None,
     ):
         """
         Launches len(sessions) local runs in different environments using `screen`.
@@ -467,6 +468,8 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
             Whether to attach to the screen session after launching it.
         print_command : bool, optional
             Whether to print the command to the console.
+        python_command_prefix : str, optional
+            A prefix to add to the Python command. This would be used, for example, to run the Python command with a profiler (e.g., nsight-sys).
         """
 
         # Generate a random ID for the session.
@@ -521,6 +524,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
             ),
             env,
             setup_commands,
+            command_prefix=python_command_prefix,
         )
         launcher_command = ["bash", str(launcher_path)]
 
@@ -554,6 +558,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         attach: bool = True,
         print_command: bool = True,
         reset_ids: bool = True,
+        python_command_prefix: str | None = None,
     ):
         """
         Runs a list of configs locally with `LightningTrainer.fast_dev_run = True`.
@@ -585,6 +590,8 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         reset_ids : bool, optional
             Whether to reset the id of the runs before running them. This prevents the
             dev runs' logs from overwriting the main runs' logs.
+        python_command_prefix : str, optional
+            A prefix to add to the Python command. This would be used, for example, to run the Python command with a profiler (e.g., nsight-sys).
         """
         resolved_runs = _resolve_runs(
             runs, copy_config=True, reset_id=reset_ids, validate=True
@@ -606,6 +613,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
             activate_venv=activate_venv,
             print_environment_info=print_environment_info,
             pause_before_exit=pause_before_exit,
+            python_command_prefix=python_command_prefix,
         )
 
     def _reset_memory_caches(self):
@@ -710,6 +718,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         print_environment_info: bool = False,
         env: Mapping[str, str] | None = None,
         print_command: bool = True,
+        python_command_prefix: str | None = None,
         **kwargs: Unpack[unified.GenericJobKwargs],
     ):
         """
@@ -733,6 +742,8 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
             Additional environment variables to set.
         print_command : bool, optional
             Whether to print the command to the console.
+        python_command_prefix : str, optional
+            A prefix to add to the Python command. This would be used, for example, to run the Python command with a profiler (e.g., nsight-sys).
         kwargs : dict
             Additional keyword arguments to pass to the job submission script.
         """
@@ -793,6 +804,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
             _runner_main,
             map_array_args,
             print_environment_info=print_environment_info,
+            python_command_prefix=python_command_prefix,
             **kwargs,
         )
         if print_command:
@@ -812,6 +824,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         print_environment_info: bool = False,
         env: Mapping[str, str] | None = None,
         print_command: bool = True,
+        python_command_prefix: str | None = None,
         **kwargs: Unpack[unified.GenericJobKwargs],
     ):
         """
@@ -835,6 +848,8 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
             Additional environment variables to set.
         print_command : bool, optional
             Whether to print the command to the console.
+        python_command_prefix : str, optional
+            A prefix to add to the Python command. This would be used, for example, to run the Python command with a profiler (e.g., nsight-sys).
         kwargs : dict
             Additional keyword arguments to pass to the job submission script.
         """
@@ -847,6 +862,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
             print_environment_info=print_environment_info,
             env=env,
             print_command=print_command,
+            python_command_prefix=python_command_prefix,
             **kwargs,
         )
 
@@ -860,6 +876,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         print_environment_info: bool = False,
         env: Mapping[str, str] | None = None,
         print_command: bool = True,
+        python_command_prefix: str | None = None,
         **kwargs: Unpack[unified.GenericJobKwargs],
     ):
         """
@@ -883,6 +900,8 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
             Additional environment variables to set.
         print_command : bool, optional
             Whether to print the command to the console.
+        python_command_prefix : str, optional
+            A prefix to add to the Python command. This would be used, for example, to run the Python command with a profiler (e.g., nsight-sys).
         kwargs : dict
             Additional keyword arguments to pass to the job submission script.
         """
@@ -895,6 +914,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
             print_environment_info=print_environment_info,
             env=env,
             print_command=print_command,
+            python_command_prefix=python_command_prefix,
             **kwargs,
         )
 

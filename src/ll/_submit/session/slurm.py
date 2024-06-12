@@ -518,6 +518,7 @@ def to_array_batch_script(
     /,
     job_index_variable: str = "SLURM_ARRAY_TASK_ID",
     print_environment_info: bool = False,
+    python_command_prefix: str | None = None,
     **kwargs: Unpack[SlurmJobKwargs],
 ) -> SubmitOutput:
     """
@@ -547,6 +548,7 @@ def to_array_batch_script(
         ),
         kwargs.get("environment", {}),
         kwargs.get("setup_commands", []),
+        command_prefix=python_command_prefix,
     )
     command = helper_script_to_command(helper_path, kwargs.get("command_template"))
 

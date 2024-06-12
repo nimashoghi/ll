@@ -418,6 +418,7 @@ def to_array_batch_script(
     /,
     job_index_variable: str = "LSB_JOBINDEX",
     print_environment_info: bool = False,
+    python_command_prefix: str | None = None,
     **kwargs: Unpack[LSFJobKwargs],
 ) -> SubmitOutput:
     """
@@ -452,6 +453,7 @@ def to_array_batch_script(
         ),
         kwargs.get("environment", {}),
         kwargs.get("setup_commands", []),
+        command_prefix=python_command_prefix,
     )
     command = helper_script_to_command(helper_path, kwargs.get("command_template"))
 
