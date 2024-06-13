@@ -936,10 +936,4 @@ def _runner_main(
 
 
 def _shell_hook():
-    # Let's detect the environment: If we're in a pixi environment,
-    #   use pixi's shell hook instead.
-    if "/.pixi/" in sys.prefix:
-        return 'eval "$(pixi shell-hook --shell bash)"'
-
-    # Otherwise, assume we're in a conda environment.
     return f'eval "$(conda shell.bash hook)" && conda activate {sys.prefix}'
