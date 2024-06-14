@@ -1,15 +1,7 @@
 from logging import getLogger
-from typing import (
-    Any,
-    Literal,
-    NotRequired,
-    Protocol,
-    TypedDict,
-    cast,
-    runtime_checkable,
-)
+from typing import Any, Literal, Protocol, TypedDict, cast, runtime_checkable
 
-from typing_extensions import override
+from typing_extensions import NotRequired, override
 
 from ._throughput_monitor_callback import ThroughputMonitor as _ThroughputMonitor
 from .base import CallbackConfigBase
