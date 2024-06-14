@@ -335,6 +335,7 @@ class ThroughputMonitor(Callback):
         self.available_flops: Optional[int] = None
         self._throughputs: Dict[RunningStage, Throughput] = {}
         self._t0s: Dict[RunningStage, float] = {}
+        self._samples: Dict[RunningStage, int] = {}
         self._lengths: Dict[RunningStage, int] = {}
 
     @override
@@ -366,6 +367,7 @@ class ThroughputMonitor(Callback):
         stage = trainer.state.stage
         assert stage is not None
         self._throughputs[stage].reset()
+        self._samples[stage] = 0
         self._lengths[stage] = 0
         self._t0s[stage] = time.perf_counter()
 
@@ -400,12 +402,12 @@ class ThroughputMonitor(Callback):
             flops_per_batch = None
 
         with torch.inference_mode():
-            batch_size = self.batch_size_fn(batch)
+            self._samples[stage] += self.batch_size_fn(batch)
+
         throughput.update(
             time=elapsed,
             batches=iter_num,
-            # this assumes that all iterations used the same batch size
-            samples=iter_num * batch_size,
+            samples=self._samples[stage],
             lengths=None if self.length_fn is None else self._lengths[stage],
             flops=flops_per_batch,
         )
