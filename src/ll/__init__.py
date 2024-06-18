@@ -17,6 +17,7 @@ from .config import PrivateAttr as PrivateAttr
 from .config import TypedConfig as TypedConfig
 from .data import dataset_transform as dataset_transform
 from .log import init_python_logging as init_python_logging
+from .log import lovely as lovely
 from .log import pretty as pretty
 from .lr_scheduler import LRSchedulerConfig as LRSchedulerConfig
 from .model import ActSaveConfig as ActSaveConfig

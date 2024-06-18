@@ -70,3 +70,18 @@ def pretty(
         log_level=log_level,
         log_save_dir=log_save_dir,
     )
+
+
+def lovely(
+    *,
+    lovely_tensors: bool = True,
+    lovely_numpy: bool = True,
+    log_level: int | str | None = logging.INFO,
+    log_save_dir: Path | None = None,
+):
+    pretty(
+        lovely_tensors=lovely_tensors,
+        lovely_numpy=lovely_numpy,
+        log_level=log_level,
+        log_save_dir=log_save_dir,
+    )
