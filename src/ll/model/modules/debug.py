@@ -2,7 +2,6 @@ from logging import getLogger
 
 import torch
 import torch.distributed
-from varname import argname
 
 log = getLogger(__name__)
 
@@ -27,17 +26,14 @@ class DebugModuleMixin:
         name: str | None = None,
         throw: bool = False,
     ):
-        if name is None:
-            arg_name = argname("tensor", vars_only=False)
-
-            if arg_name is None:
-                raise ValueError("Could not infer name for `tensor`")
-
-            name = str(arg_name)
+        name_parts: list[str] = ["Tensor"]
+        if name is not None:
+            name_parts.append(name)
+        name = " ".join(name_parts)
 
         not_finite = ~torch.isfinite(tensor)
         if not_finite.any():
-            msg = f"Tensor {name} has {not_finite.sum().item()}/{not_finite.numel()} non-finite values."
+            msg = f"{name} has {not_finite.sum().item()}/{not_finite.numel()} non-finite values."
             if throw:
                 raise RuntimeError(msg)
             else:
