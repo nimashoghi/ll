@@ -33,7 +33,6 @@ from jaxtyping import UInt16 as UInt16
 from jaxtyping import UInt32 as UInt32
 from jaxtyping import UInt64 as UInt64
 from jaxtyping._storage import get_shape_memo, shape_str
-from lovely_tensors import lovely
 from torch import Tensor as Tensor
 from torch.nn.parameter import Parameter as Parameter
 from typing_extensions import TypeVar
@@ -95,6 +94,8 @@ def _make_error_str(input: Any, t: Any) -> str:
         error_components.append(t.__instancecheck_str__(input))
     if torch.is_tensor(input):
         try:
+            from lovely_tensors import lovely
+
             error_components.append(repr(lovely(input)))
         except BaseException:
             error_components.append(repr(input.shape))

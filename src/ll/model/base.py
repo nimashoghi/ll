@@ -10,7 +10,6 @@ from logging import getLogger
 from pathlib import Path
 from typing import IO, Any, Generic, cast
 
-import psutil
 import torch
 from lightning.fabric.utilities.types import _MAP_LOCATION_TYPE, _PATH
 from lightning.pytorch import LightningDataModule, LightningModule, Trainer
@@ -124,6 +123,12 @@ def _cls_info(cls: type):
 
 
 T = TypeVar("T")
+
+
+def _psutil():
+    import psutil
+
+    return psutil
 
 
 def _try_get(fn: Callable[[], T]) -> T | None:
@@ -247,9 +252,9 @@ class LightningModuleBase(  # pyright: ignore[reportIncompatibleMethodOverride]
             machine=_try_get(lambda: platform.machine()),
             processor=_try_get(lambda: platform.processor()),
             cpu_count=_try_get(lambda: os.cpu_count()),
-            memory=_try_get(lambda: psutil.virtual_memory().total),
-            uptime=_try_get(lambda: timedelta(seconds=psutil.boot_time())),
-            boot_time=_try_get(lambda: psutil.boot_time()),
+            memory=_try_get(lambda: _psutil().virtual_memory().total),
+            uptime=_try_get(lambda: timedelta(seconds=_psutil().boot_time())),
+            boot_time=_try_get(lambda: _psutil().boot_time()),
             load_avg=_try_get(lambda: os.getloadavg()),
         )
 

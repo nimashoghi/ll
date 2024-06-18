@@ -2,7 +2,6 @@ import copy
 from collections.abc import Callable
 from typing import Any, cast
 
-import wrapt
 from typing_extensions import TypeVar
 
 TDataset = TypeVar("TDataset", infer_variance=True)
@@ -22,6 +21,8 @@ def transform(
         transform: The transform function to apply to each item.
         deepcopy: Whether to deep copy each item before applying the transform.
     """
+
+    import wrapt
 
     class _TransformedDataset(wrapt.ObjectProxy):
         def __getitem__(self, idx):
@@ -50,6 +51,8 @@ def transform_with_index(
         transform: The transform function to apply to each item.
         deepcopy: Whether to deep copy each item before applying the transform.
     """
+
+    import wrapt
 
     class _TransformedWithIndexDataset(wrapt.ObjectProxy):
         def __getitem__(self, idx: int):
