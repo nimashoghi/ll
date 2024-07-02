@@ -294,7 +294,7 @@ class LightningModuleBase(  # pyright: ignore[reportIncompatibleMethodOverride]
         Returns a loss tensor with the value 0.
         It multiples each weight by 0 and returns the sum, so we don't run into issues with ununsed parameters in DDP.
         """
-        loss = sum((0.0 * v).sum() for v in self.parameters())
+        loss = sum((0.0 * v).sum() for v in self.parameters() if v.requires_grad)
         loss = cast(torch.Tensor, loss)
         return loss
 
