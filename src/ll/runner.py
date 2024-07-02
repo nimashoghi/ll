@@ -168,6 +168,40 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
             **(env or {}),
         }
 
+    def _run_git_pre_commit_hook(self):
+        git_dir = self._find_git_dir()
+        if not git_dir:
+            log.info("Not a git repository. Skipping pre-commit hook.")
+            return True
+
+        pre_commit_hook = git_dir / "hooks" / "pre-commit"
+        if not pre_commit_hook.exists():
+            log.info("No pre-commit hook found. Skipping.")
+            return True
+
+        try:
+            result = subprocess.run(
+                [str(pre_commit_hook)],
+                check=True,
+                capture_output=True,
+                text=True,
+                cwd=git_dir.parent,
+            )
+            log.info("Git pre-commit hook passed successfully.")
+            return True
+        except subprocess.CalledProcessError as e:
+            log.error(f"Git pre-commit hook failed. Output:\n{e.stdout}\n{e.stderr}")
+            return False
+
+    def _find_git_dir(self):
+        current_dir = Path.cwd()
+        while current_dir != current_dir.parent:
+            git_dir = current_dir / ".git"
+            if git_dir.is_dir():
+                return git_dir
+            current_dir = current_dir.parent
+        return None
+
     def _get_base_path(
         self,
         runs: list[tuple[TConfig, tuple[Unpack[TArguments]]]] | None,
@@ -442,6 +476,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         attach: bool = True,
         print_command: bool = True,
         python_command_prefix: str | None = None,
+        run_git_pre_commit_hook: bool = True,
     ):
         """
         Launches len(sessions) local runs in different environments using `screen`.
@@ -470,7 +505,13 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
             Whether to print the command to the console.
         python_command_prefix : str, optional
             A prefix to add to the Python command. This would be used, for example, to run the Python command with a profiler (e.g., nsight-sys).
+        run_git_pre_commit_hook : bool, optional
+            Whether to run the Git pre-commit hook before launching the sessions.
         """
+
+        if run_git_pre_commit_hook:
+            if not self._run_git_pre_commit_hook():
+                raise ValueError("Git pre-commit hook failed. Aborting session launch.")
 
         # Generate a random ID for the session.
         # We'll use this ID for snapshotting, as well as for
@@ -559,6 +600,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         print_command: bool = True,
         reset_ids: bool = True,
         python_command_prefix: str | None = None,
+        run_git_pre_commit_hook: bool = True,
     ):
         """
         Runs a list of configs locally with `LightningTrainer.fast_dev_run = True`.
@@ -592,6 +634,8 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
             dev runs' logs from overwriting the main runs' logs.
         python_command_prefix : str, optional
             A prefix to add to the Python command. This would be used, for example, to run the Python command with a profiler (e.g., nsight-sys).
+        run_git_pre_commit_hook : bool, optional
+            Whether to run the Git pre-commit hook before launching the sessions.
         """
         resolved_runs = _resolve_runs(
             runs, copy_config=True, reset_id=reset_ids, validate=True
@@ -614,6 +658,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
             print_environment_info=print_environment_info,
             pause_before_exit=pause_before_exit,
             python_command_prefix=python_command_prefix,
+            run_git_pre_commit_hook=run_git_pre_commit_hook,
         )
 
     def _reset_memory_caches(self):
@@ -719,6 +764,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         env: Mapping[str, str] | None = None,
         print_command: bool = True,
         python_command_prefix: str | None = None,
+        run_git_pre_commit_hook: bool = True,
         **kwargs: Unpack[unified.GenericJobKwargs],
     ):
         """
@@ -744,9 +790,15 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
             Whether to print the command to the console.
         python_command_prefix : str, optional
             A prefix to add to the Python command. This would be used, for example, to run the Python command with a profiler (e.g., nsight-sys).
+        run_git_pre_commit_hook : bool, optional
+            Whether to run the Git pre-commit hook before launching the sessions.
         kwargs : dict
             Additional keyword arguments to pass to the job submission script.
         """
+        if run_git_pre_commit_hook:
+            if not self._run_git_pre_commit_hook():
+                raise ValueError("Git pre-commit hook failed. Aborting job submission.")
+
         if scheduler == "auto":
             scheduler = unified.infer_current_scheduler()
             log.critical(f"Inferred current scheduler as {scheduler}")
@@ -825,6 +877,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         env: Mapping[str, str] | None = None,
         print_command: bool = True,
         python_command_prefix: str | None = None,
+        run_git_pre_commit_hook: bool = True,
         **kwargs: Unpack[unified.GenericJobKwargs],
     ):
         """
@@ -850,6 +903,8 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
             Whether to print the command to the console.
         python_command_prefix : str, optional
             A prefix to add to the Python command. This would be used, for example, to run the Python command with a profiler (e.g., nsight-sys).
+        run_git_pre_commit_hook : bool, optional
+            Whether to run the Git pre-commit hook before launching the sessions.
         kwargs : dict
             Additional keyword arguments to pass to the job submission script.
         """
@@ -863,6 +918,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
             env=env,
             print_command=print_command,
             python_command_prefix=python_command_prefix,
+            run_git_pre_commit_hook=run_git_pre_commit_hook,
             **kwargs,
         )
 
@@ -877,6 +933,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         env: Mapping[str, str] | None = None,
         print_command: bool = True,
         python_command_prefix: str | None = None,
+        run_git_pre_commit_hook: bool = True,
         **kwargs: Unpack[unified.GenericJobKwargs],
     ):
         """
@@ -902,6 +959,8 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
             Whether to print the command to the console.
         python_command_prefix : str, optional
             A prefix to add to the Python command. This would be used, for example, to run the Python command with a profiler (e.g., nsight-sys).
+        run_git_pre_commit_hook : bool, optional
+            Whether to run the Git pre-commit hook before launching the sessions.
         kwargs : dict
             Additional keyword arguments to pass to the job submission script.
         """
@@ -915,6 +974,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
             env=env,
             print_command=print_command,
             python_command_prefix=python_command_prefix,
+            run_git_pre_commit_hook=run_git_pre_commit_hook,
             **kwargs,
         )
 
