@@ -62,11 +62,12 @@ def pretty(
     lovely_numpy: bool = True,
     log_level: int | str | None = logging.INFO,
     log_save_dir: Path | None = None,
+    rich_log_handler: bool = True,
 ):
     init_python_logging(
         lovely_tensors=lovely_tensors,
         lovely_numpy=lovely_numpy,
-        rich=True,
+        rich=rich_log_handler,
         log_level=log_level,
         log_save_dir=log_save_dir,
     )
@@ -78,10 +79,12 @@ def lovely(
     lovely_numpy: bool = True,
     log_level: int | str | None = logging.INFO,
     log_save_dir: Path | None = None,
+    rich_log_handler: bool = True,
 ):
     pretty(
         lovely_tensors=lovely_tensors,
         lovely_numpy=lovely_numpy,
         log_level=log_level,
         log_save_dir=log_save_dir,
+        rich_log_handler=rich_log_handler,
     )
