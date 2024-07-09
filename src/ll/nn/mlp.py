@@ -1,5 +1,5 @@
 import copy
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from typing import Literal, Protocol, runtime_checkable
 
 import torch
@@ -23,7 +23,7 @@ class ResidualSequential(nn.Sequential):
 
 
 def MLP(
-    dims: list[int],
+    dims: Sequence[int],
     activation: BaseNonlinearityConfig
     | nn.Module
     | Callable[[], nn.Module]
@@ -37,15 +37,15 @@ def MLP(
     ln: bool | Literal["pre", "post"] = False,
     dropout: float | None = None,
     residual: bool = False,
-    pre_layers: list[nn.Module] = [],
-    post_layers: list[nn.Module] = [],
+    pre_layers: Sequence[nn.Module] = [],
+    post_layers: Sequence[nn.Module] = [],
     linear_cls: LinearModuleConstructor = nn.Linear,
 ):
     """
     Constructs a multi-layer perceptron (MLP) with the given dimensions and activation function.
 
     Args:
-        dims (list[int]): List of integers representing the dimensions of the MLP.
+        dims (Sequence[int]): List of integers representing the dimensions of the MLP.
         nonlinearity (Callable[[], nn.Module]): Activation function to use between layers.
         activation (Callable[[], nn.Module]): Activation function to use between layers.
         bias (bool, optional): Whether to include bias terms in the linear layers. Defaults to True.
@@ -53,8 +53,8 @@ def MLP(
         ln (bool | Literal["pre", "post"], optional): Whether to apply layer normalization before or after the linear layers. Defaults to False.
         dropout (float | None, optional): Dropout probability to apply between layers. Defaults to None.
         residual (bool, optional): Whether to use residual connections between layers. Defaults to False.
-        pre_layers (list[nn.Module], optional): List of layers to insert before the linear layers. Defaults to [].
-        post_layers (list[nn.Module], optional): List of layers to insert after the linear layers. Defaults to [].
+        pre_layers (Sequence[nn.Module], optional): List of layers to insert before the linear layers. Defaults to [].
+        post_layers (Sequence[nn.Module], optional): List of layers to insert after the linear layers. Defaults to [].
 
     Returns:
         nn.Sequential: The constructed MLP.
