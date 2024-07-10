@@ -29,6 +29,9 @@ class Singleton:
     def register(cls, instance: Self) -> None:
         cls.set(instance)
 
+    def register_self(self):
+        self.register(self)
+
     @classmethod
     def instance(cls) -> Self:
         instance = cls.get()
