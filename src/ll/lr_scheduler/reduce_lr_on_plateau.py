@@ -3,6 +3,8 @@ from typing import TYPE_CHECKING, Literal, cast
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from typing_extensions import override
 
+from ll.lr_scheduler._base import LRSchedulerMetadata
+
 from ..model.config import MetricConfig
 from ._base import LRSchedulerConfigBase
 
@@ -62,4 +64,10 @@ class ReduceLROnPlateauConfig(LRSchedulerConfigBase):
         return {
             "scheduler": lr_scheduler,
             "monitor": metric.validation_monitor,
+        }
+
+    @override
+    def metadata(self) -> LRSchedulerMetadata:
+        return {
+            "interval": "epoch",
         }
