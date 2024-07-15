@@ -123,7 +123,7 @@ and we check this when adding the decorators.
 """
 
 
-def tassert(t: Any, input: T) -> T:
+def tassert(t: Any, input: T | tuple[T, ...]):
     """
     Typecheck the input against the given type.
 
@@ -134,7 +134,11 @@ def tassert(t: Any, input: T) -> T:
 
     # Ignore typechecking if the environment variable is set.
     if DISABLE_ENV_KEY is not None and bool(int(os.environ.get(DISABLE_ENV_KEY, "0"))):
-        return input
+        return
 
-    assert isinstance(input, t), _make_error_str(input, t)
-    return input
+    if isinstance(input, tuple):
+        for i in input:
+            assert isinstance(i, t), _make_error_str(i, t)
+        return
+    else:
+        assert isinstance(input, t), _make_error_str(input, t)
