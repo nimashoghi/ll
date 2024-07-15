@@ -221,6 +221,13 @@ class SlurmJobKwargs(TypedDict, total=False):
     Valid values are "append" and "truncate".
     """
 
+    requeue: bool
+    """
+    Requeues the job if it's pre-empted.
+
+    This corresponds to the "--requeue" option in sbatch.
+    """
+
     setup_commands: Sequence[str]
     """
     The setup commands to run before the job.
@@ -266,6 +273,7 @@ DEFAULT_KWARGS: SlurmJobKwargs = {
     "signal": signal.SIGUSR1,
     "signal_delay": timedelta(seconds=90),
     "open_mode": "append",
+    "requeue": True,
 }
 
 
@@ -338,6 +346,9 @@ def _write_batch_script_to_file(
 ):
     with path.open("w") as f:
         f.write("#!/bin/bash\n")
+
+        if kwargs.get("requeue"):
+            f.write("#SBATCH --requeue\n")
 
         if job_array_n_jobs is not None:
             f.write(f"#SBATCH --array=1-{job_array_n_jobs}\n")

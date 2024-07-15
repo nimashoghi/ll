@@ -123,6 +123,13 @@ class GenericJobKwargs(TypedDict, total=False):
     Default: `bash {script}`.
     """
 
+    requeue: bool
+    """
+    Whether to requeue the job if it fails.
+
+    This corresponds to the "--requeue" option in sbatch (only for Slurm).
+    """
+
     additional_slurm_options: slurm.SlurmJobKwargs
     """Additional keyword arguments for Slurm jobs."""
 
@@ -205,6 +212,8 @@ def _to_slurm(kwargs: GenericJobKwargs) -> slurm.SlurmJobKwargs:
         slurm_kwargs["environment"] = environment
     if (command_prefix := kwargs.get("command_prefix")) is not None:
         slurm_kwargs["command_prefix"] = command_prefix
+    if (requeue := kwargs.get("requeue")) is not None:
+        slurm_kwargs["requeue"] = requeue
     if (additional_kwargs := kwargs.get("additional_slurm_options")) is not None:
         slurm_kwargs.update(additional_kwargs)
 
@@ -260,6 +269,10 @@ def _to_lsf(kwargs: GenericJobKwargs) -> lsf.LSFJobKwargs:
         lsf_kwargs["environment"] = environment
     if (command_prefix := kwargs.get("command_prefix")) is not None:
         lsf_kwargs["command_prefix"] = command_prefix
+    if (signal := kwargs.get("signal")) is not None:
+        lsf_kwargs["signal"] = signal
+    if (requeue := kwargs.get("requeue")) is not None:
+        log.warning(f'LSF does not support requeueing, ignoring "{requeue=}".')
     if (additional_kwargs := kwargs.get("additional_lsf_options")) is not None:
         lsf_kwargs.update(additional_kwargs)
 
