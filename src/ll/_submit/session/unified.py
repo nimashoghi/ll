@@ -6,7 +6,7 @@ from collections.abc import Callable, Mapping, Sequence
 from datetime import timedelta
 from logging import getLogger
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 from typing_extensions import (
     TypeAlias,
@@ -308,6 +308,7 @@ def to_array_batch_script(
     job_index_variable: str | None = None,
     print_environment_info: bool = False,
     python_command_prefix: str | None = None,
+    platform_specific_kwargs: Mapping[str, Any] = {},
     **kwargs: Unpack[GenericJobKwargs],
 ) -> SubmitOutput:
     job_index_variable_kwargs = {}
@@ -316,6 +317,7 @@ def to_array_batch_script(
     match scheduler:
         case "slurm":
             slurm_kwargs = _to_slurm(kwargs)
+            slurm_kwargs.update(cast(Any, platform_specific_kwargs))
             return slurm.to_array_batch_script(
                 dest,
                 callable,
@@ -327,6 +329,7 @@ def to_array_batch_script(
             )
         case "lsf":
             lsf_kwargs = _to_lsf(kwargs)
+            lsf_kwargs.update(cast(Any, platform_specific_kwargs))
             return lsf.to_array_batch_script(
                 dest,
                 callable,

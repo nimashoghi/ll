@@ -765,6 +765,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         print_command: bool = True,
         python_command_prefix: str | None = None,
         run_git_pre_commit_hook: bool = True,
+        platform_specific_kwargs: Mapping[str, Any] = {},
         **kwargs: Unpack[unified.GenericJobKwargs],
     ):
         """
@@ -857,6 +858,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
             map_array_args,
             print_environment_info=print_environment_info,
             python_command_prefix=python_command_prefix,
+            platform_specific_kwargs=platform_specific_kwargs,
             **kwargs,
         )
         if print_command:
@@ -878,6 +880,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         print_command: bool = True,
         python_command_prefix: str | None = None,
         run_git_pre_commit_hook: bool = True,
+        slurm_kwargs: unified.slurm.SlurmJobKwargs = {},
         **kwargs: Unpack[unified.GenericJobKwargs],
     ):
         """
@@ -919,6 +922,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
             print_command=print_command,
             python_command_prefix=python_command_prefix,
             run_git_pre_commit_hook=run_git_pre_commit_hook,
+            platform_specific_kwargs=slurm_kwargs,
             **kwargs,
         )
 
@@ -934,6 +938,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         print_command: bool = True,
         python_command_prefix: str | None = None,
         run_git_pre_commit_hook: bool = True,
+        lsf_kwargs: unified.lsf.LSFJobKwargs = {},
         **kwargs: Unpack[unified.GenericJobKwargs],
     ):
         """
@@ -975,6 +980,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
             print_command=print_command,
             python_command_prefix=python_command_prefix,
             run_git_pre_commit_hook=run_git_pre_commit_hook,
+            platform_specific_kwargs=lsf_kwargs,
             **kwargs,
         )
 
