@@ -21,6 +21,7 @@ from .config import (
     BaseConfig,
     EnvironmentClassInformationConfig,
     EnvironmentLinuxEnvironmentConfig,
+    EnvironmentLSFInformationConfig,
     EnvironmentSLURMInformationConfig,
 )
 from .modules.callback import CallbackModuleMixin, CallbackRegistrarModuleMixin
@@ -223,6 +224,7 @@ class LightningModuleBase(  # pyright: ignore[reportIncompatibleMethodOverride]
         hparams.environment.slurm = (
             EnvironmentSLURMInformationConfig.from_current_environment()
         )
+        hparams.lsf = EnvironmentLSFInformationConfig.from_current_environment()
         hparams.environment.base_dir = hparams.directory.resolve_run_root_directory(
             hparams.id
         )

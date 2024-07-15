@@ -270,6 +270,63 @@ class EnvironmentSLURMInformationConfig(TypedConfig):
             return None
 
 
+class EnvironmentLSFInformationConfig(TypedConfig):
+    hostname: str
+    hostnames: list[str]
+    job_id: str
+    array_job_id: str | None
+    array_task_id: str | None
+    num_tasks: int
+    num_nodes: int
+    node: str | int | None
+    global_rank: int
+    local_rank: int
+
+    @classmethod
+    def from_current_environment(cls):
+        try:
+            import os
+            import socket
+
+            hostname = socket.gethostname()
+            hostnames = [hostname]
+            if node_list := os.environ.get("LSB_HOSTS", ""):
+                hostnames = node_list.split()
+
+            job_id = os.environ["LSB_JOBID"]
+            array_job_id = os.environ.get("LSB_JOBINDEX")
+            array_task_id = os.environ.get("LSB_JOBINDEX")
+
+            num_tasks = int(os.environ.get("LSB_DJOB_NUMPROC", 1))
+            num_nodes = len(set(hostnames))
+
+            node_id = (
+                os.environ.get("LSB_HOSTS", "").split().index(hostname)
+                if "LSB_HOSTS" in os.environ
+                else None
+            )
+
+            # LSF doesn't have direct equivalents for global_rank and local_rank
+            # You might need to calculate these based on your specific setup
+            global_rank = int(os.environ.get("PMI_RANK", 0))
+            local_rank = int(os.environ.get("LSB_RANK", 0))
+
+            return cls(
+                hostname=hostname,
+                hostnames=hostnames,
+                job_id=job_id,
+                array_job_id=array_job_id,
+                array_task_id=array_task_id,
+                num_tasks=num_tasks,
+                num_nodes=num_nodes,
+                node=node_id,
+                global_rank=global_rank,
+                local_rank=local_rank,
+            )
+        except (ImportError, RuntimeError, ValueError, KeyError):
+            return None
+
+
 class EnvironmentLinuxEnvironmentConfig(TypedConfig):
     """
     Information about the Linux environment (e.g., current user, hostname, etc.)
@@ -303,6 +360,7 @@ class EnvironmentConfig(TypedConfig):
     linux: EnvironmentLinuxEnvironmentConfig | None = None
 
     slurm: EnvironmentSLURMInformationConfig | None = None
+    lsf: EnvironmentLSFInformationConfig | None = None
 
     base_dir: Path | None = None
     log_dir: Path | None = None
