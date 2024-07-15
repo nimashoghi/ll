@@ -1,5 +1,6 @@
 import copy
 import os
+import signal
 from collections.abc import Callable, Mapping, Sequence
 from datetime import timedelta
 from logging import getLogger
@@ -174,6 +175,20 @@ class LSFJobKwargs(TypedDict, total=False):
     Default: `bash {/path/to/helper.sh}`.
     """
 
+    signal: signal.Signals
+    """
+    The signal to send to the job as the "warning action".
+
+    This corresponds to the "-wa" option in bsub.
+    """
+
+    signal_time: timedelta
+    """
+    The time (before the job ends) to send the signal.
+
+    This corresponds to the "-wt" option in bsub.
+    """
+
     # Our own custom options
     update_kwargs_fn: "Callable[[LSFJobKwargs], LSFJobKwargs]"
     """
@@ -210,16 +225,9 @@ DEFAULT_KWARGS: LSFJobKwargs = {
     "walltime": timedelta(hours=2),
     "summit": False,
     "rs_per_node": 1,
+    "signal": signal.SIGUSR1,
+    "signal_time": timedelta(minutes=5),
 }
-
-
-def _unset_cuda_visible_devices_setup_commands(config: LSFJobKwargs):
-    if not config.get("unset_cuda_visible_devices", False):
-        return
-
-    yield "unset CUDA_VISIBLE_DEVICES"
-    for i in range(40):
-        yield f"unset CUDA_VISIBLE_DEVICES{i}"
 
 
 def _summit_update_kwargs_fn(kwargs: LSFJobKwargs) -> LSFJobKwargs:
@@ -272,7 +280,6 @@ def _summit_update_kwargs_fn(kwargs: LSFJobKwargs) -> LSFJobKwargs:
 
 SUMMIT_DEFAULTS: LSFJobKwargs = {
     "update_kwargs_fn": _summit_update_kwargs_fn,
-    "load_job_step_viewer": True,
     "unset_cuda_visible_devices": True,
     "rs_per_node": 1,
     "cpus_per_rs": 7,
