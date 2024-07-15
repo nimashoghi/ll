@@ -129,9 +129,6 @@ class GenericJobKwargs(TypedDict, total=False):
     additional_lsf_options: lsf.LSFJobKwargs
     """Additional keyword arguments for LSF jobs."""
 
-    skip_validation: bool
-    """Skip validation of the job options."""
-
 
 Scheduler: TypeAlias = Literal["slurm", "lsf"]
 
@@ -211,16 +208,6 @@ def _to_slurm(kwargs: GenericJobKwargs) -> slurm.SlurmJobKwargs:
     if (additional_kwargs := kwargs.get("additional_slurm_options")) is not None:
         slurm_kwargs.update(additional_kwargs)
 
-    if not kwargs.get("skip_validation", False):
-        # Make sure ntasks_per_node is set so that we can properly
-        # schedule the total number of tasks (world size).
-        if not slurm_kwargs.get("ntasks_per_node"):
-            raise ValueError(
-                "Number of tasks per node (`tasks_per_node` or `ntasks_per_node`) must be set for LSF jobs.\n"
-                "This is because the total number of tasks is used to compute the world size "
-                "for distributed training jobs.\nYou can set `skip_validation=True` to skip this check."
-            )
-
     return slurm_kwargs
 
 
@@ -275,16 +262,6 @@ def _to_lsf(kwargs: GenericJobKwargs) -> lsf.LSFJobKwargs:
         lsf_kwargs["command_prefix"] = command_prefix
     if (additional_kwargs := kwargs.get("additional_lsf_options")) is not None:
         lsf_kwargs.update(additional_kwargs)
-
-    if not kwargs.get("skip_validation", False):
-        # Make sure rs_per_node is set so that we can properly
-        # schedule the total number of tasks (world size).
-        if not lsf_kwargs.get("rs_per_node"):
-            raise ValueError(
-                "Number of tasks per node (`tasks_per_node` or `rs_per_node`) must be set for LSF jobs.\n"
-                "This is because the total number of tasks is used to compute the world size "
-                "for distributed training jobs.\nYou can set `skip_validation=True` to skip this check."
-            )
 
     return lsf_kwargs
 
