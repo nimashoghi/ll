@@ -352,7 +352,7 @@ def _write_batch_script_to_file(
             f.write(f"#BSUB -e {error_file}\n")
 
         if (queue := kwargs.get("queue")) is not None:
-            if isinstance(queue, Sequence):
+            if not isinstance(queue, str) and isinstance(queue, Sequence):
                 assert len(queue) == 1, "Only one queue can be specified"
                 queue = queue[0]
             f.write(f"#BSUB -q {queue}\n")
