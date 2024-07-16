@@ -98,7 +98,7 @@ class _SignalConnector(_LightningSignalConnector):
     def _is_dataloader_worker(self) -> bool:
         import torch.utils.data
 
-        return torch.utils.data.get_worker_info() is
+        return torch.utils.data.get_worker_info() is not None
 
     @override
     def _slurm_sigusr_handler_fn(self, signum: _SIGNUM, _: FrameType) -> None:
