@@ -5,7 +5,7 @@ from collections.abc import Callable, Mapping, Sequence
 from datetime import timedelta
 from logging import getLogger
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from typing_extensions import TypeAlias, TypedDict, TypeVarTuple, Unpack
 
@@ -139,12 +139,12 @@ class LSFJobKwargs(TypedDict, total=False):
     The number of resource sets per node. This is sent to the `jsrun` command.
     """
 
-    cpus_per_rs: int
+    cpus_per_rs: int | Literal["ALL_CPUS"]
     """
     The number of CPUs per resource set. This is sent to the `jsrun` command.
     """
 
-    gpus_per_rs: int
+    gpus_per_rs: int | Literal["ALL_GPUS"]
     """
     The number of GPUs per resource set. This is sent to the `jsrun` command.
     """
@@ -293,7 +293,7 @@ SUMMIT_DEFAULTS: LSFJobKwargs = {
     "unset_cuda_visible_devices": True,
     "rs_per_node": 1,
     "cpus_per_rs": 7,
-    "gpus_per_rs": 1,
+    "gpus_per_rs": "ALL_GPUS",
     "tasks_per_rs": 1,
 }
 
