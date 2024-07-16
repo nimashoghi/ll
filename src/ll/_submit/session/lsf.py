@@ -414,7 +414,11 @@ def _write_batch_script_to_file(
             total_seconds = signal_time.total_seconds()
             hours = int(total_seconds // 3600)
             minutes = int((total_seconds % 3600) // 60)
-            signal_time = f"{hours:02d}:{minutes:02d}"
+
+            signal_time = str(minutes)
+            if hours > 0:
+                signal_time = f"{hours}:{signal_time}"
+
             f.write(f"#BSUB -wt {signal_time}\n")
 
         f.write("\n")
