@@ -410,7 +410,11 @@ def _write_batch_script_to_file(
             f.write(f"#BSUB -wa {signal}\n")
 
         if (signal_time := kwargs.get("signal_time")) is not None:
-            signal_time = signal_time.total_seconds() // 60
+            # Convert from time-delta to "H:M"
+            total_seconds = signal_time.total_seconds()
+            hours = int(total_seconds // 3600)
+            minutes = int((total_seconds % 3600) // 60)
+            signal_time = f"{hours:02d}:{minutes:02d}"
             f.write(f"#BSUB -wt {signal_time}\n")
 
         f.write("\n")
