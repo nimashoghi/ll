@@ -14,7 +14,6 @@ from lightning.pytorch.trainer.connectors.signal_connector import _HandlersCompo
 from lightning.pytorch.trainer.connectors.signal_connector import (
     _SignalConnector as _LightningSignalConnector,
 )
-from lightning.pytorch.utilities.rank_zero import rank_zero_info
 
 log = logging.getLogger(__name__)
 
@@ -71,7 +70,7 @@ class _SignalConnector(_LightningSignalConnector):
             self._compose_and_register(signum, handlers)
 
     def _slurm_sigusr_handler_fn(self, signum: _SIGNUM, _: FrameType) -> None:
-        rank_zero_info(f"Handling auto-requeue signal: {signum}")
+        log.critical(f"Handling auto-requeue signal: {signum}")
 
         # save logger to make sure we get all the metrics
         for logger in self.trainer.loggers:
@@ -113,7 +112,7 @@ class _SignalConnector(_LightningSignalConnector):
                 )
 
     def _lsf_sigusr_handler_fn(self, signum: _SIGNUM, _: FrameType) -> None:
-        rank_zero_info(f"Handling auto-requeue signal: {signum}")
+        log.critical(f"Handling auto-requeue signal: {signum}")
 
         # Save logger to make sure we get all the metrics
         for logger in self.trainer.loggers:
