@@ -237,8 +237,13 @@ def _update_kwargs_jsrun(kwargs: LSFJobKwargs, base_dir: Path) -> LSFJobKwargs:
     command_parts: list[str] = ["jsrun"]
 
     # Add the worker logs
-    command_parts.extend(["--stdio_stdout", str(base_dir / "worker_out.%h.%j.%t.%p")])
-    command_parts.extend(["--stdio_stderr", str(base_dir / "worker_err.%h.%j.%t.%p")])
+    command_parts.extend(["--stdio_mode", "individual"])
+    command_parts.extend(
+        ["--stdio_stdout", str(base_dir / "logs" / "worker_out.%h.%j.%t.%p")]
+    )
+    command_parts.extend(
+        ["--stdio_stderr", str(base_dir / "logs" / "worker_err.%h.%j.%t.%p")]
+    )
 
     # Add ignoring of the CUDA_VISIBLE_DEVICES environment variable
     if kwargs.get("unset_cuda_visible_devices", False):
