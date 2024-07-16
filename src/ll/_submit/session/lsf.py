@@ -290,7 +290,7 @@ def _update_kwargs_jsrun(kwargs: LSFJobKwargs, base_dir: Path) -> LSFJobKwargs:
 
 
 SUMMIT_DEFAULTS: LSFJobKwargs = {
-    "unset_cuda_visible_devices": True,
+    # "unset_cuda_visible_devices": True,
     "rs_per_node": 6,
     "cpus_per_rs": 7,
     "gpus_per_rs": 1,
