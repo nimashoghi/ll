@@ -14,6 +14,7 @@ from lightning.pytorch.trainer.connectors.signal_connector import _HandlersCompo
 from lightning.pytorch.trainer.connectors.signal_connector import (
     _SignalConnector as _LightningSignalConnector,
 )
+from typing_extensions import override
 
 log = logging.getLogger(__name__)
 
@@ -37,22 +38,33 @@ class _SignalConnector(_LightningSignalConnector):
         replace_existing: bool = False,
     ):
         if not handlers or self._is_on_windows():
+            log.info(f"Signal {signum} has no handlers or is not supported on Windows.")
             return
 
-        if self._has_already_handler(signum) and not replace_existing:
-            handlers.append(signal.getsignal(signum))
+        if self._has_already_handler(signum):
+            if not replace_existing:
+                log.info(
+                    f"Signal {signum} already has a handler. Adding ours to the existing one."
+                )
+                handlers.append(signal.getsignal(signum))
+            else:
+                log.info(f"Replacing existing handler for signal {signum} with ours.")
 
         self._register_signal(signum, _HandlersCompose(handlers))
+        log.info(f"Registered {len(handlers)} handlers for signal {signum}.")
 
+    @override
     def register_signal_handlers(self) -> None:
         if not (auto_requeue_signals := self._auto_requeue_signals()):
+            log.info(
+                "No auto-requeue signals found. Reverting to default Lightning behavior."
+            )
             return super().register_signal_handlers()
 
         self.received_sigterm = False
         self._original_handlers = self._get_current_signal_handlers()
 
         signals = defaultdict[signal.Signals, list[_HANDLER]](lambda: [])
-
         signals[signal.SIGTERM].append(self._sigterm_notifier_fn)
 
         environment = self.trainer._accelerator_connector.cluster_environment
@@ -69,6 +81,7 @@ class _SignalConnector(_LightningSignalConnector):
         for signum, handlers in signals.items():
             self._compose_and_register(signum, handlers)
 
+    @override
     def _slurm_sigusr_handler_fn(self, signum: _SIGNUM, _: FrameType) -> None:
         log.critical(f"Handling auto-requeue signal: {signum}")
 

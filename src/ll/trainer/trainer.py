@@ -289,7 +289,7 @@ class Trainer(LightningTrainer):
         super().__init__(**kwargs)
 
         # Replace the signal connector with our own.
-        self.signal_connector = _SignalConnector(self)
+        self._signal_connector = _SignalConnector(self)
 
         # Print out the log dir, so that we can easily find it in the logs.
         if log_dir := self.log_dir:
