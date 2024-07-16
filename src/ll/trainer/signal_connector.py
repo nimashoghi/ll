@@ -1,13 +1,16 @@
+import functools
 import logging
 import os
 import re
 import signal
 import subprocess
+import threading
 from collections import defaultdict
 from collections.abc import Callable
 from types import FrameType
 from typing import Any, TypeAlias
 
+import torch.utils.data
 from lightning.fabric.plugins.environments.lsf import LSFEnvironment
 from lightning.fabric.plugins.environments.slurm import SLURMEnvironment
 from lightning.pytorch.trainer.connectors.signal_connector import _HandlersCompose
@@ -84,6 +87,8 @@ class _SignalConnector(_LightningSignalConnector):
             for signal_handler in auto_requeue_signals:
                 signals[signal_handler].append(self._lsf_sigusr_handler_fn)
 
+            self._lsf_patch_signals_for_workers(auto_requeue_signals)
+
         for signum, handlers in signals.items():
             if not handlers:
                 continue
@@ -95,15 +100,66 @@ class _SignalConnector(_LightningSignalConnector):
                 in (signal.Signals.SIGUSR1, signal.Signals.SIGUSR2),
             )
 
-    def _is_dataloader_worker(self) -> bool:
-        import torch.utils.data
+    def _lsf_patch_signals_for_workers(self, signals: list[signal.Signals]):
+        # LSF's `jsrun` seemingly propagates signals to all processes in the job,
+        # including subprocesses. This can lead to unexpected behavior when signals
+        # are also sent to other process than the main process, e.g., the data loader
+        # workers. To prevent this, we need to patch the signals for the worker processes.
+        # This is done by setting the signal handler to `SIG_IGN` for all signals that
+        # are used for auto-requeueing.
 
-        return torch.utils.data.get_worker_info() is not None
+        # We will do this by patching the `_prepare_dataloader` function of the trainer's
+        # _data_connector.
+
+        log.critical(
+            "Patching signal handlers for worker processes to prevent signal propagation (LSF)"
+        )
+        fn = self.trainer._data_connector._prepare_dataloader
+        """
+        Function signature:
+        (method) def _prepare_dataloader(
+            self,
+            dataloader: object,
+            shuffle: bool,
+            mode: RunningStage
+        ) -> object
+        """
+
+        def _patch_signals(_: int):
+            # Patch signal handlers for worker processes
+            for s in signals:
+                signal.signal(s, signal.SIG_IGN)
+
+        @functools.wraps(fn)
+        def _prepare_dataloader_patched(dataloader, shuffle, mode):
+            nonlocal signals
+
+            dataloader = fn(dataloader, shuffle, mode)
+
+            # Set the worker_init_fn to patch the signals
+            if isinstance(dataloader, torch.utils.data.DataLoader):
+                dataloader.worker_init_fn = _patch_signals
+
+            return dataloader
+
+        self.trainer._data_connector._prepare_dataloader = _prepare_dataloader_patched
+        log.info("Patched signal handlers for worker processes (LSF)")
+
+    def _should_ignore_signal_handler(self) -> str | None:
+        if threading.current_thread() is not threading.main_thread():
+            return "Not in main thread"
+
+        if torch.utils.data.get_worker_info() is None:
+            return "Not in worker process"
+
+        return None
 
     @override
     def _slurm_sigusr_handler_fn(self, signum: _SIGNUM, _: FrameType) -> None:
-        if self._is_dataloader_worker():
-            log.info("Skipping SLURM auto-requeue signal in DataLoader worker process.")
+        if ignore_reason := self._should_ignore_signal_handler():
+            log.info(
+                f"Skipping SLURM auto-requeue signal handler. Reason: {ignore_reason}"
+            )
             return
 
         log.critical(f"Handling SLURM auto-requeue signal: {signum}")
@@ -148,8 +204,10 @@ class _SignalConnector(_LightningSignalConnector):
                 )
 
     def _lsf_sigusr_handler_fn(self, signum: _SIGNUM, _: FrameType) -> None:
-        if self._is_dataloader_worker():
-            log.info("Skipping SLURM auto-requeue signal in DataLoader worker process.")
+        if ignore_reason := self._should_ignore_signal_handler():
+            log.info(
+                f"Skipping LSF auto-requeue signal handler. Reason: {ignore_reason}"
+            )
             return
 
         log.critical(f"Handling LSF auto-requeue signal: {signum}")
@@ -163,6 +221,7 @@ class _SignalConnector(_LightningSignalConnector):
             self.trainer.default_root_dir
         )
         self.trainer.save_checkpoint(hpc_save_path)
+        log.info(f"Saved checkpoint to {hpc_save_path}")
 
         if self.trainer.is_global_zero:
             # Find job id
