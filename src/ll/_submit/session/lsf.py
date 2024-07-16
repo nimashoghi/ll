@@ -406,6 +406,13 @@ def _write_batch_script_to_file(
         if (alloc_flags := kwargs.get("alloc_flags")) is not None:
             f.write(f"#BSUB -alloc_flags {alloc_flags}\n")
 
+        if (signal := kwargs.get("signal")) is not None:
+            f.write(f"#BSUB -wa {signal}\n")
+
+        if (signal_time := kwargs.get("signal_time")) is not None:
+            signal_time = signal_time.total_seconds() // 60
+            f.write(f"#BSUB -wt {signal_time}\n")
+
         f.write("\n")
 
         if kwargs.get("load_job_step_viewer", False):
