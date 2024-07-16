@@ -407,6 +407,10 @@ def _write_batch_script_to_file(
             f.write(f"#BSUB -alloc_flags {alloc_flags}\n")
 
         if (signal := kwargs.get("signal")) is not None:
+            # Convert the signal.Signals enum to a string
+            signal = signal.name
+            # Remove the "SIG" prefix
+            signal = signal[len("SIG") :]
             f.write(f"#BSUB -wa {signal}\n")
 
         if (signal_time := kwargs.get("signal_time")) is not None:
