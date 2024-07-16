@@ -6,7 +6,7 @@ from collections.abc import Callable, Mapping, Sequence
 from datetime import timedelta
 from logging import getLogger
 from pathlib import Path
-from typing import Any, Literal, cast
+from typing import Any, Literal
 
 from typing_extensions import (
     TypeAlias,
@@ -130,10 +130,10 @@ class GenericJobKwargs(TypedDict, total=False):
     This corresponds to the "--requeue" option in sbatch (only for Slurm).
     """
 
-    additional_slurm_options: slurm.SlurmJobKwargs
+    slurm_options: slurm.SlurmJobKwargs
     """Additional keyword arguments for Slurm jobs."""
 
-    additional_lsf_options: lsf.LSFJobKwargs
+    lsf_options: lsf.LSFJobKwargs
     """Additional keyword arguments for LSF jobs."""
 
 
@@ -214,7 +214,7 @@ def _to_slurm(kwargs: GenericJobKwargs) -> slurm.SlurmJobKwargs:
         slurm_kwargs["command_prefix"] = command_prefix
     if (requeue_on_preempt := kwargs.get("requeue_on_preempt")) is not None:
         slurm_kwargs["requeue"] = requeue_on_preempt
-    if (additional_kwargs := kwargs.get("additional_slurm_options")) is not None:
+    if (additional_kwargs := kwargs.get("slurm_options")) is not None:
         slurm_kwargs.update(additional_kwargs)
 
     return slurm_kwargs
@@ -275,7 +275,7 @@ def _to_lsf(kwargs: GenericJobKwargs) -> lsf.LSFJobKwargs:
         log.warning(
             f'LSF does not support requeueing, ignoring "{requeue_on_preempt=}".'
         )
-    if (additional_kwargs := kwargs.get("additional_lsf_options")) is not None:
+    if (additional_kwargs := kwargs.get("lsf_options")) is not None:
         lsf_kwargs.update(additional_kwargs)
 
     return lsf_kwargs
@@ -300,7 +300,6 @@ def to_array_batch_script(
     job_index_variable: str | None = None,
     print_environment_info: bool = False,
     python_command_prefix: str | None = None,
-    platform_specific_kwargs: Mapping[str, Any] = {},
     **kwargs: Unpack[GenericJobKwargs],
 ) -> SubmitOutput:
     job_index_variable_kwargs = {}
@@ -309,7 +308,6 @@ def to_array_batch_script(
     match scheduler:
         case "slurm":
             slurm_kwargs = _to_slurm(kwargs)
-            slurm_kwargs.update(cast(Any, platform_specific_kwargs))
             return slurm.to_array_batch_script(
                 dest,
                 callable,
@@ -321,7 +319,6 @@ def to_array_batch_script(
             )
         case "lsf":
             lsf_kwargs = _to_lsf(kwargs)
-            lsf_kwargs.update(cast(Any, platform_specific_kwargs))
             return lsf.to_array_batch_script(
                 dest,
                 callable,
