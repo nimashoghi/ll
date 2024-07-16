@@ -213,11 +213,11 @@ class LSFJobKwargs(TypedDict, total=False):
 
 
 DEFAULT_KWARGS: LSFJobKwargs = {
-    "name": "ll",
-    "nodes": 1,
-    "walltime": timedelta(hours=2),
+    # "name": "ll",
+    # "nodes": 1,
+    # "rs_per_node": 1,
+    # "walltime": timedelta(hours=2),
     "summit": False,
-    "rs_per_node": 1,
     "signal": signal.SIGUSR1,
     "signal_time": timedelta(minutes=5),
 }
@@ -272,7 +272,7 @@ def _update_kwargs_jsrun(kwargs: LSFJobKwargs, base_dir: Path) -> LSFJobKwargs:
 
 
 SUMMIT_DEFAULTS: LSFJobKwargs = {
-    "rs_per_node": 1,
+    "rs_per_node": 6,
     "cpus_per_rs": 7,
     "gpus_per_rs": "ALL_GPUS",
     "tasks_per_rs": 1,
