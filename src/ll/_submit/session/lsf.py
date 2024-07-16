@@ -218,6 +218,13 @@ class LSFJobKwargs(TypedDict, total=False):
     This is a hack to fix issues with PyTorch Lightning and Summit.
     """
 
+    unset_envs: Sequence[str]
+    """
+    A list of environment variables to unset.
+
+    These environment variables will be unset before executing the job command.
+    """
+
 
 DEFAULT_KWARGS: LSFJobKwargs = {
     "name": "ll",
@@ -291,6 +298,7 @@ def _update_kwargs_jsrun(kwargs: LSFJobKwargs, base_dir: Path) -> LSFJobKwargs:
 
 SUMMIT_DEFAULTS: LSFJobKwargs = {
     # "unset_cuda_visible_devices": True,
+    "unset_envs": ["JSM_NAMESPACE_LOCAL_RANK"],
     "rs_per_node": 6,
     "cpus_per_rs": 7,
     "gpus_per_rs": 1,
@@ -457,6 +465,10 @@ def to_array_batch_script(
     additional_command_parts: list[str] = []
     if kwargs.get("unset_cuda_visible_devices", False):
         additional_command_parts.append("--unset-cuda")
+
+    if (unset_envs := kwargs.get("unset_envs")) is not None:
+        for env in unset_envs:
+            additional_command_parts.append(f"--unset-env {env}")
 
     serialized_command = serialize_many(
         destdir,

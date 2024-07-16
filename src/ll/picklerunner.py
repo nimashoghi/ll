@@ -227,6 +227,11 @@ def _parse_args():
         help="Unset the CUDA_VISIBLE_DEVICES environment variable",
     )
     parser.add_argument(
+        "--unset-env",
+        action="append",
+        help="Unset the environment variable",
+    )
+    parser.add_argument(
         "--print-environment-info",
         action=argparse.BooleanOptionalAction,
         help="Print the environment information before starting the session",
@@ -302,6 +307,12 @@ def picklerunner_main():
             os.environ.pop("CUDA_VISIBLE_DEVICES", None)
             for i in range(40):
                 os.environ.pop(f"CUDA_VISIBLE_DEVICES{i}", None)
+
+        # Unset the environment variables if requested.
+        if args.unset_env:
+            for env in args.unset_env:
+                log.critical(f"Unsetting {env}...")
+                os.environ.pop(env, None)
 
         paths = list(_resolve_paths(args.paths))
         if not paths:
