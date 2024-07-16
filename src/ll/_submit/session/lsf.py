@@ -211,6 +211,13 @@ class LSFJobKwargs(TypedDict, total=False):
     The job step viewer is a tool that can be used to view the job steps.
     """
 
+    unset_cuda_visible_devices: bool
+    """
+    Whether to unset the CUDA_VISIBLE_DEVICES environment variable.
+
+    This is a hack to fix issues with PyTorch Lightning and Summit.
+    """
+
 
 DEFAULT_KWARGS: LSFJobKwargs = {
     # "name": "ll",
@@ -237,6 +244,17 @@ def _update_kwargs_jsrun(kwargs: LSFJobKwargs, base_dir: Path) -> LSFJobKwargs:
     command_parts.extend(
         ["--stdio_stderr", str(base_dir / "logs" / "worker_err.%h.%j.%t.%p")]
     )
+
+    # Add ignoring of the CUDA_VISIBLE_DEVICES environment variable
+    if kwargs.get("unset_cuda_visible_devices", False):
+        # Regarding the --env_no_propagate=CUDA_VISIBLE_DEVICES flag:
+        # PyTorch Lightning expects all GPUs to be present to all resource sets (tasks), but this is not the case
+        #   when we use `jsrun -n6 -g1 -a1 -c7`. This is because `jsrun` automatically sets the `CUDA_VISIBLE_DEVICES`
+        #   environment variable to the local rank of the task. PyTorch Lightning does not expect this and will fail
+        #   with an error message like `RuntimeError: CUDA error: invalid device ordinal`. This hack will fix this by
+        #   unsetting the `CUDA_VISIBLE_DEVICES` environment variable, so that PyTorch Lightning can see all GPUs.
+        #   This is a hack and should be removed once PyTorch Lightning supports this natively.
+        command_parts.append("--env_no_propagate=CUDA_VISIBLE_DEVICES")
 
     if (rs_per_node := kwargs.get("rs_per_node")) is not None:
         # Add the total number of resource sets requested across all nodes in the job
@@ -272,9 +290,10 @@ def _update_kwargs_jsrun(kwargs: LSFJobKwargs, base_dir: Path) -> LSFJobKwargs:
 
 
 SUMMIT_DEFAULTS: LSFJobKwargs = {
+    "unset_cuda_visible_devices": True,
     "rs_per_node": 6,
     "cpus_per_rs": 7,
-    "gpus_per_rs": "ALL_GPUS",
+    "gpus_per_rs": 1,
     "tasks_per_rs": 1,
 }
 
@@ -436,6 +455,9 @@ def to_array_batch_script(
     destdir.mkdir(exist_ok=True)
 
     additional_command_parts: list[str] = []
+    if kwargs.get("unset_cuda_visible_devices", False):
+        additional_command_parts.append("--unset-cuda")
+
     serialized_command = serialize_many(
         destdir,
         callable,
