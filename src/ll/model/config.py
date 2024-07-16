@@ -1,6 +1,7 @@
 import copy
 import os
 import re
+import signal
 import socket
 import string
 import time
@@ -1746,12 +1747,59 @@ class SeedConfig(TypedConfig):
     """Whether to seed the workers of the dataloader."""
 
 
+Signal: TypeAlias = Literal[
+    "SIGHUP",
+    "SIGINT",
+    "SIGQUIT",
+    "SIGILL",
+    "SIGTRAP",
+    "SIGABRT",
+    "SIGBUS",
+    "SIGFPE",
+    "SIGKILL",
+    "SIGUSR1",
+    "SIGSEGV",
+    "SIGUSR2",
+    "SIGPIPE",
+    "SIGALRM",
+    "SIGTERM",
+    "SIGCHLD",
+    "SIGCONT",
+    "SIGSTOP",
+    "SIGTSTP",
+    "SIGTTIN",
+    "SIGTTOU",
+    "SIGURG",
+    "SIGXCPU",
+    "SIGXFSZ",
+    "SIGVTALRM",
+    "SIGPROF",
+    "SIGWINCH",
+    "SIGIO",
+    "SIGPWR",
+    "SIGSYS",
+    "SIGRTMIN",
+    "SIGRTMAX",
+]
+
+
+class SubmitConfig(TypedConfig):
+    auto_requeue_signals: list[Signal] = ["SIGUSR1"]
+    """Signals that will trigger an automatic requeue of the job."""
+
+    def _resolved_auto_requeue_signals(self) -> list[signal.Signals]:
+        return [getattr(signal.Signals, sig) for sig in self.auto_requeue_signals]
+
+
 class RunnerConfig(TypedConfig):
     python_logging: PythonLogging = PythonLogging()
     """Python logging configuration options."""
 
     seed: SeedConfig = SeedConfig(seed=0)
     """Seed everything configuration options."""
+
+    submit: SubmitConfig = SubmitConfig()
+    """Submit (e.g., SLURM or LSF) configuration options."""
 
     dump_run_information: bool = True
     """

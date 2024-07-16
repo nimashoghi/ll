@@ -1,13 +1,9 @@
 import contextlib
 import logging
 import os
-import re
-import signal
-import subprocess
-from collections.abc import Callable, Sequence
+from collections.abc import Sequence
 from pathlib import Path
-from types import FrameType
-from typing import Any, TypeAlias, cast
+from typing import Any, cast
 
 import torch
 from lightning.fabric.plugins.environments.lsf import LSFEnvironment
@@ -16,11 +12,6 @@ from lightning.fabric.plugins.precision.precision import _PRECISION_INPUT
 from lightning.pytorch import LightningModule
 from lightning.pytorch import Trainer as LightningTrainer
 from lightning.pytorch.profilers import Profiler
-from lightning.pytorch.trainer.connectors.signal_connector import _HandlersCompose
-from lightning.pytorch.trainer.connectors.signal_connector import (
-    _SignalConnector as _LightningSignalConnector,
-)
-from lightning.pytorch.utilities.rank_zero import rank_zero_info
 from lightning.pytorch.utilities.types import _EVALUATE_OUTPUT, _PREDICT_OUTPUT
 from typing_extensions import Unpack, assert_never, override
 
@@ -33,88 +24,9 @@ from ..model.config import (
     LightningTrainerKwargs,
     StrategyConfigProtocol,
 )
+from .signal_connector import _SignalConnector
 
 log = logging.getLogger(__name__)
-
-_SIGNUM = int | signal.Signals
-_HANDLER: TypeAlias = Callable[[_SIGNUM, FrameType], Any] | int | signal.Handlers | None
-
-
-class _SignalConnector(_LightningSignalConnector):
-    def register_signal_handlers(self) -> None:
-        self.received_sigterm = False
-        self._original_handlers = self._get_current_signal_handlers()
-
-        sigusr_handlers: list[_HANDLER] = []
-        sigterm_handlers: list[_HANDLER] = [self._sigterm_notifier_fn]
-
-        environment = self.trainer._accelerator_connector.cluster_environment
-        if isinstance(environment, SLURMEnvironment) and environment.auto_requeue:
-            log.info("SLURM auto-requeueing enabled. Setting signal handlers.")
-            sigusr_handlers.append(self._slurm_sigusr_handler_fn)
-            sigterm_handlers.append(self._sigterm_handler_fn)
-
-        if isinstance(environment, LSFEnvironment):
-            log.info("LSF auto-requeueing enabled. Setting signal handlers.")
-            sigusr_handlers.append(self._lsf_sigusr_handler_fn)
-            sigterm_handlers.append(self._sigterm_handler_fn)
-
-        # Windows seems to have signal incompatibilities
-        if not self._is_on_windows():
-            sigusr = (
-                environment.requeue_signal
-                if isinstance(environment, SLURMEnvironment)
-                else signal.SIGUSR1
-            )
-            assert sigusr is not None
-            if sigusr_handlers and not self._has_already_handler(sigusr):
-                self._register_signal(sigusr, _HandlersCompose(sigusr_handlers))
-
-            # we have our own handler, but include existing ones too
-            if self._has_already_handler(signal.SIGTERM):
-                sigterm_handlers.append(signal.getsignal(signal.SIGTERM))
-            self._register_signal(signal.SIGTERM, _HandlersCompose(sigterm_handlers))
-
-    def _lsf_sigusr_handler_fn(self, signum: _SIGNUM, _: FrameType) -> None:
-        rank_zero_info(f"Handling auto-requeue signal: {signum}")
-
-        # Save logger to make sure we get all the metrics
-        for logger in self.trainer.loggers:
-            logger.finalize("finished")
-
-        # Save checkpoint
-        hpc_save_path = self.trainer._checkpoint_connector.hpc_save_path(
-            self.trainer.default_root_dir
-        )
-        self.trainer.save_checkpoint(hpc_save_path)
-
-        if self.trainer.is_global_zero:
-            # Find job id
-            job_id = os.getenv("LSB_JOBID")
-
-            if job_id is not None:
-                assert re.match("[0-9]+", job_id)
-                cmd = ["brequeue", job_id]
-
-                # Requeue job
-                log.info(f"Requeuing job {job_id}...")
-                try:
-                    result = subprocess.call(cmd)
-                except FileNotFoundError:
-                    # Retry with shell context if subprocess call fails
-                    result = subprocess.call(" ".join(cmd), shell=True)
-
-                # Print result text
-                if result == 0:
-                    log.info(f"Requeued LSF job: {job_id}")
-                else:
-                    log.warning(
-                        f"Requeuing LSF job {job_id} failed with error code {result}"
-                    )
-            else:
-                log.warning(
-                    "LSB_JOBID environment variable not found. Unable to requeue job."
-                )
 
 
 class Trainer(LightningTrainer):
