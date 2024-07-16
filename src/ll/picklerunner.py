@@ -232,7 +232,7 @@ def _parse_args():
         help="Unset the environment variable",
     )
     parser.add_argument(
-        "-force-env",
+        "--force-env",
         action="append",
         help="Force the environment variable to be the provided value, regardless of the current value",
     )
