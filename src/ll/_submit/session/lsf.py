@@ -462,7 +462,7 @@ def to_array_batch_script(
         destdir,
         callable,
         [(args, {}) for args in args_list],
-        start_idx=1,  # LSF job indices are 1-based
+        start_idx=0,  # LSF job indices are 1-based
         additional_command_parts=additional_command_parts,
     )
     helper_path = write_helper_script(
