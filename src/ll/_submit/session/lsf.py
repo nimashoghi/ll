@@ -230,7 +230,7 @@ DEFAULT_KWARGS: LSFJobKwargs = {
 }
 
 
-def _summit_update_kwargs_fn(kwargs: LSFJobKwargs) -> LSFJobKwargs:
+def _update_kwargs_jsrun(kwargs: LSFJobKwargs) -> LSFJobKwargs:
     kwargs = copy.deepcopy(kwargs)
 
     # Update the command_prefix to add srun:
@@ -279,7 +279,6 @@ def _summit_update_kwargs_fn(kwargs: LSFJobKwargs) -> LSFJobKwargs:
 
 
 SUMMIT_DEFAULTS: LSFJobKwargs = {
-    "update_kwargs_fn": _summit_update_kwargs_fn,
     "unset_cuda_visible_devices": True,
     "rs_per_node": 1,
     "cpus_per_rs": 7,
@@ -405,12 +404,14 @@ def _update_kwargs(kwargs_in: LSFJobKwargs):
     kwargs = copy.deepcopy(DEFAULT_KWARGS)
 
     # If the job is being submitted to Summit, update the kwargs with the Summit defaults
-    if kwargs.get("summit"):
+    if kwargs_in.get("summit"):
         kwargs.update(SUMMIT_DEFAULTS)
 
     # Update the kwargs with the provided values
     kwargs.update(kwargs_in)
     del kwargs_in
+
+    kwargs = _update_kwargs_jsrun(kwargs)
 
     if (update_kwargs_fn := kwargs.get("update_kwargs_fn")) is not None:
         kwargs = copy.deepcopy(update_kwargs_fn(kwargs))
