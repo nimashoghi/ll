@@ -232,6 +232,11 @@ def _parse_args():
         help="Unset the environment variable",
     )
     parser.add_argument(
+        "-force-env",
+        action="append",
+        help="Force the environment variable to be the provided value, regardless of the current value",
+    )
+    parser.add_argument(
         "--print-environment-info",
         action=argparse.BooleanOptionalAction,
         help="Print the environment information before starting the session",
@@ -313,6 +318,13 @@ def picklerunner_main():
             for env in args.unset_env:
                 log.critical(f"Unsetting {env}...")
                 os.environ.pop(env, None)
+
+        # Force the environment variables if requested.
+        if args.force_env:
+            for env in args.force_env:
+                key, value = env.split("=", 1)
+                log.critical(f"Forcing {key}={value}...")
+                os.environ[key] = value
 
         paths = list(_resolve_paths(args.paths))
         if not paths:

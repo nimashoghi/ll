@@ -225,6 +225,13 @@ class LSFJobKwargs(TypedDict, total=False):
     These environment variables will be unset before executing the job command.
     """
 
+    force_envs: Mapping[str, str]
+    """
+    A dictionary of environment variables to force.
+
+    These environment variables will be set before executing the job command, and any existing values will be overwritten.
+    """
+
 
 DEFAULT_KWARGS: LSFJobKwargs = {
     "name": "ll",
@@ -298,7 +305,7 @@ def _update_kwargs_jsrun(kwargs: LSFJobKwargs, base_dir: Path) -> LSFJobKwargs:
 
 SUMMIT_DEFAULTS: LSFJobKwargs = {
     # "unset_cuda_visible_devices": True,
-    "unset_envs": ["JSM_NAMESPACE_LOCAL_RANK"],
+    "force_envs": {"JSM_NAMESPACE_LOCAL_RANK": "0"},
     "rs_per_node": 6,
     "cpus_per_rs": 7,
     "gpus_per_rs": 1,
@@ -469,6 +476,10 @@ def to_array_batch_script(
     if (unset_envs := kwargs.get("unset_envs")) is not None:
         for env in unset_envs:
             additional_command_parts.append(f"--unset-env {env}")
+
+    if (force_envs := kwargs.get("force_envs")) is not None:
+        for key, value in force_envs.items():
+            additional_command_parts.append(f"--force-env {key}={value}")
 
     serialized_command = serialize_many(
         destdir,
