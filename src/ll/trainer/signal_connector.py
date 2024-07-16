@@ -29,7 +29,13 @@ class _SignalConnector(_LightningSignalConnector):
         if not isinstance(config := self.trainer.lightning_module.hparams, BaseConfig):
             return []
 
-        return config.runner.submit._resolved_auto_requeue_signals()
+        signals = config.runner.submit._resolved_auto_requeue_signals()
+        signals_set = set(signals)
+        valid_signals: set[signal.Signals] = signal.valid_signals()
+        assert signals_set.issubset(
+            valid_signals
+        ), f"Invalid signal(s) found: {signals_set - valid_signals}"
+        return signals
 
     def _compose_and_register(
         self,
@@ -37,7 +43,7 @@ class _SignalConnector(_LightningSignalConnector):
         handlers: list[_HANDLER],
         replace_existing: bool = False,
     ):
-        if not handlers or self._is_on_windows():
+        if self._is_on_windows():
             log.info(f"Signal {signum} has no handlers or is not supported on Windows.")
             return
 
@@ -79,11 +85,28 @@ class _SignalConnector(_LightningSignalConnector):
                 signals[signal_handler].append(self._lsf_sigusr_handler_fn)
 
         for signum, handlers in signals.items():
-            self._compose_and_register(signum, handlers)
+            if not handlers:
+                continue
+
+            self._compose_and_register(
+                signum,
+                handlers,
+                replace_existing=signum
+                in (signal.Signals.SIGUSR1, signal.Signals.SIGUSR2),
+            )
+
+    def _is_dataloader_worker(self) -> bool:
+        import torch.utils.data
+
+        return torch.utils.data.get_worker_info() is
 
     @override
     def _slurm_sigusr_handler_fn(self, signum: _SIGNUM, _: FrameType) -> None:
-        log.critical(f"Handling auto-requeue signal: {signum}")
+        if self._is_dataloader_worker():
+            log.info("Skipping SLURM auto-requeue signal in DataLoader worker process.")
+            return
+
+        log.critical(f"Handling SLURM auto-requeue signal: {signum}")
 
         # save logger to make sure we get all the metrics
         for logger in self.trainer.loggers:
@@ -125,7 +148,11 @@ class _SignalConnector(_LightningSignalConnector):
                 )
 
     def _lsf_sigusr_handler_fn(self, signum: _SIGNUM, _: FrameType) -> None:
-        log.critical(f"Handling auto-requeue signal: {signum}")
+        if self._is_dataloader_worker():
+            log.info("Skipping SLURM auto-requeue signal in DataLoader worker process.")
+            return
+
+        log.critical(f"Handling LSF auto-requeue signal: {signum}")
 
         # Save logger to make sure we get all the metrics
         for logger in self.trainer.loggers:
