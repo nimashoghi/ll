@@ -230,11 +230,16 @@ DEFAULT_KWARGS: LSFJobKwargs = {
 }
 
 
-def _update_kwargs_jsrun(kwargs: LSFJobKwargs) -> LSFJobKwargs:
+def _update_kwargs_jsrun(kwargs: LSFJobKwargs, base_dir: Path) -> LSFJobKwargs:
     kwargs = copy.deepcopy(kwargs)
 
     # Update the command_prefix to add srun:
     command_parts: list[str] = ["jsrun"]
+
+    # Add the worker logs
+    command_parts.extend(["--stdio_stdout", str(base_dir / "worker_out.%h.%j.%t.%p")])
+    command_parts.extend(["--stdio_stderr", str(base_dir / "worker_err.%h.%j.%t.%p")])
+
     # Add ignoring of the CUDA_VISIBLE_DEVICES environment variable
     if kwargs.get("unset_cuda_visible_devices", False):
         # Regarding the --env_no_propagate=CUDA_VISIBLE_DEVICES flag:
@@ -272,6 +277,7 @@ def _update_kwargs_jsrun(kwargs: LSFJobKwargs) -> LSFJobKwargs:
     # If there is already a command prefix, combine them.
     if (existing_command_prefix := kwargs.get("command_prefix")) is not None:
         command_parts.extend(existing_command_prefix.split())
+
     # Add the command prefix to the kwargs.
     kwargs["command_prefix"] = " ".join(command_parts)
 
@@ -307,10 +313,10 @@ def _write_batch_script_to_file(
     logs_base.mkdir(exist_ok=True)
 
     if kwargs.get("output_file") is None:
-        kwargs["output_file"] = logs_base / "output_%J.out"
+        kwargs["output_file"] = logs_base / "output_%J_%I.out"
 
     if kwargs.get("error_file") is None:
-        kwargs["error_file"] = logs_base / "error_%J.err"
+        kwargs["error_file"] = logs_base / "error_%J_%I.err"
 
     with path.open("w") as f:
         f.write("#!/bin/bash\n")
@@ -399,7 +405,7 @@ def _write_batch_script_to_file(
     return path
 
 
-def _update_kwargs(kwargs_in: LSFJobKwargs):
+def _update_kwargs(kwargs_in: LSFJobKwargs, base_dir: Path) -> LSFJobKwargs:
     # Update the kwargs with the default values
     kwargs = copy.deepcopy(DEFAULT_KWARGS)
 
@@ -411,7 +417,7 @@ def _update_kwargs(kwargs_in: LSFJobKwargs):
     kwargs.update(kwargs_in)
     del kwargs_in
 
-    kwargs = _update_kwargs_jsrun(kwargs)
+    kwargs = _update_kwargs_jsrun(kwargs, base_dir)
 
     if (update_kwargs_fn := kwargs.get("update_kwargs_fn")) is not None:
         kwargs = copy.deepcopy(update_kwargs_fn(kwargs))
@@ -435,7 +441,7 @@ def to_array_batch_script(
 
     from ...picklerunner import serialize_many
 
-    kwargs = _update_kwargs(kwargs)
+    kwargs = _update_kwargs(kwargs, dest)
 
     # Convert the command/callable to a string for the command
     num_jobs = len(args_list)
