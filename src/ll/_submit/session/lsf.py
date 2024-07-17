@@ -239,7 +239,7 @@ DEFAULT_KWARGS: LSFJobKwargs = {
     # "rs_per_node": 1,
     # "walltime": timedelta(hours=2),
     "summit": False,
-    "signal": signal.SIGUSR1,
+    "signal": signal.SIGURG,
     "signal_time": timedelta(minutes=5),
 }
 

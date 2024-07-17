@@ -8,7 +8,7 @@ from collections.abc import Callable, MutableMapping
 from datetime import timedelta
 from logging import getLogger
 from pathlib import Path
-from typing import IO, Any, Generic, cast
+from typing import IO, TYPE_CHECKING, Any, Generic, cast
 
 import torch
 from lightning.fabric.utilities.types import _MAP_LOCATION_TYPE, _PATH
@@ -174,14 +174,18 @@ class LightningModuleBase(  # pyright: ignore[reportIncompatibleMethodOverride]
         if not inspect.isfunction(init_fn):
             raise TypeError(f"__init__ must be a function: {init_fn}")
 
-        parameters = inspect.signature(init_fn).parameters
+        parameters = dict(inspect.signature(init_fn).parameters)
+        # Remove the "self" parameter.
+        _ = parameters.pop("self", None)
         if len(parameters) != 1:
             raise TypeError(
                 f"__init__ must take a single argument, got {len(parameters)}: {init_fn}"
             )
 
         if "hparams" not in parameters:
-            raise TypeError(f"__init__'s argument must be named 'hparams': {init_fn}")
+            raise TypeError(
+                f"__init__'s argument must be named 'hparams', got {parameters}"
+            )
 
     hparams: THparams  # pyright: ignore[reportIncompatibleMethodOverride]
     hparams_initial: THparams  # pyright: ignore[reportIncompatibleMethodOverride]
@@ -316,212 +320,214 @@ class LightningModuleBase(  # pyright: ignore[reportIncompatibleMethodOverride]
         datamodule = cast(LightningDataModuleBase[THparams], datamodule)
         return datamodule
 
-    @override
-    def training_step(  # pyright: ignore[reportIncompatibleMethodOverride]
-        self,
-        batch: Any,
-        batch_idx: int,
-    ) -> Any:
-        r"""Here you compute and return the training loss and some additional metrics for e.g. the progress bar or
-        logger.
+    if TYPE_CHECKING:
 
-        Args:
-            batch: The output of your data iterable, normally a :class:`~torch.utils.data.DataLoader`.
-            batch_idx: The index of this batch.
-            dataloader_idx: The index of the dataloader that produced this batch.
-                (only if multiple dataloaders used)
+        @override
+        def training_step(  # pyright: ignore[reportIncompatibleMethodOverride]
+            self,
+            batch: Any,
+            batch_idx: int,
+        ) -> Any:
+            r"""Here you compute and return the training loss and some additional metrics for e.g. the progress bar or
+            logger.
 
-        Return:
-            - :class:`~torch.Tensor` - The loss tensor
-            - ``dict`` - A dictionary which can include any keys, but must include the key ``'loss'`` in the case of
-              automatic optimization.
-            - ``None`` - In automatic optimization, this will skip to the next batch (but is not supported for
-              multi-GPU, TPU, or DeepSpeed). For manual optimization, this has no special meaning, as returning
-              the loss is not required.
+            Args:
+                batch: The output of your data iterable, normally a :class:`~torch.utils.data.DataLoader`.
+                batch_idx: The index of this batch.
+                dataloader_idx: The index of the dataloader that produced this batch.
+                    (only if multiple dataloaders used)
 
-        In this step you'd normally do the forward pass and calculate the loss for a batch.
-        You can also do fancier things like multiple forward passes or something model specific.
+            Return:
+                - :class:`~torch.Tensor` - The loss tensor
+                - ``dict`` - A dictionary which can include any keys, but must include the key ``'loss'`` in the case of
+                automatic optimization.
+                - ``None`` - In automatic optimization, this will skip to the next batch (but is not supported for
+                multi-GPU, TPU, or DeepSpeed). For manual optimization, this has no special meaning, as returning
+                the loss is not required.
 
-        Example::
+            In this step you'd normally do the forward pass and calculate the loss for a batch.
+            You can also do fancier things like multiple forward passes or something model specific.
 
-            def training_step(self, batch, batch_idx):
-                x, y, z = batch
-                out = self.encoder(x)
-                loss = self.loss(out, x)
-                return loss
+            Example::
 
-        To use multiple optimizers, you can switch to 'manual optimization' and control their stepping:
+                def training_step(self, batch, batch_idx):
+                    x, y, z = batch
+                    out = self.encoder(x)
+                    loss = self.loss(out, x)
+                    return loss
 
-        .. code-block:: python
+            To use multiple optimizers, you can switch to 'manual optimization' and control their stepping:
 
-            def __init__(self):
-                super().__init__()
-                self.automatic_optimization = False
+            .. code-block:: python
 
-
-            # Multiple optimizers (e.g.: GANs)
-            def training_step(self, batch, batch_idx):
-                opt1, opt2 = self.optimizers()
-
-                # do training_step with encoder
-                ...
-                opt1.step()
-                # do training_step with decoder
-                ...
-                opt2.step()
-
-        Note:
-            When ``accumulate_grad_batches`` > 1, the loss returned here will be automatically
-            normalized by ``accumulate_grad_batches`` internally.
-
-        """
-        raise NotImplementedError
-
-    @override
-    def validation_step(  # pyright: ignore[reportIncompatibleMethodOverride]
-        self,
-        batch: Any,
-        batch_idx: int,
-    ) -> STEP_OUTPUT:
-        r"""Operates on a single batch of data from the validation set. In this step you'd might generate examples or
-        calculate anything of interest like accuracy.
-
-        Args:
-            batch: The output of your data iterable, normally a :class:`~torch.utils.data.DataLoader`.
-            batch_idx: The index of this batch.
-            dataloader_idx: The index of the dataloader that produced this batch.
-                (only if multiple dataloaders used)
-
-        Return:
-            - :class:`~torch.Tensor` - The loss tensor
-            - ``dict`` - A dictionary. Can include any keys, but must include the key ``'loss'``.
-            - ``None`` - Skip to the next batch.
-
-        .. code-block:: python
-
-            # if you have one val dataloader:
-            def validation_step(self, batch, batch_idx): ...
+                def __init__(self):
+                    super().__init__()
+                    self.automatic_optimization = False
 
 
-            # if you have multiple val dataloaders:
-            def validation_step(self, batch, batch_idx, dataloader_idx=0): ...
+                # Multiple optimizers (e.g.: GANs)
+                def training_step(self, batch, batch_idx):
+                    opt1, opt2 = self.optimizers()
 
-        Examples::
+                    # do training_step with encoder
+                    ...
+                    opt1.step()
+                    # do training_step with decoder
+                    ...
+                    opt2.step()
 
-            # CASE 1: A single validation dataset
-            def validation_step(self, batch, batch_idx):
-                x, y = batch
+            Note:
+                When ``accumulate_grad_batches`` > 1, the loss returned here will be automatically
+                normalized by ``accumulate_grad_batches`` internally.
 
-                # implement your own
-                out = self(x)
-                loss = self.loss(out, y)
+            """
+            raise NotImplementedError
 
-                # log 6 example images
-                # or generated text... or whatever
-                sample_imgs = x[:6]
-                grid = torchvision.utils.make_grid(sample_imgs)
-                self.logger.experiment.add_image('example_images', grid, 0)
+        @override
+        def validation_step(  # pyright: ignore[reportIncompatibleMethodOverride]
+            self,
+            batch: Any,
+            batch_idx: int,
+        ) -> STEP_OUTPUT:
+            r"""Operates on a single batch of data from the validation set. In this step you'd might generate examples or
+            calculate anything of interest like accuracy.
 
-                # calculate acc
-                labels_hat = torch.argmax(out, dim=1)
-                val_acc = torch.sum(y == labels_hat).item() / (len(y) * 1.0)
+            Args:
+                batch: The output of your data iterable, normally a :class:`~torch.utils.data.DataLoader`.
+                batch_idx: The index of this batch.
+                dataloader_idx: The index of the dataloader that produced this batch.
+                    (only if multiple dataloaders used)
 
-                # log the outputs!
-                self.log_dict({'val_loss': loss, 'val_acc': val_acc})
+            Return:
+                - :class:`~torch.Tensor` - The loss tensor
+                - ``dict`` - A dictionary. Can include any keys, but must include the key ``'loss'``.
+                - ``None`` - Skip to the next batch.
 
-        If you pass in multiple val dataloaders, :meth:`validation_step` will have an additional argument. We recommend
-        setting the default value of 0 so that you can quickly switch between single and multiple dataloaders.
+            .. code-block:: python
 
-        .. code-block:: python
-
-            # CASE 2: multiple validation dataloaders
-            def validation_step(self, batch, batch_idx, dataloader_idx=0):
-                # dataloader_idx tells you which dataset this is.
-                ...
-
-        Note:
-            If you don't need to validate you don't need to implement this method.
-
-        Note:
-            When the :meth:`validation_step` is called, the model has been put in eval mode
-            and PyTorch gradients have been disabled. At the end of validation,
-            the model goes back to training mode and gradients are enabled.
-
-        """
-        raise NotImplementedError
-
-    @override
-    def test_step(  # pyright: ignore[reportIncompatibleMethodOverride]
-        self,
-        batch: Any,
-        batch_idx: int,
-    ) -> STEP_OUTPUT:
-        r"""Operates on a single batch of data from the test set. In this step you'd normally generate examples or
-        calculate anything of interest such as accuracy.
-
-        Args:
-            batch: The output of your data iterable, normally a :class:`~torch.utils.data.DataLoader`.
-            batch_idx: The index of this batch.
-            dataloader_idx: The index of the dataloader that produced this batch.
-                (only if multiple dataloaders used)
-
-        Return:
-            - :class:`~torch.Tensor` - The loss tensor
-            - ``dict`` - A dictionary. Can include any keys, but must include the key ``'loss'``.
-            - ``None`` - Skip to the next batch.
-
-        .. code-block:: python
-
-            # if you have one test dataloader:
-            def test_step(self, batch, batch_idx): ...
+                # if you have one val dataloader:
+                def validation_step(self, batch, batch_idx): ...
 
 
-            # if you have multiple test dataloaders:
-            def test_step(self, batch, batch_idx, dataloader_idx=0): ...
+                # if you have multiple val dataloaders:
+                def validation_step(self, batch, batch_idx, dataloader_idx=0): ...
 
-        Examples::
+            Examples::
 
-            # CASE 1: A single test dataset
-            def test_step(self, batch, batch_idx):
-                x, y = batch
+                # CASE 1: A single validation dataset
+                def validation_step(self, batch, batch_idx):
+                    x, y = batch
 
-                # implement your own
-                out = self(x)
-                loss = self.loss(out, y)
+                    # implement your own
+                    out = self(x)
+                    loss = self.loss(out, y)
 
-                # log 6 example images
-                # or generated text... or whatever
-                sample_imgs = x[:6]
-                grid = torchvision.utils.make_grid(sample_imgs)
-                self.logger.experiment.add_image('example_images', grid, 0)
+                    # log 6 example images
+                    # or generated text... or whatever
+                    sample_imgs = x[:6]
+                    grid = torchvision.utils.make_grid(sample_imgs)
+                    self.logger.experiment.add_image('example_images', grid, 0)
 
-                # calculate acc
-                labels_hat = torch.argmax(out, dim=1)
-                test_acc = torch.sum(y == labels_hat).item() / (len(y) * 1.0)
+                    # calculate acc
+                    labels_hat = torch.argmax(out, dim=1)
+                    val_acc = torch.sum(y == labels_hat).item() / (len(y) * 1.0)
 
-                # log the outputs!
-                self.log_dict({'test_loss': loss, 'test_acc': test_acc})
+                    # log the outputs!
+                    self.log_dict({'val_loss': loss, 'val_acc': val_acc})
 
-        If you pass in multiple test dataloaders, :meth:`test_step` will have an additional argument. We recommend
-        setting the default value of 0 so that you can quickly switch between single and multiple dataloaders.
+            If you pass in multiple val dataloaders, :meth:`validation_step` will have an additional argument. We recommend
+            setting the default value of 0 so that you can quickly switch between single and multiple dataloaders.
 
-        .. code-block:: python
+            .. code-block:: python
 
-            # CASE 2: multiple test dataloaders
-            def test_step(self, batch, batch_idx, dataloader_idx=0):
-                # dataloader_idx tells you which dataset this is.
-                ...
+                # CASE 2: multiple validation dataloaders
+                def validation_step(self, batch, batch_idx, dataloader_idx=0):
+                    # dataloader_idx tells you which dataset this is.
+                    ...
 
-        Note:
-            If you don't need to test you don't need to implement this method.
+            Note:
+                If you don't need to validate you don't need to implement this method.
 
-        Note:
-            When the :meth:`test_step` is called, the model has been put in eval mode and
-            PyTorch gradients have been disabled. At the end of the test epoch, the model goes back
-            to training mode and gradients are enabled.
+            Note:
+                When the :meth:`validation_step` is called, the model has been put in eval mode
+                and PyTorch gradients have been disabled. At the end of validation,
+                the model goes back to training mode and gradients are enabled.
 
-        """
-        raise NotImplementedError
+            """
+            raise NotImplementedError
+
+        @override
+        def test_step(  # pyright: ignore[reportIncompatibleMethodOverride]
+            self,
+            batch: Any,
+            batch_idx: int,
+        ) -> STEP_OUTPUT:
+            r"""Operates on a single batch of data from the test set. In this step you'd normally generate examples or
+            calculate anything of interest such as accuracy.
+
+            Args:
+                batch: The output of your data iterable, normally a :class:`~torch.utils.data.DataLoader`.
+                batch_idx: The index of this batch.
+                dataloader_idx: The index of the dataloader that produced this batch.
+                    (only if multiple dataloaders used)
+
+            Return:
+                - :class:`~torch.Tensor` - The loss tensor
+                - ``dict`` - A dictionary. Can include any keys, but must include the key ``'loss'``.
+                - ``None`` - Skip to the next batch.
+
+            .. code-block:: python
+
+                # if you have one test dataloader:
+                def test_step(self, batch, batch_idx): ...
+
+
+                # if you have multiple test dataloaders:
+                def test_step(self, batch, batch_idx, dataloader_idx=0): ...
+
+            Examples::
+
+                # CASE 1: A single test dataset
+                def test_step(self, batch, batch_idx):
+                    x, y = batch
+
+                    # implement your own
+                    out = self(x)
+                    loss = self.loss(out, y)
+
+                    # log 6 example images
+                    # or generated text... or whatever
+                    sample_imgs = x[:6]
+                    grid = torchvision.utils.make_grid(sample_imgs)
+                    self.logger.experiment.add_image('example_images', grid, 0)
+
+                    # calculate acc
+                    labels_hat = torch.argmax(out, dim=1)
+                    test_acc = torch.sum(y == labels_hat).item() / (len(y) * 1.0)
+
+                    # log the outputs!
+                    self.log_dict({'test_loss': loss, 'test_acc': test_acc})
+
+            If you pass in multiple test dataloaders, :meth:`test_step` will have an additional argument. We recommend
+            setting the default value of 0 so that you can quickly switch between single and multiple dataloaders.
+
+            .. code-block:: python
+
+                # CASE 2: multiple test dataloaders
+                def test_step(self, batch, batch_idx, dataloader_idx=0):
+                    # dataloader_idx tells you which dataset this is.
+                    ...
+
+            Note:
+                If you don't need to test you don't need to implement this method.
+
+            Note:
+                When the :meth:`test_step` is called, the model has been put in eval mode and
+                PyTorch gradients have been disabled. At the end of the test epoch, the model goes back
+                to training mode and gradients are enabled.
+
+            """
+            raise NotImplementedError
 
     @override
     def predict_step(  # pyright: ignore[reportIncompatibleMethodOverride]
@@ -564,7 +570,12 @@ class LightningModuleBase(  # pyright: ignore[reportIncompatibleMethodOverride]
             predictions = trainer.predict(model, dm)
 
         """
-        raise NotImplementedError
+        prediction = self(batch)
+        return {
+            "prediction": prediction,
+            "batch": batch,
+            "batch_idx": batch_idx,
+        }
 
 
 class LightningDataModuleBase(

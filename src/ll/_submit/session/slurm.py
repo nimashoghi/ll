@@ -270,7 +270,7 @@ DEFAULT_KWARGS: SlurmJobKwargs = {
     "name": "ll",
     "nodes": 1,
     # "time": timedelta(hours=2),
-    "signal": signal.SIGUSR1,
+    "signal": signal.SIGURG,
     "signal_delay": timedelta(seconds=90),
     "open_mode": "append",
     "requeue": True,

@@ -1784,7 +1784,13 @@ Signal: TypeAlias = Literal[
 
 
 class SubmitConfig(TypedConfig):
-    auto_requeue_signals: list[Signal] = ["SIGUSR1"]
+    auto_requeue_signals: list[Signal] = [
+        # "SIGUSR1",
+        # On SIGURG:
+        # Important note from https://amrex-astro.github.io/workflow/olcf-workflow.html:
+        # We can also ask the job manager to send a warning signal some amount of time before the allocation expires by passing -wa 'signal' and -wt '[hour:]minute' to bsub. We can then have bash create a dump_and_stop file when it receives the signal, which will tell Castro to output a checkpoint file and exit cleanly after it finishes the current timestep. An important detail that I couldn't find documented anywhere is that the job manager sends the signal to all the processes in the job, not just the submission script, and we have to use a signal that is ignored by default so Castro doesn't immediately crash upon receiving it. SIGCHLD, SIGURG, and SIGWINCH are the only signals that fit this requirement and of these, SIGURG is the least likely to be triggered by other events.
+        "SIGURG"
+    ]
     """Signals that will trigger an automatic requeue of the job."""
 
     def _resolved_auto_requeue_signals(self) -> list[signal.Signals]:
