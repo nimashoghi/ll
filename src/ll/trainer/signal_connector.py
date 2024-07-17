@@ -104,8 +104,8 @@ class _SignalConnector(_LightningSignalConnector):
         if threading.current_thread() is not threading.main_thread():
             return "Not in main thread"
 
-        if torch.utils.data.get_worker_info() is None:
-            return "Not in worker process"
+        if torch.utils.data.get_worker_info() is not None:
+            return "Inside DataLoader worker process"
 
         return None
 
