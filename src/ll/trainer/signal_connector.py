@@ -6,6 +6,7 @@ import subprocess
 import threading
 from collections import defaultdict
 from collections.abc import Callable
+from pathlib import Path
 from types import FrameType
 from typing import Any, TypeAlias
 
@@ -93,12 +94,7 @@ class _SignalConnector(_LightningSignalConnector):
             if not handlers:
                 continue
 
-            self._compose_and_register(
-                signum,
-                handlers,
-                replace_existing=signum
-                in (signal.Signals.SIGUSR1, signal.Signals.SIGUSR2),
-            )
+            self._compose_and_register(signum, handlers)
 
     def _should_ignore_signal_handler(self) -> str | None:
         if threading.current_thread() is not threading.main_thread():
@@ -128,35 +124,35 @@ class _SignalConnector(_LightningSignalConnector):
         )
         self.trainer.save_checkpoint(hpc_save_path)
 
-        if self.trainer.is_global_zero:
-            # find job id
-            array_job_id = os.getenv("SLURM_ARRAY_JOB_ID")
-            if array_job_id is not None:
-                array_task_id = os.environ["SLURM_ARRAY_TASK_ID"]
-                job_id = f"{array_job_id}_{array_task_id}"
-            else:
-                job_id = os.environ["SLURM_JOB_ID"]
+        if not self.trainer.is_global_zero:
+            return
 
-            assert re.match("[0-9_-]+", job_id)
-            cmd = ["scontrol", "requeue", job_id]
+        # find job id
+        array_job_id = os.getenv("SLURM_ARRAY_JOB_ID")
+        if array_job_id is not None:
+            array_task_id = os.environ["SLURM_ARRAY_TASK_ID"]
+            job_id = f"{array_job_id}_{array_task_id}"
+        else:
+            job_id = os.environ["SLURM_JOB_ID"]
 
-            # requeue job
-            log.info(f"requeing job {job_id}...")
-            try:
-                result = subprocess.call(cmd)
-            except FileNotFoundError:
-                # This can occur if a subprocess call to `scontrol` is run outside a shell context
-                # Re-attempt call (now with shell context). If any error is raised, propagate to user.
-                # When running a shell command, it should be passed as a single string.
-                result = subprocess.call(" ".join(cmd), shell=True)
+        assert re.match("[0-9_-]+", job_id)
+        cmd = ["scontrol", "requeue", job_id]
 
-            # print result text
-            if result == 0:
-                log.info(f"Requeued SLURM job: {job_id}")
-            else:
-                log.warning(
-                    f"Requeuing SLURM job {job_id} failed with error code {result}"
-                )
+        # requeue job
+        log.info(f"requeing job {job_id}...")
+        try:
+            result = subprocess.call(cmd)
+        except FileNotFoundError:
+            # This can occur if a subprocess call to `scontrol` is run outside a shell context
+            # Re-attempt call (now with shell context). If any error is raised, propagate to user.
+            # When running a shell command, it should be passed as a single string.
+            result = subprocess.call(" ".join(cmd), shell=True)
+
+        # print result text
+        if result == 0:
+            log.info(f"Requeued SLURM job: {job_id}")
+        else:
+            log.warning(f"Requeuing SLURM job {job_id} failed with error code {result}")
 
     def _lsf_sigusr_handler_fn(self, signum: _SIGNUM, _: FrameType) -> None:
         if ignore_reason := self._should_ignore_signal_handler():
@@ -178,30 +174,35 @@ class _SignalConnector(_LightningSignalConnector):
         self.trainer.save_checkpoint(hpc_save_path)
         log.info(f"Saved checkpoint to {hpc_save_path}")
 
-        if self.trainer.is_global_zero:
-            # Find job id
-            job_id = os.getenv("LSB_JOBID")
+        if not self.trainer.is_global_zero:
+            return
 
-            if job_id is not None:
-                assert re.match("[0-9_-]+", job_id)
-                cmd = ["brequeue", job_id]
+        # Find job id
+        if (job_id := os.getenv("LSB_JOBID")) is None:
+            log.warning(
+                "LSB_JOBID environment variable not found. Unable to requeue job."
+            )
+            return
 
-                # Requeue job
-                log.info(f"Requeuing job {job_id}...")
-                try:
-                    result = subprocess.call(cmd)
-                except FileNotFoundError:
-                    # Retry with shell context if subprocess call fails
-                    result = subprocess.call(" ".join(cmd), shell=True)
+        assert re.match("[0-9_-]+", job_id)
 
-                # Print result text
-                if result == 0:
-                    log.info(f"Requeued LSF job: {job_id}")
-                else:
-                    log.warning(
-                        f"Requeuing LSF job {job_id} failed with error code {result}"
-                    )
-            else:
-                log.warning(
-                    "LSB_JOBID environment variable not found. Unable to requeue job."
-                )
+        exe = "brequeue"
+        if (bin_dir := os.getenv("LSF_BINDIR")) is not None:
+            exe = str((Path(bin_dir) / exe).resolve().absolute())
+
+        log.info(f"Using LSF requeue executable: {exe}")
+        cmd = [exe, job_id]
+
+        # Requeue job
+        log.info(f"Requeuing job {job_id}...")
+        try:
+            result = subprocess.call(cmd)
+        except FileNotFoundError:
+            # Retry with shell context if subprocess call fails
+            result = subprocess.call(" ".join(cmd), shell=True)
+
+        # Print result text
+        if result == 0:
+            log.info(f"Requeued LSF job: {job_id}")
+        else:
+            log.warning(f"Requeuing LSF job {job_id} failed with error code {result}")
