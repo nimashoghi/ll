@@ -21,6 +21,7 @@ from ._submit.session import unified
 from ._submit.session._script import create_launcher_script_file
 from .log import init_python_logging
 from .model.config import BaseConfig
+from .snapshot import snapshot_modules
 from .trainer import Trainer
 from .util import seed
 from .util.environment import (
@@ -28,7 +29,6 @@ from .util.environment import (
     remove_slurm_environment_variables,
     remove_wandb_environment_variables,
 )
-from .util.snapshot import snapshot_modules
 
 log = getLogger(__name__)
 
@@ -713,7 +713,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
             return None
 
         # Set the snapshot base to the user's home directory
-        snapshot_dir = snapshot_config.get("dir", local_data_path / "ll_snapshot")
+        snapshot_dir = snapshot_config.get("dir", local_data_path / "snapshot")
         snapshot_dir.mkdir(exist_ok=True, parents=True)
 
         snapshot_modules_set: set[str] = set()
