@@ -1,18 +1,19 @@
 import copy
+import logging
 import os
 import signal
 from collections.abc import Callable, Mapping, Sequence
 from datetime import timedelta
-from logging import getLogger
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
+from deepmerge import always_merger
 from typing_extensions import TypeAlias, TypedDict, TypeVarTuple, Unpack
 
 from ._output import SubmitOutput
 from ._script import helper_script_to_command, write_helper_script
 
-log = getLogger(__name__)
+log = logging.getLogger(__name__)
 
 
 TArgs = TypeVarTuple("TArgs")
@@ -190,46 +191,11 @@ class LSFJobKwargs(TypedDict, total=False):
     """
 
     # Our own custom options
-    update_kwargs_fn: "Callable[[LSFJobKwargs], LSFJobKwargs]"
-    """
-    A function to update the kwargs with the defaults.
-
-    This is useful for setting the command prefix to be dependent on num nodes/gpus/etc.
-    """
-
     summit: bool
     """
     Whether the job is being submitted to Summit.
 
     If set to True, the job will be submitted to Summit and the default Summit options will be used.
-    """
-
-    load_job_step_viewer: bool
-    """
-    Whether to load the job step viewer.
-
-    The job step viewer is a tool that can be used to view the job steps.
-    """
-
-    unset_cuda_visible_devices: bool
-    """
-    Whether to unset the CUDA_VISIBLE_DEVICES environment variable.
-
-    This is a hack to fix issues with PyTorch Lightning and Summit.
-    """
-
-    unset_envs: Sequence[str]
-    """
-    A list of environment variables to unset.
-
-    These environment variables will be unset before executing the job command.
-    """
-
-    force_envs: Mapping[str, str]
-    """
-    A dictionary of environment variables to force.
-
-    These environment variables will be set before executing the job command, and any existing values will be overwritten.
     """
 
 
@@ -258,17 +224,6 @@ def _update_kwargs_jsrun(kwargs: LSFJobKwargs, base_dir: Path) -> LSFJobKwargs:
     command_parts.extend(
         ["--stdio_stderr", str(base_dir / "logs" / "worker_err.%h.%j.%t.%p")]
     )
-
-    # Add ignoring of the CUDA_VISIBLE_DEVICES environment variable
-    if kwargs.get("unset_cuda_visible_devices", False):
-        # Regarding the --env_no_propagate=CUDA_VISIBLE_DEVICES flag:
-        # PyTorch Lightning expects all GPUs to be present to all resource sets (tasks), but this is not the case
-        #   when we use `jsrun -n6 -g1 -a1 -c7`. This is because `jsrun` automatically sets the `CUDA_VISIBLE_DEVICES`
-        #   environment variable to the local rank of the task. PyTorch Lightning does not expect this and will fail
-        #   with an error message like `RuntimeError: CUDA error: invalid device ordinal`. This hack will fix this by
-        #   unsetting the `CUDA_VISIBLE_DEVICES` environment variable, so that PyTorch Lightning can see all GPUs.
-        #   This is a hack and should be removed once PyTorch Lightning supports this natively.
-        command_parts.append("--env_no_propagate=CUDA_VISIBLE_DEVICES")
 
     if (rs_per_node := kwargs.get("rs_per_node")) is not None:
         # Add the total number of resource sets requested across all nodes in the job
@@ -304,8 +259,7 @@ def _update_kwargs_jsrun(kwargs: LSFJobKwargs, base_dir: Path) -> LSFJobKwargs:
 
 
 SUMMIT_DEFAULTS: LSFJobKwargs = {
-    # "unset_cuda_visible_devices": True,
-    "force_envs": {"JSM_NAMESPACE_LOCAL_RANK": "0"},
+    "environment": {"JSM_NAMESPACE_LOCAL_RANK": "0"},
     "rs_per_node": 6,
     "cpus_per_rs": 7,
     "gpus_per_rs": 1,
@@ -427,12 +381,6 @@ def _write_batch_script_to_file(
 
         f.write("\n")
 
-        if kwargs.get("load_job_step_viewer", False):
-            f.write("\n")
-            f.write("module load job-step-viewer\n")
-
-        f.write("\n")
-
         if (command_prefix := kwargs.get("command_prefix")) is not None:
             command = " ".join(
                 x_stripped
@@ -446,21 +394,19 @@ def _write_batch_script_to_file(
 
 def _update_kwargs(kwargs_in: LSFJobKwargs, base_dir: Path) -> LSFJobKwargs:
     # Update the kwargs with the default values
+    global DEFAULT_KWARGS
     kwargs = copy.deepcopy(DEFAULT_KWARGS)
 
     # If the job is being submitted to Summit, update the kwargs with the Summit defaults
     if kwargs_in.get("summit"):
-        kwargs.update(SUMMIT_DEFAULTS)
+        global SUMMIT_DEFAULTS
+        kwargs = cast(LSFJobKwargs, always_merger.merge(kwargs, SUMMIT_DEFAULTS))
 
     # Update the kwargs with the provided values
-    kwargs.update(kwargs_in)
+    kwargs = cast(LSFJobKwargs, always_merger.merge(kwargs, kwargs_in))
     del kwargs_in
 
     kwargs = _update_kwargs_jsrun(kwargs, base_dir)
-
-    if (update_kwargs_fn := kwargs.get("update_kwargs_fn")) is not None:
-        kwargs = copy.deepcopy(update_kwargs_fn(kwargs))
-
     return kwargs
 
 
@@ -489,16 +435,6 @@ def to_array_batch_script(
     destdir.mkdir(exist_ok=True)
 
     additional_command_parts: list[str] = []
-    if kwargs.get("unset_cuda_visible_devices", False):
-        additional_command_parts.append("--unset-cuda")
-
-    if (unset_envs := kwargs.get("unset_envs")) is not None:
-        for env in unset_envs:
-            additional_command_parts.append(f"--unset-env {env}")
-
-    if (force_envs := kwargs.get("force_envs")) is not None:
-        for key, value in force_envs.items():
-            additional_command_parts.append(f"--force-env {key}={value}")
 
     serialized_command = serialize_many(
         destdir,

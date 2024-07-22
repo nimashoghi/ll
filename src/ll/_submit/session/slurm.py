@@ -1,19 +1,20 @@
 import copy
+import logging
 import math
 import os
 import signal
 from collections.abc import Callable, Mapping, Sequence
 from datetime import timedelta
-from logging import getLogger
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
+from deepmerge import always_merger
 from typing_extensions import TypeAlias, TypedDict, TypeVarTuple, Unpack
 
 from ._output import SubmitOutput
 from ._script import helper_script_to_command, write_helper_script
 
-log = getLogger(__name__)
+log = logging.getLogger(__name__)
 
 TArgs = TypeVarTuple("TArgs")
 
@@ -261,19 +262,15 @@ class SlurmJobKwargs(TypedDict, total=False):
     The flags to pass to the `srun` command.
     """
 
-    # Our own custom options
-    update_kwargs_fn: "Callable[[SlurmJobKwargs, Path], SlurmJobKwargs]"
-    """A function to update the kwargs."""
-
 
 DEFAULT_KWARGS: SlurmJobKwargs = {
     "name": "ll",
-    "nodes": 1,
+    # "nodes": 1,
     # "time": timedelta(hours=2),
     "signal": signal.SIGURG,
     "signal_delay": timedelta(seconds=90),
     "open_mode": "append",
-    "requeue": True,
+    # "requeue": True,
 }
 
 
@@ -455,10 +452,13 @@ def _write_batch_script_to_file(
     return path
 
 
-def _update_kwargs(kwargs: SlurmJobKwargs, base_path: Path):
+def _update_kwargs(kwargs_in: SlurmJobKwargs, base_path: Path):
     # Update the kwargs with the default values
-    kwargs = copy.deepcopy(kwargs)
-    kwargs = {**DEFAULT_KWARGS, **kwargs}
+    kwargs = copy.deepcopy(DEFAULT_KWARGS)
+
+    # Merge the kwargs
+    kwargs = cast(SlurmJobKwargs, always_merger.merge(kwargs, kwargs_in))
+    del kwargs_in
 
     # If out/err files are not specified, set them
     logs_base = base_path.parent / "logs"
@@ -515,9 +515,6 @@ def _update_kwargs(kwargs: SlurmJobKwargs, base_path: Path):
         command_parts.extend(existing_command_prefix.split())
     # Add the command prefix to the kwargs.
     kwargs["command_prefix"] = " ".join(command_parts)
-
-    if (update_kwargs_fn := kwargs.get("update_kwargs_fn")) is not None:
-        kwargs = copy.deepcopy(update_kwargs_fn(kwargs, base_path))
 
     return kwargs
 

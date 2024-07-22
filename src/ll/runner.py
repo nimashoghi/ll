@@ -1,5 +1,6 @@
 import contextlib
 import copy
+import logging
 import os
 import shutil
 import subprocess
@@ -10,15 +11,13 @@ from collections import Counter
 from collections.abc import Mapping, Sequence
 from contextlib import ExitStack
 from functools import wraps
-from logging import getLogger
 from pathlib import Path
 from typing import Any, Generic, Literal, Protocol, cast, runtime_checkable
 
-from tqdm.auto import tqdm
 from typing_extensions import TypedDict, TypeVar, TypeVarTuple, Unpack, override
 
 from ._submit.session import unified
-from ._submit.session._script import create_launcher_script_file
+from ._submit.session._script import write_helper_script
 from .log import init_python_logging
 from .model.config import BaseConfig
 from .snapshot import snapshot_modules
@@ -30,7 +29,16 @@ from .util.environment import (
     remove_wandb_environment_variables,
 )
 
-log = getLogger(__name__)
+log = logging.getLogger(__name__)
+
+
+def _tqdm_if_installed(iterable, *args, **kwargs):
+    try:
+        from tqdm.auto import tqdm
+
+        return tqdm(iterable, *args, **kwargs)
+    except ImportError:
+        return iterable
 
 
 class SnapshotConfig(TypedDict, total=False):
@@ -419,7 +427,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
 
         return_values: list[TReturn] = []
         with self._with_env(env or {}):
-            for config, args in tqdm(resolved_runs, desc="Fast dev run"):
+            for config, args in _tqdm_if_installed(resolved_runs, desc="Fast dev run"):
                 run_id = config.id
                 run_name = config.run_name
                 try:
@@ -556,9 +564,8 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
         )
 
         # Create the launcher script
-        launcher_path = config_pickle_save_path / "launcher.sh"
-        create_launcher_script_file(
-            launcher_path,
+        launcher_path = write_helper_script(
+            config_pickle_save_path,
             serialized.bash_command_sequential(
                 pause_before_exit=pause_before_exit,
                 print_environment_info=print_environment_info,
@@ -566,6 +573,7 @@ class Runner(Generic[TConfig, TReturn, Unpack[TArguments]]):
             env,
             setup_commands,
             command_prefix=python_command_prefix,
+            file_name="launcher.sh",
         )
         launcher_command = ["bash", str(launcher_path)]
 
